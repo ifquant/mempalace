@@ -19,6 +19,7 @@ Current first-phase support:
 - `mine` for project files
 - `search`
 - `migrate`
+- `repair`
 - `status`
 - `doctor`
 - `prepare-embedding`
@@ -26,6 +27,7 @@ Current first-phase support:
 - provider-based embedding layer with batch document embedding
 - SQLite schema version tracking and a minimal migration path
 - `migrate` exposes the current SQLite schema upgrade path as a CLI command
+- `repair` provides non-destructive palace diagnostics
 
 Current project-mining behavior:
 
@@ -55,6 +57,7 @@ Useful verification command:
 - `cargo run -- --palace /tmp/mempalace doctor --warm-embedding`
 - `cargo run -- --palace /tmp/mempalace prepare-embedding`
 - `cargo run -- --palace /tmp/mempalace migrate`
+- `cargo run -- --palace /tmp/mempalace repair`
 - `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding`
 - `MEMPALACE_RS_TEST_HF_ENDPOINT=https://hf-mirror.com cargo test cli_fastembed_prepare_mine_search_smoke -- --ignored --nocapture`
 
@@ -89,7 +92,13 @@ Intentionally not in this first Rust phase:
 
 - write MCP tools
 - hooks
-- repair
 - AAAK generation
 - conversation mining
 - direct compatibility with Python palace data
+
+Current repair scope:
+
+- checks whether SQLite and LanceDB paths exist
+- reports `schema_version`, embedding profile, and SQLite drawer count
+- checks whether the current LanceDB table is accessible
+- does not rebuild or delete any data

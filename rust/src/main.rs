@@ -43,6 +43,7 @@ enum Command {
         results: usize,
     },
     Migrate,
+    Repair,
     Status,
     Doctor {
         #[arg(long)]
@@ -114,6 +115,13 @@ async fn main() -> anyhow::Result<()> {
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = App::new(config)?;
             let summary = app.migrate().await?;
+            println!("{}", serde_json::to_string_pretty(&summary)?);
+        }
+        Command::Repair => {
+            let mut config = AppConfig::resolve(palace.as_ref())?;
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+            let app = App::new(config)?;
+            let summary = app.repair().await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
         Command::Status => {

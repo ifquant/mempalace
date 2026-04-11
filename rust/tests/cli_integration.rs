@@ -200,6 +200,70 @@ fn cli_migrate_upgrades_legacy_sqlite_schema() {
         .stdout(contains("\"changed\": true"));
 }
 
+#[test]
+fn cli_repair_reports_missing_palace_non_destructively() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("missing-palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "repair"])
+        .assert()
+        .success()
+        .stdout(contains("\"ok\": false"))
+        .stdout(contains("SQLite palace file is missing"))
+        .stdout(contains("LanceDB directory is missing"));
+}
+
+#[test]
+fn cli_repair_reports_healthy_hash_palace() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("src").join("auth.txt"),
+        "JWT authentication tokens are stored locally.\n\nThe team switched to Clerk for auth.",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "repair"])
+        .assert()
+        .success()
+        .stdout(contains("\"ok\": true"))
+        .stdout(contains("\"vector_accessible\": true"))
+        .stdout(contains("\"embedding_provider\": \"hash\""))
+        .stdout(contains("\"schema_version\": 2"));
+}
+
 fn run_cli_json(
     palace: &std::path::Path,
     command: &str,

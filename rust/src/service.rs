@@ -12,7 +12,7 @@ use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
     DoctorSummary, DrawerInput, InitSummary, KgTriple, MigrateSummary, MineSummary,
-    PrepareEmbeddingSummary, Rooms, SearchResults, Status, Taxonomy,
+    PrepareEmbeddingSummary, RepairSummary, Rooms, SearchResults, Status, Taxonomy,
 };
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
 use crate::storage::vector::VectorStore;
@@ -137,6 +137,79 @@ impl App {
             schema_version_before,
             schema_version_after,
             changed: schema_version_before != Some(schema_version_after),
+        })
+    }
+
+    pub async fn repair(&self) -> Result<RepairSummary> {
+        let palace_path = self.config.palace_path.display().to_string();
+        let sqlite_path = self.config.sqlite_path();
+        let lance_path = self.config.lance_path();
+        let sqlite_exists = sqlite_path.exists();
+        let lance_exists = lance_path.exists();
+        let mut issues = Vec::new();
+
+        if !sqlite_exists {
+            issues.push("SQLite palace file is missing".to_string());
+        }
+        if !lance_exists {
+            issues.push("LanceDB directory is missing".to_string());
+        }
+
+        let mut schema_version = None;
+        let mut sqlite_drawer_count = None;
+        let mut embedding_provider = None;
+        let mut embedding_model = None;
+        let mut embedding_dimension = None;
+
+        if sqlite_exists {
+            let sqlite = SqliteStore::open(&sqlite_path)?;
+            sqlite.init_schema()?;
+            schema_version = sqlite.schema_version()?;
+            sqlite_drawer_count = Some(sqlite.total_drawers()?);
+            embedding_provider = sqlite.meta("embedding_provider")?;
+            embedding_model = sqlite.meta("embedding_model")?;
+            embedding_dimension = sqlite
+                .meta("embedding_dimension")?
+                .and_then(|value| value.parse::<usize>().ok());
+
+            if let Err(err) = sqlite.ensure_embedding_profile(self.embedder.profile()) {
+                issues.push(format!("Embedding profile mismatch: {err}"));
+            }
+        }
+
+        let vector_accessible = if lance_exists {
+            match VectorStore::connect(&lance_path).await {
+                Ok(vector) => vector
+                    .ensure_table(self.embedder.profile().dimension)
+                    .await
+                    .map(|_| true)
+                    .unwrap_or_else(|err| {
+                        issues.push(format!("LanceDB access failed: {err}"));
+                        false
+                    }),
+                Err(err) => {
+                    issues.push(format!("LanceDB connect failed: {err}"));
+                    false
+                }
+            }
+        } else {
+            false
+        };
+
+        Ok(RepairSummary {
+            palace_path,
+            sqlite_path: sqlite_path.display().to_string(),
+            lance_path: lance_path.display().to_string(),
+            sqlite_exists,
+            lance_exists,
+            schema_version,
+            sqlite_drawer_count,
+            embedding_provider,
+            embedding_model,
+            embedding_dimension,
+            vector_accessible,
+            ok: issues.is_empty(),
+            issues,
         })
     }
 

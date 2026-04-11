@@ -85,6 +85,23 @@ pub struct MigrateSummary {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RepairSummary {
+    pub palace_path: String,
+    pub sqlite_path: String,
+    pub lance_path: String,
+    pub sqlite_exists: bool,
+    pub lance_exists: bool,
+    pub schema_version: Option<i64>,
+    pub sqlite_drawer_count: Option<usize>,
+    pub embedding_provider: Option<String>,
+    pub embedding_model: Option<String>,
+    pub embedding_dimension: Option<usize>,
+    pub vector_accessible: bool,
+    pub ok: bool,
+    pub issues: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DoctorSummary {
     pub palace_path: String,
     pub provider: String,
