@@ -44,12 +44,19 @@ Useful verification command:
 - `cargo run -- --palace /tmp/mempalace doctor --warm-embedding`
 - `cargo run -- --palace /tmp/mempalace prepare-embedding`
 - `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding`
+- `MEMPALACE_RS_TEST_HF_ENDPOINT=https://hf-mirror.com cargo test cli_fastembed_prepare_mine_search_smoke -- --ignored --nocapture`
 
 Recommended first-run flow for fastembed:
 
 1. `cargo run -- --palace /tmp/mempalace doctor`
 2. `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding --attempts 3 --wait-ms 1000`
 3. `cargo run -- --palace /tmp/mempalace mine /path/to/project`
+
+Fastembed smoke test note:
+
+- the real `fastembed` CLI integration test is marked `ignored`
+- run it explicitly when you want a true local `prepare-embedding -> mine -> search` pass
+- set `MEMPALACE_RS_TEST_HF_ENDPOINT` if your environment needs a HuggingFace mirror
 
 Local runtime note:
 
