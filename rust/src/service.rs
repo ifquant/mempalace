@@ -114,10 +114,13 @@ impl App {
         sqlite.init_schema()?;
         sqlite.ensure_embedding_profile(self.embedder.profile())?;
         Ok(Status {
+            kind: "status".to_string(),
             total_drawers: sqlite.total_drawers()?,
             wings: sqlite.list_wings()?,
             rooms: sqlite.list_rooms(None)?.rooms,
             palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            lance_path: self.config.lance_path().display().to_string(),
             version: VERSION.to_string(),
             schema_version: sqlite.schema_version()?.unwrap_or(CURRENT_SCHEMA_VERSION),
         })
@@ -132,8 +135,10 @@ impl App {
         let schema_version_after = sqlite.schema_version()?.unwrap_or(CURRENT_SCHEMA_VERSION);
 
         Ok(MigrateSummary {
+            kind: "migrate".to_string(),
             palace_path: self.config.palace_path.display().to_string(),
             sqlite_path: self.config.sqlite_path().display().to_string(),
+            version: VERSION.to_string(),
             schema_version_before,
             schema_version_after,
             changed: schema_version_before != Some(schema_version_after),
@@ -197,9 +202,11 @@ impl App {
         };
 
         Ok(RepairSummary {
+            kind: "repair".to_string(),
             palace_path,
             sqlite_path: sqlite_path.display().to_string(),
             lance_path: lance_path.display().to_string(),
+            version: VERSION.to_string(),
             sqlite_exists,
             lance_exists,
             schema_version,

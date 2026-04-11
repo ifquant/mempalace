@@ -183,10 +183,14 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
         "mempalace_status" => {
             let status = app.status().await?;
             Ok(json!({
+                "kind": status.kind,
                 "total_drawers": status.total_drawers,
                 "wings": status.wings,
                 "rooms": status.rooms,
                 "palace_path": status.palace_path,
+                "sqlite_path": status.sqlite_path,
+                "lance_path": status.lance_path,
+                "version": status.version,
                 "schema_version": status.schema_version,
                 "protocol": PALACE_PROTOCOL,
                 "aaak_dialect": AAAK_SPEC,

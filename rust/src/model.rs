@@ -41,10 +41,13 @@ pub struct SearchResults {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Status {
+    pub kind: String,
     pub total_drawers: usize,
     pub wings: BTreeMap<String, usize>,
     pub rooms: BTreeMap<String, usize>,
     pub palace_path: String,
+    pub sqlite_path: String,
+    pub lance_path: String,
     pub version: String,
     pub schema_version: i64,
 }
@@ -87,8 +90,10 @@ pub struct InitSummary {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MigrateSummary {
+    pub kind: String,
     pub palace_path: String,
     pub sqlite_path: String,
+    pub version: String,
     pub schema_version_before: Option<i64>,
     pub schema_version_after: i64,
     pub changed: bool,
@@ -96,9 +101,11 @@ pub struct MigrateSummary {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct RepairSummary {
+    pub kind: String,
     pub palace_path: String,
     pub sqlite_path: String,
     pub lance_path: String,
+    pub version: String,
     pub sqlite_exists: bool,
     pub lance_exists: bool,
     pub schema_version: Option<i64>,

@@ -30,6 +30,7 @@ Current first-phase support:
 - `repair` provides non-destructive palace diagnostics
 - CLI help and command descriptions are now closer to the Python entrypoint
 - `search` CLI JSON now carries Python-style `query`, `filters`, `source_file`, and `similarity`
+- `status`, `migrate`, and `repair` now carry stable `kind`/path/version context fields
 
 Current project-mining behavior:
 

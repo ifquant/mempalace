@@ -51,6 +51,9 @@ fn cli_init_status_mine_search_round_trip() {
         .args(["--palace", palace.to_str().unwrap(), "status"])
         .assert()
         .success()
+        .stdout(contains("\"kind\": \"status\""))
+        .stdout(contains("\"sqlite_path\":"))
+        .stdout(contains("\"lance_path\":"))
         .stdout(contains("\"total_drawers\":"));
 
     Command::cargo_bin("mempalace-rs")
@@ -225,6 +228,8 @@ fn cli_migrate_upgrades_legacy_sqlite_schema() {
         .args(["--palace", palace.to_str().unwrap(), "migrate"])
         .assert()
         .success()
+        .stdout(contains("\"kind\": \"migrate\""))
+        .stdout(contains("\"version\":"))
         .stdout(contains("\"schema_version_before\": 1"))
         .stdout(contains("\"schema_version_after\": 2"))
         .stdout(contains("\"changed\": true"));
@@ -241,6 +246,7 @@ fn cli_repair_reports_missing_palace_non_destructively() {
         .args(["--palace", palace.to_str().unwrap(), "repair"])
         .assert()
         .success()
+        .stdout(contains("\"kind\": \"repair\""))
         .stdout(contains("\"ok\": false"))
         .stdout(contains("SQLite palace file is missing"))
         .stdout(contains("LanceDB directory is missing"));
@@ -288,6 +294,8 @@ fn cli_repair_reports_healthy_hash_palace() {
         .args(["--palace", palace.to_str().unwrap(), "repair"])
         .assert()
         .success()
+        .stdout(contains("\"kind\": \"repair\""))
+        .stdout(contains("\"version\":"))
         .stdout(contains("\"ok\": true"))
         .stdout(contains("\"vector_accessible\": true"))
         .stdout(contains("\"embedding_provider\": \"hash\""))

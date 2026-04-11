@@ -61,6 +61,10 @@ async fn mcp_read_tools_work() {
     .unwrap();
     let status_text = status["result"]["content"][0]["text"].as_str().unwrap();
     assert!(status_text.contains("total_drawers"));
+    assert!(status_text.contains("\"kind\": \"status\""));
+    assert!(status_text.contains("\"sqlite_path\""));
+    assert!(status_text.contains("\"lance_path\""));
+    assert!(status_text.contains("\"version\""));
     assert!(status_text.contains("\"protocol\""));
     assert!(status_text.contains("\"aaak_dialect\""));
 
