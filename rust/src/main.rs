@@ -1,8 +1,9 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
 use mempalace_rs::config::AppConfig;
 use mempalace_rs::mcp;
+use mempalace_rs::model::MineRequest;
 use mempalace_rs::service::App;
 use serde_json::json;
 
@@ -36,6 +37,9 @@ enum Command {
     Mine {
         #[arg(help = "Directory to mine")]
         dir: PathBuf,
+        #[arg(long, default_value = "projects")]
+        #[arg(help = "Ingest mode: 'projects' for code/docs (default), 'convos' for chat exports")]
+        mode: String,
         #[arg(long)]
         #[arg(help = "Wing name (default: mempalace.yaml wing or directory name)")]
         wing: Option<String>,
@@ -53,6 +57,14 @@ enum Command {
             help = "Always scan these project-relative paths even if ignored; repeat or pass comma-separated paths"
         )]
         include_ignored: Vec<String>,
+        #[arg(long, default_value = "mempalace")]
+        #[arg(help = "Your name — recorded on every drawer (default: mempalace)")]
+        agent: String,
+        #[arg(long, default_value = "exchange")]
+        #[arg(
+            help = "Extraction strategy for convos mode: 'exchange' (default) or 'general' (5 memory types)"
+        )]
+        extract: String,
     },
     #[command(about = "Find anything, exact words")]
     Search {
@@ -112,25 +124,33 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Mine {
             dir,
+            mode,
             wing,
             limit,
             dry_run,
             no_gitignore,
             include_ignored,
+            agent,
+            extract,
         } => {
+            if mode != "projects" {
+                print_unsupported_mine_mode(&mode, &extract, &dir)?;
+                std::process::exit(2);
+            }
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = App::new(config)?;
-            let summary = app
-                .mine_project(
-                    &dir,
-                    wing.as_deref(),
-                    limit,
-                    dry_run,
-                    !no_gitignore,
-                    &include_ignored,
-                )
-                .await?;
+            let request = MineRequest {
+                wing,
+                mode,
+                agent,
+                limit,
+                dry_run,
+                respect_gitignore: !no_gitignore,
+                include_ignored,
+                extract,
+            };
+            let summary = app.mine_project(&dir, &request).await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
         Command::Search {
@@ -215,6 +235,18 @@ fn print_no_palace(config: &AppConfig) -> anyhow::Result<()> {
         "error": "No palace found",
         "hint": "Run: mempalace init <dir> && mempalace mine <dir>",
         "palace_path": config.palace_path.display().to_string(),
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
+fn print_unsupported_mine_mode(mode: &str, extract: &str, dir: &Path) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": "Unsupported mine mode",
+        "hint": "Rust currently supports only `mempalace mine <dir>` project ingest. Conversation and general extraction modes are not implemented yet.",
+        "mode": mode,
+        "extract": extract,
+        "project_path": dir.display().to_string(),
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())

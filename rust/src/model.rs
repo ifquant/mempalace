@@ -75,6 +75,9 @@ pub struct KgTriple {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MineSummary {
     pub kind: String,
+    pub mode: String,
+    pub extract: String,
+    pub agent: String,
     pub wing: String,
     pub project_path: String,
     pub palace_path: String,
@@ -87,6 +90,18 @@ pub struct MineSummary {
     pub files_mined: usize,
     pub drawers_added: usize,
     pub files_skipped_unchanged: usize,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct MineRequest {
+    pub wing: Option<String>,
+    pub mode: String,
+    pub agent: String,
+    pub limit: usize,
+    pub dry_run: bool,
+    pub respect_gitignore: bool,
+    pub include_ignored: Vec<String>,
+    pub extract: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

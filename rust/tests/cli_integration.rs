@@ -47,6 +47,9 @@ fn cli_init_status_mine_search_round_trip() {
         .assert()
         .success()
         .stdout(contains("\"kind\": \"mine\""))
+        .stdout(contains("\"mode\": \"projects\""))
+        .stdout(contains("\"extract\": \"exchange\""))
+        .stdout(contains("\"agent\": \"mempalace\""))
         .stdout(contains("\"dry_run\": false"))
         .stdout(contains("\"project_path\":"))
         .stdout(contains("\"palace_path\":"))
@@ -138,6 +141,18 @@ fn cli_search_help_mentions_filters_and_results() {
 }
 
 #[test]
+fn cli_mine_help_mentions_mode_agent_and_extract() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["mine", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Ingest mode: 'projects' for code/docs"))
+        .stdout(contains("Your name"))
+        .stdout(contains("Extraction strategy for convos mode"));
+}
+
+#[test]
 fn cli_status_reports_no_palace_with_python_style_hint() {
     let tmp = tempdir().unwrap();
     let palace = tmp.path().join("missing-palace");
@@ -201,6 +216,9 @@ fn cli_mine_dry_run_reports_preview_without_writing_drawers() {
         .clone();
     let mine: Value = serde_json::from_slice(&mine_output).unwrap();
     assert_eq!(mine["kind"], "mine");
+    assert_eq!(mine["mode"], "projects");
+    assert_eq!(mine["extract"], "exchange");
+    assert_eq!(mine["agent"], "mempalace");
     assert_eq!(mine["dry_run"], true);
     assert_eq!(mine["files_mined"], 1);
     assert_eq!(mine["respect_gitignore"], true);
@@ -218,6 +236,33 @@ fn cli_mine_dry_run_reports_preview_without_writing_drawers() {
     let status: Value = serde_json::from_slice(&status_output).unwrap();
     assert_eq!(status["kind"], "status");
     assert_eq!(status["total_drawers"], 0);
+}
+
+#[test]
+fn cli_mine_rejects_unsupported_convos_mode_with_json_hint() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("chats");
+    fs::create_dir_all(&project).unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+            "--mode",
+            "convos",
+            "--extract",
+            "general",
+        ])
+        .assert()
+        .failure()
+        .code(2)
+        .stdout(contains("\"error\": \"Unsupported mine mode\""))
+        .stdout(contains("\"mode\": \"convos\""))
+        .stdout(contains("\"extract\": \"general\""));
 }
 
 #[test]

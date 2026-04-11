@@ -18,6 +18,8 @@ Current first-phase support:
 - `init`
 - `mine` for project files
 - `mine --dry-run` to preview file discovery and chunk counts without persisting drawers
+- `mine --mode projects --agent <name>` matches more of the Python CLI surface
+- `mine --mode convos` and `--extract general` are accepted at the CLI boundary but currently return a structured "not implemented yet" response
 - `search`
 - `migrate`
 - `repair`

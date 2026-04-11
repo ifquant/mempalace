@@ -1,5 +1,5 @@
 use mempalace_rs::config::{AppConfig, EmbeddingBackend};
-use mempalace_rs::model::KgTriple;
+use mempalace_rs::model::{KgTriple, MineRequest};
 use mempalace_rs::service::App;
 use mempalace_rs::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
 use rusqlite::Connection;
@@ -50,9 +50,21 @@ async fn kg_round_trip_and_taxonomy_work() {
     config.embedding.backend = EmbeddingBackend::Hash;
     let app = App::new(config).unwrap();
     app.init().await.unwrap();
-    app.mine_project(&project, Some("project"), 0, false, true, &[])
-        .await
-        .unwrap();
+    app.mine_project(
+        &project,
+        &MineRequest {
+            wing: Some("project".to_string()),
+            mode: "projects".to_string(),
+            agent: "mempalace".to_string(),
+            limit: 0,
+            dry_run: false,
+            respect_gitignore: true,
+            include_ignored: vec![],
+            extract: "exchange".to_string(),
+        },
+    )
+    .await
+    .unwrap();
 
     let taxonomy = app.taxonomy().await.unwrap();
     assert_eq!(taxonomy.taxonomy["project"]["general"], 1);
@@ -118,10 +130,25 @@ rooms:
     app.init().await.unwrap();
 
     let summary = app
-        .mine_project(&project, None, 0, false, true, &[])
+        .mine_project(
+            &project,
+            &MineRequest {
+                wing: None,
+                mode: "projects".to_string(),
+                agent: "mempalace".to_string(),
+                limit: 0,
+                dry_run: false,
+                respect_gitignore: true,
+                include_ignored: vec![],
+                extract: "exchange".to_string(),
+            },
+        )
         .await
         .unwrap();
     assert_eq!(summary.kind, "mine");
+    assert_eq!(summary.mode, "projects");
+    assert_eq!(summary.extract, "exchange");
+    assert_eq!(summary.agent, "mempalace");
     assert_eq!(summary.wing, "alpha");
     assert_eq!(summary.project_path, project.display().to_string());
     assert_eq!(summary.version, env!("CARGO_PKG_VERSION"));
@@ -165,7 +192,19 @@ rooms:
     app.init().await.unwrap();
 
     let skipped = app
-        .mine_project(&project, None, 0, false, true, &[])
+        .mine_project(
+            &project,
+            &MineRequest {
+                wing: None,
+                mode: "projects".to_string(),
+                agent: "mempalace".to_string(),
+                limit: 0,
+                dry_run: false,
+                respect_gitignore: true,
+                include_ignored: vec![],
+                extract: "exchange".to_string(),
+            },
+        )
         .await
         .unwrap();
     assert_eq!(skipped.files_seen, 0);
@@ -173,11 +212,16 @@ rooms:
     let included = app
         .mine_project(
             &project,
-            None,
-            0,
-            false,
-            true,
-            &[String::from("secret/plan.md")],
+            &MineRequest {
+                wing: None,
+                mode: "projects".to_string(),
+                agent: "mempalace".to_string(),
+                limit: 0,
+                dry_run: false,
+                respect_gitignore: true,
+                include_ignored: vec![String::from("secret/plan.md")],
+                extract: "exchange".to_string(),
+            },
         )
         .await
         .unwrap();
@@ -205,12 +249,26 @@ async fn mine_dry_run_reports_work_without_writing_drawers() {
     app.init().await.unwrap();
 
     let summary = app
-        .mine_project(&project, Some("project"), 0, true, true, &[])
+        .mine_project(
+            &project,
+            &MineRequest {
+                wing: Some("project".to_string()),
+                mode: "projects".to_string(),
+                agent: "codex".to_string(),
+                limit: 0,
+                dry_run: true,
+                respect_gitignore: true,
+                include_ignored: vec![],
+                extract: "exchange".to_string(),
+            },
+        )
         .await
         .unwrap();
     let status = app.status().await.unwrap();
 
     assert!(summary.dry_run);
+    assert_eq!(summary.agent, "codex");
+    assert_eq!(summary.mode, "projects");
     assert_eq!(summary.files_seen, 1);
     assert_eq!(summary.files_mined, 1);
     assert!(summary.drawers_added > 0);

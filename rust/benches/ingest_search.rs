@@ -2,6 +2,7 @@ use std::fs;
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use mempalace_rs::config::{AppConfig, EmbeddingBackend};
+use mempalace_rs::model::MineRequest;
 use mempalace_rs::service::App;
 use tempfile::tempdir;
 
@@ -24,9 +25,21 @@ fn ingest_search_benchmark(criterion: &mut Criterion) {
                 config.embedding.backend = EmbeddingBackend::Hash;
                 let app = App::new(config).unwrap();
                 app.init().await.unwrap();
-                app.mine_project(&project, Some("project"), 0, false, true, &[])
-                    .await
-                    .unwrap();
+                app.mine_project(
+                    &project,
+                    &MineRequest {
+                        wing: Some("project".to_string()),
+                        mode: "projects".to_string(),
+                        agent: "bench".to_string(),
+                        limit: 0,
+                        dry_run: false,
+                        respect_gitignore: true,
+                        include_ignored: vec![],
+                        extract: "exchange".to_string(),
+                    },
+                )
+                .await
+                .unwrap();
             });
         });
     });
@@ -46,9 +59,21 @@ fn ingest_search_benchmark(criterion: &mut Criterion) {
         let app = App::new(config).unwrap();
         runtime.block_on(async {
             app.init().await.unwrap();
-            app.mine_project(&project, Some("project"), 0, false, true, &[])
-                .await
-                .unwrap();
+            app.mine_project(
+                &project,
+                &MineRequest {
+                    wing: Some("project".to_string()),
+                    mode: "projects".to_string(),
+                    agent: "bench".to_string(),
+                    limit: 0,
+                    dry_run: false,
+                    respect_gitignore: true,
+                    include_ignored: vec![],
+                    extract: "exchange".to_string(),
+                },
+            )
+            .await
+            .unwrap();
         });
 
         bench.iter(|| {

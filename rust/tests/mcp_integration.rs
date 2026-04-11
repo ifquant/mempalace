@@ -1,5 +1,6 @@
 use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::mcp::handle_request;
+use mempalace_rs::model::MineRequest;
 use mempalace_rs::service::App;
 use serde_json::json;
 use tempfile::tempdir;
@@ -19,9 +20,21 @@ async fn mcp_read_tools_work() {
     config.embedding.backend = EmbeddingBackend::Hash;
     let app = App::new(config.clone()).unwrap();
     app.init().await.unwrap();
-    app.mine_project(&project, Some("project"), 0, false, true, &[])
-        .await
-        .unwrap();
+    app.mine_project(
+        &project,
+        &MineRequest {
+            wing: Some("project".to_string()),
+            mode: "projects".to_string(),
+            agent: "mempalace".to_string(),
+            limit: 0,
+            dry_run: false,
+            respect_gitignore: true,
+            include_ignored: vec![],
+            extract: "exchange".to_string(),
+        },
+    )
+    .await
+    .unwrap();
 
     let init = handle_request(json!({"method":"initialize","id":1,"params":{}}), &config)
         .await

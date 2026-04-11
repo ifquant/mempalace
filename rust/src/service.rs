@@ -11,7 +11,7 @@ use crate::config::AppConfig;
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
-    DoctorSummary, DrawerInput, InitSummary, KgTriple, MigrateSummary, MineSummary,
+    DoctorSummary, DrawerInput, InitSummary, KgTriple, MigrateSummary, MineRequest, MineSummary,
     PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters, SearchResults, Status, Taxonomy,
 };
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
@@ -341,15 +341,7 @@ impl App {
         })
     }
 
-    pub async fn mine_project(
-        &self,
-        dir: &Path,
-        wing_override: Option<&str>,
-        limit: usize,
-        dry_run: bool,
-        respect_gitignore: bool,
-        include_ignored: &[String],
-    ) -> Result<MineSummary> {
+    pub async fn mine_project(&self, dir: &Path, request: &MineRequest) -> Result<MineSummary> {
         if !dir.exists() {
             return Err(MempalaceError::InvalidArgument(format!(
                 "Project directory does not exist: {}",
@@ -358,7 +350,7 @@ impl App {
         }
 
         self.init().await?;
-        let wing = wing_override.map(ToOwned::to_owned).unwrap_or_else(|| {
+        let wing = request.wing.clone().unwrap_or_else(|| {
             load_project_config(dir)
                 .ok()
                 .flatten()
@@ -371,8 +363,8 @@ impl App {
         });
         let rooms = load_project_rooms(dir)?;
 
-        let files = discover_files(dir, respect_gitignore, include_ignored)?;
-        let vector = if dry_run {
+        let files = discover_files(dir, request.respect_gitignore, &request.include_ignored)?;
+        let vector = if request.dry_run {
             None
         } else {
             Some(VectorStore::connect(&self.config.lance_path()).await?)
@@ -385,10 +377,11 @@ impl App {
         let mut files_skipped_unchanged = 0_usize;
         let mut drawers_added = 0_usize;
 
-        for path in files
-            .into_iter()
-            .take(if limit == 0 { usize::MAX } else { limit })
-        {
+        for path in files.into_iter().take(if request.limit == 0 {
+            usize::MAX
+        } else {
+            request.limit
+        }) {
             files_seen += 1;
             let Some(contents) = read_text_file(&path)? else {
                 continue;
@@ -430,7 +423,7 @@ impl App {
             drawers_added += drawers.len();
             files_mined += 1;
 
-            if dry_run {
+            if request.dry_run {
                 continue;
             }
 
@@ -443,17 +436,20 @@ impl App {
 
         Ok(MineSummary {
             kind: "mine".to_string(),
+            mode: request.mode.clone(),
+            extract: request.extract.clone(),
+            agent: request.agent.clone(),
             wing,
             project_path: dir.display().to_string(),
             palace_path: self.config.palace_path.display().to_string(),
             version: VERSION.to_string(),
-            dry_run,
+            dry_run: request.dry_run,
             filters: SearchFilters {
-                wing: wing_override.map(ToOwned::to_owned),
+                wing: request.wing.clone(),
                 room: None,
             },
-            respect_gitignore,
-            include_ignored: include_ignored.to_vec(),
+            respect_gitignore: request.respect_gitignore,
+            include_ignored: request.include_ignored.clone(),
             files_seen,
             files_mined,
             drawers_added,
