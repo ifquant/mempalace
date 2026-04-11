@@ -36,6 +36,7 @@ pub struct Status {
     pub rooms: BTreeMap<String, usize>,
     pub palace_path: String,
     pub version: String,
+    pub schema_version: i64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

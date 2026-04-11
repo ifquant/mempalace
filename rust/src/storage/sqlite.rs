@@ -8,6 +8,8 @@ use crate::embed::EmbeddingProfile;
 use crate::error::Result;
 use crate::model::{DrawerInput, KgTriple, Rooms, Taxonomy};
 
+pub const CURRENT_SCHEMA_VERSION: i64 = 2;
+
 pub struct SqliteStore {
     conn: Connection,
 }
@@ -19,13 +21,57 @@ impl SqliteStore {
     }
 
     pub fn init_schema(&self) -> Result<()> {
+        self.ensure_meta_table()?;
+
+        let version = self.schema_version()?.unwrap_or_else(|| {
+            if self.has_user_tables().unwrap_or(false) {
+                1
+            } else {
+                0
+            }
+        });
+
+        match version {
+            0 => self.bootstrap_schema()?,
+            1 => self.migrate_v1_to_v2()?,
+            CURRENT_SCHEMA_VERSION => {}
+            other => {
+                return Err(crate::error::MempalaceError::InvalidArgument(format!(
+                    "Unsupported palace schema_version {other}; expected <= {CURRENT_SCHEMA_VERSION}"
+                )));
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn schema_version(&self) -> Result<Option<i64>> {
+        let value = self
+            .conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'schema_version'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()?;
+        Ok(value.and_then(|raw| raw.parse::<i64>().ok()))
+    }
+
+    fn ensure_meta_table(&self) -> Result<()> {
         self.conn.execute_batch(
             r#"
             CREATE TABLE IF NOT EXISTS meta (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL
             );
+            "#,
+        )?;
+        Ok(())
+    }
 
+    fn bootstrap_schema(&self) -> Result<()> {
+        self.conn.execute_batch(
+            r#"
             CREATE TABLE IF NOT EXISTS drawers (
                 id TEXT PRIMARY KEY,
                 wing TEXT NOT NULL,
@@ -58,14 +104,56 @@ impl SqliteStore {
                 valid_to TEXT,
                 created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL,
+                note TEXT NOT NULL
+            );
             "#,
         )?;
 
-        self.conn.execute(
-            "INSERT OR REPLACE INTO meta(key, value) VALUES('schema_version', '1')",
-            [],
+        self.set_meta("schema_version", &CURRENT_SCHEMA_VERSION.to_string())?;
+        self.record_migration(
+            CURRENT_SCHEMA_VERSION,
+            "bootstrap fresh schema with migration tracking",
         )?;
         Ok(())
+    }
+
+    fn migrate_v1_to_v2(&self) -> Result<()> {
+        self.conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL,
+                note TEXT NOT NULL
+            );
+            "#,
+        )?;
+        self.set_meta("schema_version", &CURRENT_SCHEMA_VERSION.to_string())?;
+        self.record_migration(
+            CURRENT_SCHEMA_VERSION,
+            "add schema_migrations table and promote schema version metadata",
+        )?;
+        Ok(())
+    }
+
+    fn record_migration(&self, version: i64, note: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO schema_migrations(version, applied_at, note) VALUES(?1, ?2, ?3)",
+            params![version, Utc::now().to_rfc3339(), note],
+        )?;
+        Ok(())
+    }
+
+    fn has_user_tables(&self) -> Result<bool> {
+        let count = self.conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('drawers', 'ingested_files', 'kg_triples')",
+            [],
+            |row| row.get::<_, i64>(0),
+        )?;
+        Ok(count > 0)
     }
 
     pub fn source_hash(&self, source_path: &str) -> Result<Option<String>> {

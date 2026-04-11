@@ -189,6 +189,7 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                 "wings": status.wings,
                 "rooms": status.rooms,
                 "palace_path": status.palace_path,
+                "schema_version": status.schema_version,
                 "protocol": PALACE_PROTOCOL,
                 "aaak_dialect": AAAK_SPEC,
             }))

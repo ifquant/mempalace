@@ -14,7 +14,7 @@ use crate::model::{
     DoctorSummary, DrawerInput, InitSummary, KgTriple, MineSummary, PrepareEmbeddingSummary, Rooms,
     SearchResults, Status, Taxonomy,
 };
-use crate::storage::sqlite::SqliteStore;
+use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
 use crate::storage::vector::VectorStore;
 
 const READABLE_EXTENSIONS: &[&str] = &[
@@ -119,6 +119,7 @@ impl App {
             rooms: sqlite.list_rooms(None)?.rooms,
             palace_path: self.config.palace_path.display().to_string(),
             version: VERSION.to_string(),
+            schema_version: sqlite.schema_version()?.unwrap_or(CURRENT_SCHEMA_VERSION),
         })
     }
 

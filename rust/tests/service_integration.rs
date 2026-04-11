@@ -1,6 +1,8 @@
 use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::model::KgTriple;
 use mempalace_rs::service::App;
+use mempalace_rs::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
+use rusqlite::Connection;
 use tempfile::tempdir;
 
 #[tokio::test]
@@ -18,6 +20,7 @@ async fn init_is_idempotent_and_status_starts_empty() {
     assert_eq!(status.total_drawers, 0);
     assert!(status.wings.is_empty());
     assert!(status.rooms.is_empty());
+    assert_eq!(status.schema_version, CURRENT_SCHEMA_VERSION);
 }
 
 #[tokio::test]
@@ -158,4 +161,68 @@ rooms:
 
     let taxonomy = app.taxonomy().await.unwrap();
     assert!(taxonomy.taxonomy["forced"].contains_key("secrets"));
+}
+
+#[tokio::test]
+async fn init_migrates_v1_sqlite_schema_to_current() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("palace");
+    std::fs::create_dir_all(&palace).unwrap();
+    let sqlite_path = palace.join("palace.sqlite3");
+
+    let conn = Connection::open(&sqlite_path).unwrap();
+    conn.execute_batch(
+        r#"
+        CREATE TABLE meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        INSERT INTO meta(key, value) VALUES('schema_version', '1');
+
+        CREATE TABLE drawers (
+            id TEXT PRIMARY KEY,
+            wing TEXT NOT NULL,
+            room TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            source_hash TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE ingested_files (
+            source_path TEXT PRIMARY KEY,
+            content_hash TEXT NOT NULL,
+            wing TEXT NOT NULL,
+            room TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE kg_triples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subject TEXT NOT NULL,
+            predicate TEXT NOT NULL,
+            object TEXT NOT NULL,
+            valid_from TEXT,
+            valid_to TEXT,
+            created_at TEXT NOT NULL
+        );
+        "#,
+    )
+    .unwrap();
+    drop(conn);
+
+    let mut config = AppConfig::resolve(Some(&palace)).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let status = app.status().await.unwrap();
+    assert_eq!(status.schema_version, CURRENT_SCHEMA_VERSION);
+
+    let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    assert_eq!(
+        sqlite.schema_version().unwrap(),
+        Some(CURRENT_SCHEMA_VERSION)
+    );
 }

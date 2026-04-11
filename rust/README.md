@@ -23,6 +23,7 @@ Current first-phase support:
 - `prepare-embedding`
 - read-only MCP tools for `status`, `list_wings`, `list_rooms`, `get_taxonomy`, `search`
 - provider-based embedding layer with batch document embedding
+- SQLite schema version tracking and a minimal migration path
 
 Current project-mining behavior:
 
@@ -71,6 +72,7 @@ Current MCP compatibility notes:
 - read-only MCP tool names match the Python server
 - `tools/list` now exposes Python-style input schemas for read tools
 - `mempalace_status` includes `protocol` and `aaak_dialect`
+- `status` and MCP status now expose `schema_version`
 - `mempalace_search` returns Python-style `query`, `filters`, `source_file`, and `similarity`
 - empty palaces return the Python-style `{"error":"No palace found","hint":"Run: ..."}` shape
 
