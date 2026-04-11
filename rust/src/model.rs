@@ -90,6 +90,8 @@ pub struct MineSummary {
     pub files_mined: usize,
     pub drawers_added: usize,
     pub files_skipped_unchanged: usize,
+    pub room_counts: BTreeMap<String, usize>,
+    pub next_hint: String,
 }
 
 #[derive(Clone, Debug, PartialEq)]

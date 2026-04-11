@@ -54,6 +54,8 @@ fn cli_init_status_mine_search_round_trip() {
         .stdout(contains("\"project_path\":"))
         .stdout(contains("\"palace_path\":"))
         .stdout(contains("\"filters\":"))
+        .stdout(contains("\"room_counts\":"))
+        .stdout(contains("\"next_hint\":"))
         .stdout(contains("\"files_mined\": 1"));
 
     Command::cargo_bin("mempalace-rs")
@@ -223,6 +225,11 @@ fn cli_mine_dry_run_reports_preview_without_writing_drawers() {
     assert_eq!(mine["files_mined"], 1);
     assert_eq!(mine["respect_gitignore"], true);
     assert_eq!(mine["include_ignored"], Value::Array(vec![]));
+    assert_eq!(mine["room_counts"]["general"], 1);
+    assert_eq!(
+        mine["next_hint"],
+        "mempalace search \"what you're looking for\""
+    );
 
     let status_output = Command::cargo_bin("mempalace-rs")
         .unwrap()

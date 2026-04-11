@@ -376,6 +376,7 @@ impl App {
         let mut files_mined = 0_usize;
         let mut files_skipped_unchanged = 0_usize;
         let mut drawers_added = 0_usize;
+        let mut room_counts = BTreeMap::new();
 
         for path in files.into_iter().take(if request.limit == 0 {
             usize::MAX
@@ -437,6 +438,7 @@ impl App {
 
             drawers_added += drawers.len();
             files_mined += 1;
+            *room_counts.entry(room.clone()).or_insert(0) += 1;
 
             if request.dry_run {
                 continue;
@@ -476,6 +478,8 @@ impl App {
             files_mined,
             drawers_added,
             files_skipped_unchanged,
+            room_counts,
+            next_hint: "mempalace search \"what you're looking for\"".to_string(),
         })
     }
 

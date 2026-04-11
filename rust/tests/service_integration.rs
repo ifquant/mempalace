@@ -157,6 +157,12 @@ rooms:
     assert!(summary.include_ignored.is_empty());
     assert_eq!(summary.files_seen, 2);
     assert_eq!(summary.files_mined, 2);
+    assert_eq!(summary.room_counts["auth"], 1);
+    assert_eq!(summary.room_counts["docs"], 1);
+    assert_eq!(
+        summary.next_hint,
+        "mempalace search \"what you're looking for\""
+    );
 
     let taxonomy = app.taxonomy().await.unwrap();
     assert!(taxonomy.taxonomy["alpha"].contains_key("auth"));
@@ -227,6 +233,7 @@ rooms:
         .unwrap();
     assert_eq!(included.files_seen, 1);
     assert_eq!(included.files_mined, 1);
+    assert_eq!(included.room_counts["secrets"], 1);
 
     let taxonomy = app.taxonomy().await.unwrap();
     assert!(taxonomy.taxonomy["forced"].contains_key("secrets"));
@@ -272,6 +279,7 @@ async fn mine_dry_run_reports_work_without_writing_drawers() {
     assert_eq!(summary.files_seen, 1);
     assert_eq!(summary.files_mined, 1);
     assert!(summary.drawers_added > 0);
+    assert_eq!(summary.room_counts["general"], 1);
     assert_eq!(status.total_drawers, 0);
     assert!(status.wings.is_empty());
 }
