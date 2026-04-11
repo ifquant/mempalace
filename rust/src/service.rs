@@ -387,9 +387,24 @@ impl App {
                 continue;
             };
 
-            let source_path = path.canonicalize()?.display().to_string();
+            let source_path_buf = path.canonicalize()?;
+            let source_path = source_path_buf.display().to_string();
+            let source_mtime = SqliteStore::source_mtime(&source_path_buf);
+            let existing = sqlite.ingested_file_state(&source_path)?;
+            let mtime_pair = existing
+                .as_ref()
+                .and_then(|state| state.source_mtime)
+                .zip(source_mtime);
+            if mtime_pair.is_some_and(|(stored, current)| stored == current) {
+                files_skipped_unchanged += 1;
+                continue;
+            }
+
             let source_hash = blake3::hash(contents.as_bytes()).to_hex().to_string();
-            if sqlite.source_hash(&source_path)?.as_deref() == Some(source_hash.as_str()) {
+            if mtime_pair.is_none()
+                && existing.as_ref().map(|state| state.content_hash.as_str())
+                    == Some(source_hash.as_str())
+            {
                 files_skipped_unchanged += 1;
                 continue;
             }
@@ -431,7 +446,14 @@ impl App {
             if let Some(vector) = &vector {
                 vector.replace_source(&drawers, &embeddings).await?;
             }
-            sqlite.replace_source(&source_path, &wing, &room, &source_hash, &drawers)?;
+            sqlite.replace_source(
+                &source_path,
+                &wing,
+                &room,
+                &source_hash,
+                source_mtime,
+                &drawers,
+            )?;
         }
 
         Ok(MineSummary {

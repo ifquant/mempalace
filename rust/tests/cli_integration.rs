@@ -32,7 +32,7 @@ fn cli_init_status_mine_search_round_trip() {
         .success()
         .stdout(contains("\"kind\": \"init\""))
         .stdout(contains("\"version\":"))
-        .stdout(contains("\"schema_version\": 2"))
+        .stdout(contains("\"schema_version\": 3"))
         .stdout(contains("palace.sqlite3"));
 
     Command::cargo_bin("mempalace-rs")
@@ -383,7 +383,7 @@ fn cli_migrate_upgrades_legacy_sqlite_schema() {
         .stdout(contains("\"kind\": \"migrate\""))
         .stdout(contains("\"version\":"))
         .stdout(contains("\"schema_version_before\": 1"))
-        .stdout(contains("\"schema_version_after\": 2"))
+        .stdout(contains("\"schema_version_after\": 3"))
         .stdout(contains("\"changed\": true"));
 }
 
@@ -451,7 +451,7 @@ fn cli_repair_reports_healthy_hash_palace() {
         .stdout(contains("\"ok\": true"))
         .stdout(contains("\"vector_accessible\": true"))
         .stdout(contains("\"embedding_provider\": \"hash\""))
-        .stdout(contains("\"schema_version\": 2"));
+        .stdout(contains("\"schema_version\": 3"));
 }
 
 #[test]

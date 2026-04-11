@@ -20,6 +20,7 @@ Current first-phase support:
 - `mine --dry-run` to preview file discovery and chunk counts without persisting drawers
 - `mine --mode projects --agent <name>` matches more of the Python CLI surface
 - `mine --mode convos` and `--extract general` are accepted at the CLI boundary but currently return a structured "not implemented yet" response
+- project re-mine bookkeeping now tracks `source_mtime` so unchanged files skip more like the Python miner
 - `search`
 - `migrate`
 - `repair`

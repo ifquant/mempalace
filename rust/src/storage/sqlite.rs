@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::time::UNIX_EPOCH;
 
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -8,7 +9,13 @@ use crate::embed::EmbeddingProfile;
 use crate::error::Result;
 use crate::model::{DrawerInput, KgTriple, Rooms, Taxonomy};
 
-pub const CURRENT_SCHEMA_VERSION: i64 = 2;
+pub const CURRENT_SCHEMA_VERSION: i64 = 3;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct IngestedFileState {
+    pub content_hash: String,
+    pub source_mtime: Option<f64>,
+}
 
 pub struct SqliteStore {
     conn: Connection,
@@ -34,6 +41,7 @@ impl SqliteStore {
         match version {
             0 => self.bootstrap_schema()?,
             1 => self.migrate_v1_to_v2()?,
+            2 => self.migrate_v2_to_v3()?,
             CURRENT_SCHEMA_VERSION => {}
             other => {
                 return Err(crate::error::MempalaceError::InvalidArgument(format!(
@@ -90,6 +98,7 @@ impl SqliteStore {
             CREATE TABLE IF NOT EXISTS ingested_files (
                 source_path TEXT PRIMARY KEY,
                 content_hash TEXT NOT NULL,
+                source_mtime REAL,
                 wing TEXT NOT NULL,
                 room TEXT NOT NULL,
                 updated_at TEXT NOT NULL
@@ -133,8 +142,21 @@ impl SqliteStore {
         )?;
         self.set_meta("schema_version", &CURRENT_SCHEMA_VERSION.to_string())?;
         self.record_migration(
-            CURRENT_SCHEMA_VERSION,
+            2,
             "add schema_migrations table and promote schema version metadata",
+        )?;
+        Ok(())
+    }
+
+    fn migrate_v2_to_v3(&self) -> Result<()> {
+        self.conn.execute(
+            "ALTER TABLE ingested_files ADD COLUMN source_mtime REAL",
+            [],
+        )?;
+        self.set_meta("schema_version", &CURRENT_SCHEMA_VERSION.to_string())?;
+        self.record_migration(
+            CURRENT_SCHEMA_VERSION,
+            "add source_mtime tracking for project re-mine parity",
         )?;
         Ok(())
     }
@@ -156,13 +178,18 @@ impl SqliteStore {
         Ok(count > 0)
     }
 
-    pub fn source_hash(&self, source_path: &str) -> Result<Option<String>> {
+    pub fn ingested_file_state(&self, source_path: &str) -> Result<Option<IngestedFileState>> {
         let value = self
             .conn
             .query_row(
-                "SELECT content_hash FROM ingested_files WHERE source_path = ?1",
+                "SELECT content_hash, source_mtime FROM ingested_files WHERE source_path = ?1",
                 [source_path],
-                |row| row.get(0),
+                |row| {
+                    Ok(IngestedFileState {
+                        content_hash: row.get(0)?,
+                        source_mtime: row.get(1)?,
+                    })
+                },
             )
             .optional()?;
         Ok(value)
@@ -235,6 +262,7 @@ impl SqliteStore {
         wing: &str,
         room: &str,
         content_hash: &str,
+        source_mtime: Option<f64>,
         drawers: &[DrawerInput],
     ) -> Result<()> {
         let tx = self.conn.transaction()?;
@@ -261,12 +289,18 @@ impl SqliteStore {
         }
 
         tx.execute(
-            "INSERT OR REPLACE INTO ingested_files (source_path, content_hash, wing, room, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![source_path, content_hash, wing, room, now],
+            "INSERT OR REPLACE INTO ingested_files (source_path, content_hash, source_mtime, wing, room, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![source_path, content_hash, source_mtime, wing, room, now],
         )?;
         tx.commit()?;
         Ok(())
+    }
+
+    pub fn source_mtime(path: &Path) -> Option<f64> {
+        let modified = path.metadata().ok()?.modified().ok()?;
+        let duration = modified.duration_since(UNIX_EPOCH).ok()?;
+        Some(duration.as_secs_f64())
     }
 
     pub fn total_drawers(&self) -> Result<usize> {

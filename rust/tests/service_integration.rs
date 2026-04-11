@@ -277,6 +277,52 @@ async fn mine_dry_run_reports_work_without_writing_drawers() {
 }
 
 #[tokio::test]
+async fn mine_skips_unchanged_files_and_remines_when_mtime_changes() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    let source = project.join("src").join("cache.txt");
+    std::fs::write(
+        &source,
+        "JWT authentication notes.\n\nModified-time parity matters here.",
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+
+    let request = MineRequest {
+        wing: Some("project".to_string()),
+        mode: "projects".to_string(),
+        agent: "mempalace".to_string(),
+        limit: 0,
+        dry_run: false,
+        respect_gitignore: true,
+        include_ignored: vec![],
+        extract: "exchange".to_string(),
+    };
+
+    let first = app.mine_project(&project, &request).await.unwrap();
+    let second = app.mine_project(&project, &request).await.unwrap();
+    assert_eq!(first.files_mined, 1);
+    assert_eq!(second.files_mined, 0);
+    assert_eq!(second.files_skipped_unchanged, 1);
+
+    let metadata = std::fs::metadata(&source).unwrap();
+    let modified = metadata.modified().unwrap();
+    let bumped = modified + std::time::Duration::from_secs(5);
+    filetime::set_file_mtime(&source, filetime::FileTime::from_system_time(bumped)).unwrap();
+
+    let third = app.mine_project(&project, &request).await.unwrap();
+    let status = app.status().await.unwrap();
+    assert_eq!(third.files_mined, 1);
+    assert_eq!(third.files_skipped_unchanged, 0);
+    assert!(status.total_drawers > 0);
+}
+
+#[tokio::test]
 async fn init_migrates_v1_sqlite_schema_to_current() {
     let tmp = tempdir().unwrap();
     let palace = tmp.path().join("palace");
