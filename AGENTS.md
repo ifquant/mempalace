@@ -5,6 +5,7 @@
 ## Setup
 
 ```bash
+cd python
 pip install -e ".[dev]"
 ```
 
@@ -12,38 +13,40 @@ pip install -e ".[dev]"
 
 ```bash
 # Run tests
-python -m pytest tests/ -v --ignore=tests/benchmarks
+cd python && python -m pytest tests/ -v --ignore=tests/benchmarks
 
 # Run tests with coverage
-python -m pytest tests/ -v --ignore=tests/benchmarks --cov=mempalace --cov-report=term-missing
+cd python && python -m pytest tests/ -v --ignore=tests/benchmarks --cov=mempalace --cov-report=term-missing
 
 # Lint
-ruff check .
+cd python && ruff check .
 
 # Format
-ruff format .
+cd python && ruff format .
 
 # Format check (CI mode)
-ruff format --check .
+cd python && ruff format --check .
 ```
 
 ## Project structure
 
 ```
-mempalace/
-├── mcp_server.py        # MCP server — all read/write tools
-├── miner.py             # Project file miner
-├── convo_miner.py       # Conversation transcript miner
-├── searcher.py          # Semantic search
-├── knowledge_graph.py   # Temporal entity-relationship graph (SQLite)
-├── palace.py            # Shared palace operations (ChromaDB access)
-├── config.py            # Configuration + input validation
-├── normalize.py         # Transcript format detection + normalization
-├── cli.py               # CLI dispatcher
-├── dialect.py           # AAAK compression dialect
-├── palace_graph.py      # Room traversal + cross-wing tunnels
-├── hooks_cli.py         # Hook system for auto-save
-└── version.py           # Single source of truth for version
+python/
+├── mempalace/
+│   ├── mcp_server.py      # MCP server — all read/write tools
+│   ├── miner.py           # Project file miner
+│   ├── convo_miner.py     # Conversation transcript miner
+│   ├── searcher.py        # Semantic search
+│   ├── knowledge_graph.py # Temporal entity-relationship graph (SQLite)
+│   ├── palace.py          # Shared palace operations (ChromaDB access)
+│   ├── config.py          # Configuration + input validation
+│   ├── normalize.py       # Transcript format detection + normalization
+│   ├── cli.py             # CLI dispatcher
+│   ├── dialect.py         # AAAK compression dialect
+│   ├── palace_graph.py    # Room traversal + cross-wing tunnels
+│   ├── hooks_cli.py       # Hook system for auto-save
+│   └── version.py         # Single source of truth for version
+└── tests/
 ```
 
 ## Conventions
@@ -71,8 +74,8 @@ Knowledge Graph:
 
 ## Key files for common tasks
 
-- **Adding an MCP tool**: `mempalace/mcp_server.py` — add handler function + TOOLS dict entry
-- **Changing search**: `mempalace/searcher.py`
-- **Modifying mining**: `mempalace/miner.py` (project files) or `mempalace/convo_miner.py` (transcripts)
-- **Input validation**: `mempalace/config.py` — `sanitize_name()` / `sanitize_content()`
-- **Tests**: mirror source structure in `tests/test_<module>.py`
+- **Adding an MCP tool**: `python/mempalace/mcp_server.py` — add handler function + TOOLS dict entry
+- **Changing search**: `python/mempalace/searcher.py`
+- **Modifying mining**: `python/mempalace/miner.py` (project files) or `python/mempalace/convo_miner.py` (transcripts)
+- **Input validation**: `python/mempalace/config.py` — `sanitize_name()` / `sanitize_content()`
+- **Tests**: mirror source structure in `python/tests/test_<module>.py`
