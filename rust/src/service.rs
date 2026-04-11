@@ -11,8 +11,8 @@ use crate::config::AppConfig;
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
-    DoctorSummary, DrawerInput, InitSummary, KgTriple, MineSummary, PrepareEmbeddingSummary, Rooms,
-    SearchResults, Status, Taxonomy,
+    DoctorSummary, DrawerInput, InitSummary, KgTriple, MigrateSummary, MineSummary,
+    PrepareEmbeddingSummary, Rooms, SearchResults, Status, Taxonomy,
 };
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
 use crate::storage::vector::VectorStore;
@@ -120,6 +120,23 @@ impl App {
             palace_path: self.config.palace_path.display().to_string(),
             version: VERSION.to_string(),
             schema_version: sqlite.schema_version()?.unwrap_or(CURRENT_SCHEMA_VERSION),
+        })
+    }
+
+    pub async fn migrate(&self) -> Result<MigrateSummary> {
+        self.config.ensure_dirs()?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        let schema_version_before = sqlite.schema_version()?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let schema_version_after = sqlite.schema_version()?.unwrap_or(CURRENT_SCHEMA_VERSION);
+
+        Ok(MigrateSummary {
+            palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            schema_version_before,
+            schema_version_after,
+            changed: schema_version_before != Some(schema_version_after),
         })
     }
 

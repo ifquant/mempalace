@@ -18,12 +18,14 @@ Current first-phase support:
 - `init`
 - `mine` for project files
 - `search`
+- `migrate`
 - `status`
 - `doctor`
 - `prepare-embedding`
 - read-only MCP tools for `status`, `list_wings`, `list_rooms`, `get_taxonomy`, `search`
 - provider-based embedding layer with batch document embedding
 - SQLite schema version tracking and a minimal migration path
+- `migrate` exposes the current SQLite schema upgrade path as a CLI command
 
 Current project-mining behavior:
 
@@ -52,6 +54,7 @@ Useful verification command:
 - `cargo run -- --palace /tmp/mempalace doctor`
 - `cargo run -- --palace /tmp/mempalace doctor --warm-embedding`
 - `cargo run -- --palace /tmp/mempalace prepare-embedding`
+- `cargo run -- --palace /tmp/mempalace migrate`
 - `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding`
 - `MEMPALACE_RS_TEST_HF_ENDPOINT=https://hf-mirror.com cargo test cli_fastembed_prepare_mine_search_smoke -- --ignored --nocapture`
 
@@ -86,7 +89,7 @@ Intentionally not in this first Rust phase:
 
 - write MCP tools
 - hooks
-- repair / migrate
+- repair
 - AAAK generation
 - conversation mining
 - direct compatibility with Python palace data

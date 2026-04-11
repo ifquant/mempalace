@@ -42,6 +42,7 @@ enum Command {
         #[arg(long, default_value_t = 5)]
         results: usize,
     },
+    Migrate,
     Status,
     Doctor {
         #[arg(long)]
@@ -106,6 +107,13 @@ async fn main() -> anyhow::Result<()> {
             let summary = app
                 .search(&query, wing.as_deref(), room.as_deref(), results)
                 .await?;
+            println!("{}", serde_json::to_string_pretty(&summary)?);
+        }
+        Command::Migrate => {
+            let mut config = AppConfig::resolve(palace.as_ref())?;
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+            let app = App::new(config)?;
+            let summary = app.migrate().await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
         Command::Status => {

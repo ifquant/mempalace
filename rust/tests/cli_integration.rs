@@ -2,6 +2,7 @@ use std::fs;
 
 use assert_cmd::Command;
 use predicates::str::contains;
+use rusqlite::Connection;
 use serde_json::Value;
 use tempfile::tempdir;
 
@@ -138,6 +139,65 @@ fn cli_fastembed_prepare_mine_search_smoke() {
             .unwrap_or_default()
             .contains("fastembed")
     }));
+}
+
+#[test]
+fn cli_migrate_upgrades_legacy_sqlite_schema() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("palace");
+    fs::create_dir_all(&palace).unwrap();
+    let sqlite_path = palace.join("palace.sqlite3");
+    let conn = Connection::open(&sqlite_path).unwrap();
+    conn.execute_batch(
+        r#"
+        CREATE TABLE meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        INSERT INTO meta(key, value) VALUES('schema_version', '1');
+
+        CREATE TABLE drawers (
+            id TEXT PRIMARY KEY,
+            wing TEXT NOT NULL,
+            room TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            source_hash TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE ingested_files (
+            source_path TEXT PRIMARY KEY,
+            content_hash TEXT NOT NULL,
+            wing TEXT NOT NULL,
+            room TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE kg_triples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subject TEXT NOT NULL,
+            predicate TEXT NOT NULL,
+            object TEXT NOT NULL,
+            valid_from TEXT,
+            valid_to TEXT,
+            created_at TEXT NOT NULL
+        );
+        "#,
+    )
+    .unwrap();
+    drop(conn);
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "migrate"])
+        .assert()
+        .success()
+        .stdout(contains("\"schema_version_before\": 1"))
+        .stdout(contains("\"schema_version_after\": 2"))
+        .stdout(contains("\"changed\": true"));
 }
 
 fn run_cli_json(

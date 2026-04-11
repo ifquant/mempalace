@@ -76,6 +76,15 @@ pub struct InitSummary {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct MigrateSummary {
+    pub palace_path: String,
+    pub sqlite_path: String,
+    pub schema_version_before: Option<i64>,
+    pub schema_version_after: i64,
+    pub changed: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DoctorSummary {
     pub palace_path: String,
     pub provider: String,
