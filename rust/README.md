@@ -20,6 +20,7 @@ Current first-phase support:
 - `search`
 - `status`
 - `doctor`
+- `prepare-embedding`
 - read-only MCP tools for `status`, `list_wings`, `list_rooms`, `get_taxonomy`, `search`
 - provider-based embedding layer with batch document embedding
 
@@ -40,6 +41,13 @@ Useful verification command:
 
 - `cargo run -- --palace /tmp/mempalace doctor`
 - `cargo run -- --palace /tmp/mempalace doctor --warm-embedding`
+- `cargo run -- --palace /tmp/mempalace prepare-embedding`
+
+Recommended first-run flow for fastembed:
+
+1. `cargo run -- --palace /tmp/mempalace doctor`
+2. `cargo run -- --palace /tmp/mempalace prepare-embedding --attempts 3 --wait-ms 1000`
+3. `cargo run -- --palace /tmp/mempalace mine /path/to/project`
 
 Local runtime note:
 

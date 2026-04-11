@@ -131,6 +131,9 @@ impl EmbeddingProvider for HashEmbedder {
             cache_dir: None,
             model_cache_dir: None,
             model_cache_present: false,
+            expected_model_file: None,
+            expected_model_file_present: false,
+            hf_endpoint: None,
             ort_dylib_path: None,
             warmup_attempted: warmup,
             warmup_ok: true,
@@ -143,6 +146,7 @@ pub struct FastEmbedder {
     cache_dir: PathBuf,
     model_name: EmbeddingModel,
     model_code: String,
+    model_file: String,
     profile: EmbeddingProfile,
     runtime: Mutex<Option<TextEmbedding>>,
     show_download_progress: bool,
@@ -160,6 +164,7 @@ impl FastEmbedder {
         Ok(Self {
             cache_dir,
             model_code: model_info.model_code.clone(),
+            model_file: model_info.model_file.clone(),
             use_e5_prefixes: matches!(model_name, EmbeddingModel::MultilingualE5Small),
             model_name,
             profile: EmbeddingProfile {
@@ -273,6 +278,13 @@ impl EmbeddingProvider for FastEmbedder {
             .as_ref()
             .map(|path| model_cache_ready(path))
             .unwrap_or(false);
+        let expected_model_file = model_cache_dir
+            .as_ref()
+            .map(|path| path.join("snapshots").join(&self.model_file));
+        let expected_model_file_present = expected_model_file
+            .as_ref()
+            .map(|path| path.exists())
+            .unwrap_or(false);
         let (warmup_ok, warmup_error) = if warmup {
             match self.embed_query("health check") {
                 Ok(_) => (true, None),
@@ -290,6 +302,9 @@ impl EmbeddingProvider for FastEmbedder {
             cache_dir: Some(self.cache_dir.display().to_string()),
             model_cache_dir: model_cache_dir.map(|path| path.display().to_string()),
             model_cache_present,
+            expected_model_file: expected_model_file.map(|path| path.display().to_string()),
+            expected_model_file_present,
+            hf_endpoint: std::env::var("HF_ENDPOINT").ok(),
             ort_dylib_path: detect_ort_dylib_path().map(|path| path.display().to_string()),
             warmup_attempted: warmup,
             warmup_ok,

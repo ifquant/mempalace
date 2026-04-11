@@ -65,6 +65,20 @@ fn cli_init_status_mine_search_round_trip() {
         .args([
             "--palace",
             palace.to_str().unwrap(),
+            "prepare-embedding",
+            "--attempts",
+            "1",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"success\": true"));
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
             "search",
             "Clerk auth",
             "--results",

@@ -83,8 +83,22 @@ pub struct DoctorSummary {
     pub cache_dir: Option<String>,
     pub model_cache_dir: Option<String>,
     pub model_cache_present: bool,
+    pub expected_model_file: Option<String>,
+    pub expected_model_file_present: bool,
+    pub hf_endpoint: Option<String>,
     pub ort_dylib_path: Option<String>,
     pub warmup_attempted: bool,
     pub warmup_ok: bool,
     pub warmup_error: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct PrepareEmbeddingSummary {
+    pub palace_path: String,
+    pub provider: String,
+    pub model: String,
+    pub attempts: usize,
+    pub success: bool,
+    pub last_error: Option<String>,
+    pub doctor: DoctorSummary,
 }

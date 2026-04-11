@@ -10,8 +10,8 @@ use crate::config::AppConfig;
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
-    DoctorSummary, DrawerInput, InitSummary, KgTriple, MineSummary, Rooms, SearchResults, Status,
-    Taxonomy,
+    DoctorSummary, DrawerInput, InitSummary, KgTriple, MineSummary, PrepareEmbeddingSummary, Rooms,
+    SearchResults, Status, Taxonomy,
 };
 use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::VectorStore;
@@ -69,6 +69,55 @@ impl App {
             &self.config.palace_path.display().to_string(),
             warm_embedding,
         ))
+    }
+
+    pub async fn prepare_embedding(
+        &self,
+        attempts: usize,
+        wait_ms: u64,
+    ) -> Result<PrepareEmbeddingSummary> {
+        self.config.ensure_dirs()?;
+
+        let total_attempts = attempts.max(1);
+        let mut last_error = None;
+        let mut last_doctor = self
+            .embedder
+            .doctor(&self.config.palace_path.display().to_string(), false);
+
+        for attempt in 0..total_attempts {
+            let doctor = self
+                .embedder
+                .doctor(&self.config.palace_path.display().to_string(), true);
+            let success = doctor.warmup_ok;
+            last_error = doctor.warmup_error.clone();
+            last_doctor = doctor;
+
+            if success {
+                return Ok(PrepareEmbeddingSummary {
+                    palace_path: self.config.palace_path.display().to_string(),
+                    provider: self.embedder.profile().provider.clone(),
+                    model: self.embedder.profile().model.clone(),
+                    attempts: attempt + 1,
+                    success: true,
+                    last_error: None,
+                    doctor: last_doctor,
+                });
+            }
+
+            if attempt + 1 < total_attempts && wait_ms > 0 {
+                tokio::time::sleep(std::time::Duration::from_millis(wait_ms)).await;
+            }
+        }
+
+        Ok(PrepareEmbeddingSummary {
+            palace_path: self.config.palace_path.display().to_string(),
+            provider: self.embedder.profile().provider.clone(),
+            model: self.embedder.profile().model.clone(),
+            attempts: total_attempts,
+            success: false,
+            last_error,
+            doctor: last_doctor,
+        })
     }
 
     pub async fn list_wings(&self) -> Result<BTreeMap<String, usize>> {
