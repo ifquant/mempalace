@@ -17,6 +17,7 @@ Current first-phase support:
 
 - `init`
 - `mine` for project files
+- `mine --dry-run` to preview file discovery and chunk counts without persisting drawers
 - `search`
 - `migrate`
 - `repair`

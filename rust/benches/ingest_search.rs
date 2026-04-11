@@ -24,7 +24,7 @@ fn ingest_search_benchmark(criterion: &mut Criterion) {
                 config.embedding.backend = EmbeddingBackend::Hash;
                 let app = App::new(config).unwrap();
                 app.init().await.unwrap();
-                app.mine_project(&project, Some("project"), 0, true, &[])
+                app.mine_project(&project, Some("project"), 0, false, true, &[])
                     .await
                     .unwrap();
             });
@@ -46,7 +46,7 @@ fn ingest_search_benchmark(criterion: &mut Criterion) {
         let app = App::new(config).unwrap();
         runtime.block_on(async {
             app.init().await.unwrap();
-            app.mine_project(&project, Some("project"), 0, true, &[])
+            app.mine_project(&project, Some("project"), 0, false, true, &[])
                 .await
                 .unwrap();
         });

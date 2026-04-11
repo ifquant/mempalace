@@ -47,6 +47,7 @@ fn cli_init_status_mine_search_round_trip() {
         .assert()
         .success()
         .stdout(contains("\"kind\": \"mine\""))
+        .stdout(contains("\"dry_run\": false"))
         .stdout(contains("\"project_path\":"))
         .stdout(contains("\"palace_path\":"))
         .stdout(contains("\"filters\":"))
@@ -168,6 +169,55 @@ fn cli_search_reports_no_palace_with_python_style_hint() {
             "Run: mempalace init <dir> && mempalace mine <dir>",
         ))
         .stdout(contains("\"palace_path\":"));
+}
+
+#[test]
+fn cli_mine_dry_run_reports_preview_without_writing_drawers() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("src").join("auth.txt"),
+        "JWT authentication dry-run preview.\n\nNothing should be persisted.",
+    )
+    .unwrap();
+
+    let palace = tmp.path().join("palace");
+
+    let mine_output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+            "--dry-run",
+        ])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let mine: Value = serde_json::from_slice(&mine_output).unwrap();
+    assert_eq!(mine["kind"], "mine");
+    assert_eq!(mine["dry_run"], true);
+    assert_eq!(mine["files_mined"], 1);
+    assert_eq!(mine["respect_gitignore"], true);
+    assert_eq!(mine["include_ignored"], Value::Array(vec![]));
+
+    let status_output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "status"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let status: Value = serde_json::from_slice(&status_output).unwrap();
+    assert_eq!(status["kind"], "status");
+    assert_eq!(status["total_drawers"], 0);
 }
 
 #[test]

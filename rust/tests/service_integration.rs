@@ -50,7 +50,7 @@ async fn kg_round_trip_and_taxonomy_work() {
     config.embedding.backend = EmbeddingBackend::Hash;
     let app = App::new(config).unwrap();
     app.init().await.unwrap();
-    app.mine_project(&project, Some("project"), 0, true, &[])
+    app.mine_project(&project, Some("project"), 0, false, true, &[])
         .await
         .unwrap();
 
@@ -118,13 +118,16 @@ rooms:
     app.init().await.unwrap();
 
     let summary = app
-        .mine_project(&project, None, 0, true, &[])
+        .mine_project(&project, None, 0, false, true, &[])
         .await
         .unwrap();
     assert_eq!(summary.kind, "mine");
     assert_eq!(summary.wing, "alpha");
     assert_eq!(summary.project_path, project.display().to_string());
     assert_eq!(summary.version, env!("CARGO_PKG_VERSION"));
+    assert!(!summary.dry_run);
+    assert!(summary.respect_gitignore);
+    assert!(summary.include_ignored.is_empty());
     assert_eq!(summary.files_seen, 2);
     assert_eq!(summary.files_mined, 2);
 
@@ -162,13 +165,20 @@ rooms:
     app.init().await.unwrap();
 
     let skipped = app
-        .mine_project(&project, None, 0, true, &[])
+        .mine_project(&project, None, 0, false, true, &[])
         .await
         .unwrap();
     assert_eq!(skipped.files_seen, 0);
 
     let included = app
-        .mine_project(&project, None, 0, true, &[String::from("secret/plan.md")])
+        .mine_project(
+            &project,
+            None,
+            0,
+            false,
+            true,
+            &[String::from("secret/plan.md")],
+        )
         .await
         .unwrap();
     assert_eq!(included.files_seen, 1);
@@ -176,6 +186,36 @@ rooms:
 
     let taxonomy = app.taxonomy().await.unwrap();
     assert!(taxonomy.taxonomy["forced"].contains_key("secrets"));
+}
+
+#[tokio::test]
+async fn mine_dry_run_reports_work_without_writing_drawers() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::write(
+        project.join("src").join("notes.md"),
+        "Graph search notes.\n\nDry run should not persist drawers.",
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+
+    let summary = app
+        .mine_project(&project, Some("project"), 0, true, true, &[])
+        .await
+        .unwrap();
+    let status = app.status().await.unwrap();
+
+    assert!(summary.dry_run);
+    assert_eq!(summary.files_seen, 1);
+    assert_eq!(summary.files_mined, 1);
+    assert!(summary.drawers_added > 0);
+    assert_eq!(status.total_drawers, 0);
+    assert!(status.wings.is_empty());
 }
 
 #[tokio::test]

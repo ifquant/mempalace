@@ -346,6 +346,7 @@ impl App {
         dir: &Path,
         wing_override: Option<&str>,
         limit: usize,
+        dry_run: bool,
         respect_gitignore: bool,
         include_ignored: &[String],
     ) -> Result<MineSummary> {
@@ -371,7 +372,11 @@ impl App {
         let rooms = load_project_rooms(dir)?;
 
         let files = discover_files(dir, respect_gitignore, include_ignored)?;
-        let vector = VectorStore::connect(&self.config.lance_path()).await?;
+        let vector = if dry_run {
+            None
+        } else {
+            Some(VectorStore::connect(&self.config.lance_path()).await?)
+        };
         let mut sqlite = SqliteStore::open(&self.config.sqlite_path())?;
         sqlite.init_schema()?;
 
@@ -422,12 +427,18 @@ impl App {
                 })
                 .collect();
 
-            let embeddings = self.embedder.embed_documents(&chunks)?;
-            vector.replace_source(&drawers, &embeddings).await?;
-            sqlite.replace_source(&source_path, &wing, &room, &source_hash, &drawers)?;
-
             drawers_added += drawers.len();
             files_mined += 1;
+
+            if dry_run {
+                continue;
+            }
+
+            let embeddings = self.embedder.embed_documents(&chunks)?;
+            if let Some(vector) = &vector {
+                vector.replace_source(&drawers, &embeddings).await?;
+            }
+            sqlite.replace_source(&source_path, &wing, &room, &source_hash, &drawers)?;
         }
 
         Ok(MineSummary {
@@ -436,10 +447,13 @@ impl App {
             project_path: dir.display().to_string(),
             palace_path: self.config.palace_path.display().to_string(),
             version: VERSION.to_string(),
+            dry_run,
             filters: SearchFilters {
                 wing: wing_override.map(ToOwned::to_owned),
                 room: None,
             },
+            respect_gitignore,
+            include_ignored: include_ignored.to_vec(),
             files_seen,
             files_mined,
             drawers_added,

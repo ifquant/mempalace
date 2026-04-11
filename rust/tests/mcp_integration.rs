@@ -19,7 +19,7 @@ async fn mcp_read_tools_work() {
     config.embedding.backend = EmbeddingBackend::Hash;
     let app = App::new(config.clone()).unwrap();
     app.init().await.unwrap();
-    app.mine_project(&project, Some("project"), 0, true, &[])
+    app.mine_project(&project, Some("project"), 0, false, true, &[])
         .await
         .unwrap();
 

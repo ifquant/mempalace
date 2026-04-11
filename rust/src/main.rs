@@ -43,6 +43,9 @@ enum Command {
         #[arg(help = "Max files to process (0 = all)")]
         limit: usize,
         #[arg(long)]
+        #[arg(help = "Preview what would be mined without writing drawers to the palace")]
+        dry_run: bool,
+        #[arg(long)]
         #[arg(help = "Do not respect .gitignore files when scanning project files")]
         no_gitignore: bool,
         #[arg(long = "include-ignored")]
@@ -111,6 +114,7 @@ async fn main() -> anyhow::Result<()> {
             dir,
             wing,
             limit,
+            dry_run,
             no_gitignore,
             include_ignored,
         } => {
@@ -122,6 +126,7 @@ async fn main() -> anyhow::Result<()> {
                     &dir,
                     wing.as_deref(),
                     limit,
+                    dry_run,
                     !no_gitignore,
                     &include_ignored,
                 )
