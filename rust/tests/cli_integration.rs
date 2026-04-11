@@ -69,6 +69,10 @@ fn cli_init_status_mine_search_round_trip() {
         .args(["--palace", palace.to_str().unwrap(), "doctor"])
         .assert()
         .success()
+        .stdout(contains("\"kind\": \"doctor\""))
+        .stdout(contains("\"version\":"))
+        .stdout(contains("\"sqlite_path\":"))
+        .stdout(contains("\"lance_path\":"))
         .stdout(contains("\"provider\": \"hash\""));
 
     Command::cargo_bin("mempalace-rs")
@@ -83,6 +87,10 @@ fn cli_init_status_mine_search_round_trip() {
         ])
         .assert()
         .success()
+        .stdout(contains("\"kind\": \"prepare_embedding\""))
+        .stdout(contains("\"version\":"))
+        .stdout(contains("\"sqlite_path\":"))
+        .stdout(contains("\"lance_path\":"))
         .stdout(contains("\"success\": true"));
 
     Command::cargo_bin("mempalace-rs")
@@ -149,6 +157,14 @@ fn cli_fastembed_prepare_mine_search_smoke() {
         &["--attempts", "1", "--wait-ms", "0"],
         hf_endpoint.as_deref(),
     );
+    assert_eq!(prepare["kind"], "prepare_embedding");
+    assert!(
+        prepare["sqlite_path"]
+            .as_str()
+            .unwrap()
+            .ends_with("palace.sqlite3")
+    );
+    assert!(prepare["lance_path"].as_str().unwrap().ends_with("lance"));
     assert_eq!(prepare["provider"], "fastembed");
     assert_eq!(prepare["success"], true);
     assert_eq!(prepare["doctor"]["warmup_ok"], true);

@@ -226,10 +226,14 @@ impl App {
 
     pub async fn doctor(&self, warm_embedding: bool) -> Result<DoctorSummary> {
         self.config.ensure_dirs()?;
-        Ok(self.embedder.doctor(
+        let mut summary = self.embedder.doctor(
             &self.config.palace_path.display().to_string(),
             warm_embedding,
-        ))
+        );
+        summary.sqlite_path = self.config.sqlite_path().display().to_string();
+        summary.lance_path = self.config.lance_path().display().to_string();
+        summary.version = VERSION.to_string();
+        Ok(summary)
     }
 
     pub async fn prepare_embedding(
@@ -255,7 +259,11 @@ impl App {
 
             if success {
                 return Ok(PrepareEmbeddingSummary {
+                    kind: "prepare_embedding".to_string(),
                     palace_path: self.config.palace_path.display().to_string(),
+                    sqlite_path: self.config.sqlite_path().display().to_string(),
+                    lance_path: self.config.lance_path().display().to_string(),
+                    version: VERSION.to_string(),
                     provider: self.embedder.profile().provider.clone(),
                     model: self.embedder.profile().model.clone(),
                     attempts: attempt + 1,
@@ -271,7 +279,11 @@ impl App {
         }
 
         Ok(PrepareEmbeddingSummary {
+            kind: "prepare_embedding".to_string(),
             palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            lance_path: self.config.lance_path().display().to_string(),
+            version: VERSION.to_string(),
             provider: self.embedder.profile().provider.clone(),
             model: self.embedder.profile().model.clone(),
             attempts: total_attempts,

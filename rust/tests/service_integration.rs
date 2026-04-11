@@ -15,6 +15,8 @@ async fn init_is_idempotent_and_status_starts_empty() {
     let first = app.init().await.unwrap();
     let second = app.init().await.unwrap();
     let status = app.status().await.unwrap();
+    let doctor = app.doctor(false).await.unwrap();
+    let prepare = app.prepare_embedding(1, 0).await.unwrap();
 
     assert_eq!(first.palace_path, second.palace_path);
     assert_eq!(first.kind, "init");
@@ -23,6 +25,14 @@ async fn init_is_idempotent_and_status_starts_empty() {
     assert!(status.wings.is_empty());
     assert!(status.rooms.is_empty());
     assert_eq!(status.schema_version, CURRENT_SCHEMA_VERSION);
+    assert_eq!(doctor.kind, "doctor");
+    assert_eq!(doctor.version, env!("CARGO_PKG_VERSION"));
+    assert!(doctor.sqlite_path.ends_with("palace.sqlite3"));
+    assert!(doctor.lance_path.ends_with("lance"));
+    assert_eq!(prepare.kind, "prepare_embedding");
+    assert_eq!(prepare.version, env!("CARGO_PKG_VERSION"));
+    assert!(prepare.sqlite_path.ends_with("palace.sqlite3"));
+    assert!(prepare.lance_path.ends_with("lance"));
 }
 
 #[tokio::test]

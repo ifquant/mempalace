@@ -128,7 +128,11 @@ pub struct RepairSummary {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DoctorSummary {
+    pub kind: String,
     pub palace_path: String,
+    pub sqlite_path: String,
+    pub lance_path: String,
+    pub version: String,
     pub provider: String,
     pub model: String,
     pub dimension: usize,
@@ -146,7 +150,11 @@ pub struct DoctorSummary {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct PrepareEmbeddingSummary {
+    pub kind: String,
     pub palace_path: String,
+    pub sqlite_path: String,
+    pub lance_path: String,
+    pub version: String,
     pub provider: String,
     pub model: String,
     pub attempts: usize,

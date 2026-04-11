@@ -125,7 +125,11 @@ impl EmbeddingProvider for HashEmbedder {
 
     fn doctor(&self, palace_path: &str, warmup: bool) -> DoctorSummary {
         DoctorSummary {
+            kind: "doctor".to_string(),
             palace_path: palace_path.to_string(),
+            sqlite_path: String::new(),
+            lance_path: String::new(),
+            version: crate::VERSION.to_string(),
             provider: self.profile.provider.clone(),
             model: self.profile.model.clone(),
             dimension: self.profile.dimension,
@@ -318,7 +322,11 @@ impl EmbeddingProvider for FastEmbedder {
         };
 
         DoctorSummary {
+            kind: "doctor".to_string(),
             palace_path: palace_path.to_string(),
+            sqlite_path: String::new(),
+            lance_path: String::new(),
+            version: crate::VERSION.to_string(),
             provider: self.profile.provider.clone(),
             model: self.profile.model.clone(),
             dimension: self.profile.dimension,
