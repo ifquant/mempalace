@@ -1,4 +1,4 @@
-use mempalace_rs::config::AppConfig;
+use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::mcp::handle_request;
 use mempalace_rs::service::App;
 use serde_json::json;
@@ -15,8 +15,9 @@ async fn mcp_read_tools_work() {
     )
     .unwrap();
 
-    let config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
-    let app = App::new(config.clone());
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
     app.init().await.unwrap();
     app.mine_project(&project, Some("project"), 0, true, &[])
         .await

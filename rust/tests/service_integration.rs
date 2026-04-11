@@ -1,4 +1,4 @@
-use mempalace_rs::config::AppConfig;
+use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::model::KgTriple;
 use mempalace_rs::service::App;
 use tempfile::tempdir;
@@ -6,8 +6,9 @@ use tempfile::tempdir;
 #[tokio::test]
 async fn init_is_idempotent_and_status_starts_empty() {
     let tmp = tempdir().unwrap();
-    let config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
-    let app = App::new(config);
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
 
     let first = app.init().await.unwrap();
     let second = app.init().await.unwrap();
@@ -30,8 +31,9 @@ async fn kg_round_trip_and_taxonomy_work() {
     )
     .unwrap();
 
-    let config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
-    let app = App::new(config);
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
     app.init().await.unwrap();
     app.mine_project(&project, Some("project"), 0, true, &[])
         .await

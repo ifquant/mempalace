@@ -8,7 +8,6 @@ use futures::TryStreamExt;
 use lancedb::query::{ExecutableQuery, QueryBase};
 use lancedb::{Connection, Table, connect};
 
-use crate::embed::EMBEDDING_DIM;
 use crate::error::Result;
 use crate::model::{DrawerInput, SearchHit};
 
@@ -24,11 +23,11 @@ impl VectorStore {
         Ok(Self { conn })
     }
 
-    pub async fn ensure_table(&self) -> Result<Table> {
+    pub async fn ensure_table(&self, dimension: usize) -> Result<Table> {
         match self.conn.open_table(TABLE_NAME).execute().await {
             Ok(table) => Ok(table),
             Err(_) => {
-                let schema = schema();
+                let schema = schema(dimension);
                 self.conn
                     .create_empty_table(TABLE_NAME, schema)
                     .execute()
@@ -43,17 +42,20 @@ impl VectorStore {
         drawers: &[DrawerInput],
         embeddings: &[Vec<f32>],
     ) -> Result<()> {
-        let table = self.ensure_table().await?;
-        if let Some(source_path) = drawers.first().map(|d| d.source_path.clone()) {
+        if drawers.is_empty() {
+            return Ok(());
+        }
+        let dimension = embeddings.first().map(Vec::len).ok_or_else(|| {
+            crate::error::MempalaceError::InvalidArgument("missing embeddings".to_string())
+        })?;
+        let table = self.ensure_table(dimension).await?;
+        if let Some(source_path) = drawers.first().map(|drawer| drawer.source_path.clone()) {
             let escaped = source_path.replace('\'', "''");
             table
                 .delete(&format!("source_path = '{}'", escaped))
                 .await?;
         }
-        if drawers.is_empty() {
-            return Ok(());
-        }
-        let batch = record_batch(drawers, embeddings)?;
+        let batch = record_batch(drawers, embeddings, dimension)?;
         table.add(batch).execute().await?;
         Ok(())
     }
@@ -65,7 +67,7 @@ impl VectorStore {
         room: Option<&str>,
         limit: usize,
     ) -> Result<Vec<SearchHit>> {
-        let table = self.ensure_table().await?;
+        let table = self.ensure_table(embedding.len()).await?;
         let mut query = table.query().limit(limit);
         if let Some(filter) = filter_sql(wing, room) {
             query = query.only_if(filter);
@@ -86,7 +88,7 @@ impl VectorStore {
     }
 }
 
-fn schema() -> SchemaRef {
+fn schema(dimension: usize) -> SchemaRef {
     Arc::new(Schema::new(vec![
         Field::new("id", DataType::Utf8, false),
         Field::new("wing", DataType::Utf8, false),
@@ -98,15 +100,19 @@ fn schema() -> SchemaRef {
             "vector",
             DataType::FixedSizeList(
                 Arc::new(Field::new("item", DataType::Float32, true)),
-                EMBEDDING_DIM as i32,
+                dimension as i32,
             ),
             true,
         ),
     ]))
 }
 
-fn record_batch(drawers: &[DrawerInput], embeddings: &[Vec<f32>]) -> Result<RecordBatch> {
-    let schema = schema();
+fn record_batch(
+    drawers: &[DrawerInput],
+    embeddings: &[Vec<f32>],
+    dimension: usize,
+) -> Result<RecordBatch> {
+    let schema = schema(dimension);
     let ids = StringArray::from_iter_values(drawers.iter().map(|d| d.id.as_str()));
     let wings = StringArray::from_iter_values(drawers.iter().map(|d| d.wing.as_str()));
     let rooms = StringArray::from_iter_values(drawers.iter().map(|d| d.room.as_str()));
@@ -118,7 +124,7 @@ fn record_batch(drawers: &[DrawerInput], embeddings: &[Vec<f32>]) -> Result<Reco
         embeddings
             .iter()
             .map(|embedding| Some(embedding.iter().copied().map(Some).collect::<Vec<_>>())),
-        EMBEDDING_DIM as i32,
+        dimension as i32,
     );
 
     Ok(RecordBatch::try_new(

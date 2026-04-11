@@ -14,6 +14,8 @@ pub enum MempalaceError {
     Json(#[from] serde_json::Error),
     #[error("Arrow error: {0}")]
     Arrow(#[from] arrow_schema::ArrowError),
+    #[error("Embedding error: {0}")]
+    Anyhow(#[from] anyhow::Error),
     #[error("Invalid argument: {0}")]
     InvalidArgument(String),
     #[error("MCP error: {0}")]

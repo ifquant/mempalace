@@ -17,6 +17,7 @@ blake3 = "1.8.4"
 chrono = { version = "0.4.44", features = ["serde"] }
 clap = { version = "4.6.0", features = ["derive", "env"] }
 dirs = "6"
+fastembed = { version = "5.13.2", default-features = false, features = ["hf-hub-rustls-tls", "ort-load-dynamic"] }
 futures = "0.3"
 ignore = "0.4.25"
 lancedb = "0.27.2"

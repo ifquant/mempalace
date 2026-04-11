@@ -133,7 +133,7 @@ fn tool(name: &str, description: &str) -> Value {
 }
 
 async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<Value> {
-    let app = App::new(config.clone());
+    let app = App::new(config.clone())?;
 
     match name {
         "mempalace_status" => Ok(serde_json::to_value(app.status().await?)?),

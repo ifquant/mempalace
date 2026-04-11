@@ -1,7 +1,7 @@
 use std::fs;
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use mempalace_rs::config::AppConfig;
+use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::service::App;
 use tempfile::tempdir;
 
@@ -20,8 +20,9 @@ fn ingest_search_benchmark(criterion: &mut Criterion) {
                 )
                 .unwrap();
 
-                let config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
-                let app = App::new(config);
+                let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+                config.embedding.backend = EmbeddingBackend::Hash;
+                let app = App::new(config).unwrap();
                 app.init().await.unwrap();
                 app.mine_project(&project, Some("project"), 0, true, &[])
                     .await
@@ -40,8 +41,9 @@ fn ingest_search_benchmark(criterion: &mut Criterion) {
         )
         .unwrap();
 
-        let config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
-        let app = App::new(config);
+        let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+        config.embedding.backend = EmbeddingBackend::Hash;
+        let app = App::new(config).unwrap();
         runtime.block_on(async {
             app.init().await.unwrap();
             app.mine_project(&project, Some("project"), 0, true, &[])

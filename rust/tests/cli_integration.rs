@@ -19,6 +19,7 @@ fn cli_init_status_mine_search_round_trip() {
 
     Command::cargo_bin("mempalace-rs")
         .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
         .args([
             "--palace",
             palace.to_str().unwrap(),
@@ -31,6 +32,7 @@ fn cli_init_status_mine_search_round_trip() {
 
     Command::cargo_bin("mempalace-rs")
         .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
         .args([
             "--palace",
             palace.to_str().unwrap(),
@@ -43,6 +45,7 @@ fn cli_init_status_mine_search_round_trip() {
 
     Command::cargo_bin("mempalace-rs")
         .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
         .args(["--palace", palace.to_str().unwrap(), "status"])
         .assert()
         .success()
@@ -50,6 +53,7 @@ fn cli_init_status_mine_search_round_trip() {
 
     Command::cargo_bin("mempalace-rs")
         .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
         .args([
             "--palace",
             palace.to_str().unwrap(),

@@ -4,6 +4,7 @@ use std::path::Path;
 use chrono::Utc;
 use rusqlite::{Connection, OptionalExtension, params};
 
+use crate::embed::EmbeddingProfile;
 use crate::error::Result;
 use crate::model::{DrawerInput, KgTriple, Rooms, Taxonomy};
 
@@ -77,6 +78,67 @@ impl SqliteStore {
             )
             .optional()?;
         Ok(value)
+    }
+
+    pub fn meta(&self, key: &str) -> Result<Option<String>> {
+        let value = self
+            .conn
+            .query_row("SELECT value FROM meta WHERE key = ?1", [key], |row| {
+                row.get(0)
+            })
+            .optional()?;
+        Ok(value)
+    }
+
+    pub fn set_meta(&self, key: &str, value: &str) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meta(key, value) VALUES(?1, ?2)",
+            params![key, value],
+        )?;
+        Ok(())
+    }
+
+    pub fn ensure_embedding_profile(&self, profile: &EmbeddingProfile) -> Result<()> {
+        let stored_provider = self.meta("embedding_provider")?;
+        let stored_model = self.meta("embedding_model")?;
+        let stored_dimension = self
+            .meta("embedding_dimension")?
+            .and_then(|value| value.parse::<usize>().ok());
+
+        if let (Some(provider), Some(model), Some(dimension)) =
+            (stored_provider, stored_model, stored_dimension)
+        {
+            if provider == profile.provider
+                && model == profile.model
+                && dimension == profile.dimension
+            {
+                return Ok(());
+            }
+
+            return Err(crate::error::MempalaceError::InvalidArgument(format!(
+                "Palace embedding profile mismatch: existing={provider}/{model}/{dimension}, requested={}/{}/{}",
+                profile.provider, profile.model, profile.dimension
+            )));
+        }
+
+        if self.total_drawers()? > 0 {
+            let legacy = EmbeddingProfile::legacy_hash();
+            if &legacy != profile {
+                return Err(crate::error::MempalaceError::InvalidArgument(format!(
+                    "Existing palace contains legacy hash embeddings. Re-open it with hash provider or create a new palace for {}/{}",
+                    profile.provider, profile.model
+                )));
+            }
+        }
+
+        self.persist_embedding_profile(profile)
+    }
+
+    fn persist_embedding_profile(&self, profile: &EmbeddingProfile) -> Result<()> {
+        self.set_meta("embedding_provider", &profile.provider)?;
+        self.set_meta("embedding_model", &profile.model)?;
+        self.set_meta("embedding_dimension", &profile.dimension.to_string())?;
+        Ok(())
     }
 
     pub fn replace_source(

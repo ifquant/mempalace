@@ -1,12 +1,13 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use ignore::WalkBuilder;
 
 use crate::VERSION;
 use crate::config::AppConfig;
-use crate::embed::embed_text;
+use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
     DrawerInput, InitSummary, KgTriple, MineSummary, Rooms, SearchResults, Status, Taxonomy,
@@ -17,19 +18,28 @@ use crate::storage::vector::VectorStore;
 #[derive(Clone)]
 pub struct App {
     pub config: AppConfig,
+    embedder: Arc<dyn EmbeddingProvider>,
 }
 
 impl App {
-    pub fn new(config: AppConfig) -> Self {
-        Self { config }
+    pub fn new(config: AppConfig) -> Result<Self> {
+        let embedder = build_embedder(&config.embedding)?;
+        Ok(Self { config, embedder })
+    }
+
+    pub fn with_embedder(config: AppConfig, embedder: Arc<dyn EmbeddingProvider>) -> Self {
+        Self { config, embedder }
     }
 
     pub async fn init(&self) -> Result<InitSummary> {
         self.config.ensure_dirs()?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
         sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
         let vector = VectorStore::connect(&self.config.lance_path()).await?;
-        let _ = vector.ensure_table().await?;
+        let _ = vector
+            .ensure_table(self.embedder.profile().dimension)
+            .await?;
 
         Ok(InitSummary {
             palace_path: self.config.palace_path.display().to_string(),
@@ -42,6 +52,7 @@ impl App {
         self.config.ensure_dirs()?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
         sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
         Ok(Status {
             total_drawers: sqlite.total_drawers()?,
             wings: sqlite.list_wings()?,
@@ -55,6 +66,7 @@ impl App {
         self.config.ensure_dirs()?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
         sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
         sqlite.list_wings()
     }
 
@@ -62,6 +74,7 @@ impl App {
         self.config.ensure_dirs()?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
         sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
         sqlite.list_rooms(wing)
     }
 
@@ -69,6 +82,7 @@ impl App {
         self.config.ensure_dirs()?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
         sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
         sqlite.taxonomy()
     }
 
@@ -82,8 +96,10 @@ impl App {
         self.config.ensure_dirs()?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
         sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
         let vector = VectorStore::connect(&self.config.lance_path()).await?;
-        let hits = vector.search(&embed_text(query), wing, room, limit).await?;
+        let embedding = self.embedder.embed_query(query)?;
+        let hits = vector.search(&embedding, wing, room, limit).await?;
         Ok(SearchResults { results: hits })
     }
 
@@ -161,10 +177,7 @@ impl App {
                 })
                 .collect();
 
-            let embeddings: Vec<Vec<f32>> = drawers
-                .iter()
-                .map(|drawer| embed_text(&drawer.text))
-                .collect();
+            let embeddings = self.embedder.embed_documents(&chunks)?;
             vector.replace_source(&drawers, &embeddings).await?;
             sqlite.replace_source(&source_path, &wing, &room, &source_hash, &drawers)?;
 

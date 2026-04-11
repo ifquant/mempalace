@@ -52,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
         Command::Init { dir } => {
             let palace_path = palace.as_ref().unwrap_or(&dir);
             let config = AppConfig::resolve(Some(palace_path))?;
-            let app = App::new(config);
+            let app = App::new(config)?;
             let summary = app.init().await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
@@ -64,7 +64,7 @@ async fn main() -> anyhow::Result<()> {
             include_ignored,
         } => {
             let config = AppConfig::resolve(palace.as_ref())?;
-            let app = App::new(config);
+            let app = App::new(config)?;
             let summary = app
                 .mine_project(
                     &dir,
@@ -83,7 +83,7 @@ async fn main() -> anyhow::Result<()> {
             results,
         } => {
             let config = AppConfig::resolve(palace.as_ref())?;
-            let app = App::new(config);
+            let app = App::new(config)?;
             let summary = app
                 .search(&query, wing.as_deref(), room.as_deref(), results)
                 .await?;
@@ -91,7 +91,7 @@ async fn main() -> anyhow::Result<()> {
         }
         Command::Status => {
             let config = AppConfig::resolve(palace.as_ref())?;
-            let app = App::new(config);
+            let app = App::new(config)?;
             let summary = app.status().await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
