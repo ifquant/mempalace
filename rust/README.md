@@ -66,6 +66,14 @@ Fastembed smoke test note:
 - run it explicitly when you want a true local `prepare-embedding -> mine -> search` pass
 - set `MEMPALACE_RS_TEST_HF_ENDPOINT` if your environment needs a HuggingFace mirror
 
+Current MCP compatibility notes:
+
+- read-only MCP tool names match the Python server
+- `tools/list` now exposes Python-style input schemas for read tools
+- `mempalace_status` includes `protocol` and `aaak_dialect`
+- `mempalace_search` returns Python-style `query`, `filters`, `source_file`, and `similarity`
+- empty palaces return the Python-style `{"error":"No palace found","hint":"Run: ..."}` shape
+
 Local runtime note:
 
 - `fastembed` now uses runtime-loaded ONNX Runtime instead of build-time binary downloads
