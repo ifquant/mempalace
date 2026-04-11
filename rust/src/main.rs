@@ -7,11 +7,18 @@ use mempalace_rs::service::App;
 
 #[derive(Parser)]
 #[command(name = "mempalace-rs")]
-#[command(about = "Rust rewrite of MemPalace")]
+#[command(
+    about = "MemPalace — Give your AI a memory. No API key required.",
+    long_about = "MemPalace — Give your AI a memory. No API key required.\n\nCurrent Rust phase supports local-first project mining, search, migration, repair diagnostics, and read-only MCP tools.\n\nExamples:\n  mempalace-rs init ~/projects/my_app\n  mempalace-rs mine ~/projects/my_app\n  mempalace-rs search \"why did we switch to GraphQL\"\n  mempalace-rs status\n  mempalace-rs migrate\n  mempalace-rs repair"
+)]
 struct Cli {
     #[arg(long)]
+    #[arg(
+        help = "Where the palace lives (default: ~/.mempalace-rs/palace or MEMPALACE_RS_PALACE_PATH)"
+    )]
     palace: Option<PathBuf>,
     #[arg(long)]
+    #[arg(help = "Override the HuggingFace endpoint used by fastembed model downloads")]
     hf_endpoint: Option<String>,
     #[command(subcommand)]
     command: Command,
@@ -19,42 +26,66 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    #[command(about = "Set up a palace directory for a project")]
     Init {
+        #[arg(help = "Project directory to set up")]
         dir: PathBuf,
     },
+    #[command(about = "Mine project files into the palace")]
     Mine {
+        #[arg(help = "Directory to mine")]
         dir: PathBuf,
         #[arg(long)]
+        #[arg(help = "Wing name (default: mempalace.yaml wing or directory name)")]
         wing: Option<String>,
         #[arg(long, default_value_t = 0)]
+        #[arg(help = "Max files to process (0 = all)")]
         limit: usize,
         #[arg(long)]
+        #[arg(help = "Do not respect .gitignore files when scanning project files")]
         no_gitignore: bool,
         #[arg(long = "include-ignored")]
+        #[arg(
+            help = "Always scan these project-relative paths even if ignored; repeat or pass comma-separated paths"
+        )]
         include_ignored: Vec<String>,
     },
+    #[command(about = "Find anything, exact words")]
     Search {
+        #[arg(help = "What to search for")]
         query: String,
         #[arg(long)]
+        #[arg(help = "Limit to one project/wing")]
         wing: Option<String>,
         #[arg(long)]
+        #[arg(help = "Limit to one room")]
         room: Option<String>,
         #[arg(long, default_value_t = 5)]
+        #[arg(help = "Number of results")]
         results: usize,
     },
+    #[command(about = "Upgrade palace SQLite metadata to the current schema version")]
     Migrate,
+    #[command(about = "Run non-destructive palace diagnostics")]
     Repair,
+    #[command(about = "Show what has been filed in the palace")]
     Status,
+    #[command(about = "Inspect embedding runtime health and cache state")]
     Doctor {
         #[arg(long)]
+        #[arg(help = "Warm the embedding model during the doctor run")]
         warm_embedding: bool,
     },
+    #[command(about = "Prepare the local embedding runtime and model cache")]
     PrepareEmbedding {
         #[arg(long, default_value_t = 3)]
+        #[arg(help = "How many warm-up attempts to make")]
         attempts: usize,
         #[arg(long, default_value_t = 1000)]
+        #[arg(help = "Milliseconds to wait between attempts")]
         wait_ms: u64,
     },
+    #[command(about = "Run the read-only MCP server on stdio")]
     Mcp,
 }
 

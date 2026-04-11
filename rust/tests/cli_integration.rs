@@ -92,6 +92,33 @@ fn cli_init_status_mine_search_round_trip() {
 }
 
 #[test]
+fn cli_root_help_mentions_core_commands_and_examples() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "MemPalace — Give your AI a memory. No API key required.",
+        ))
+        .stdout(contains("mempalace-rs mine ~/projects/my_app"))
+        .stdout(contains("migrate"))
+        .stdout(contains("repair"));
+}
+
+#[test]
+fn cli_search_help_mentions_filters_and_results() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["search", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Find anything, exact words"))
+        .stdout(contains("Limit to one project/wing"))
+        .stdout(contains("Number of results"));
+}
+
+#[test]
 #[ignore = "requires fastembed runtime and model warm-up"]
 fn cli_fastembed_prepare_mine_search_smoke() {
     let tmp = tempdir().unwrap();

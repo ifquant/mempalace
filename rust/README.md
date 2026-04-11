@@ -28,6 +28,7 @@ Current first-phase support:
 - SQLite schema version tracking and a minimal migration path
 - `migrate` exposes the current SQLite schema upgrade path as a CLI command
 - `repair` provides non-destructive palace diagnostics
+- CLI help and command descriptions are now closer to the Python entrypoint
 
 Current project-mining behavior:
 
