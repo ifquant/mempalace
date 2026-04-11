@@ -12,7 +12,7 @@ use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
     DoctorSummary, DrawerInput, InitSummary, KgTriple, MigrateSummary, MineSummary,
-    PrepareEmbeddingSummary, RepairSummary, Rooms, SearchResults, Status, Taxonomy,
+    PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters, SearchResults, Status, Taxonomy,
 };
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
 use crate::storage::vector::VectorStore;
@@ -308,7 +308,14 @@ impl App {
         let vector = VectorStore::connect(&self.config.lance_path()).await?;
         let embedding = self.embedder.embed_query(query)?;
         let hits = vector.search(&embedding, wing, room, limit).await?;
-        Ok(SearchResults { results: hits })
+        Ok(SearchResults {
+            query: query.to_string(),
+            filters: SearchFilters {
+                wing: wing.map(ToOwned::to_owned),
+                room: room.map(ToOwned::to_owned),
+            },
+            results: hits,
+        })
     }
 
     pub async fn mine_project(

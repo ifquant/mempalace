@@ -29,6 +29,7 @@ Current first-phase support:
 - `migrate` exposes the current SQLite schema upgrade path as a CLI command
 - `repair` provides non-destructive palace diagnostics
 - CLI help and command descriptions are now closer to the Python entrypoint
+- `search` CLI JSON now carries Python-style `query`, `filters`, `source_file`, and `similarity`
 
 Current project-mining behavior:
 

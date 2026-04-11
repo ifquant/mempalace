@@ -184,14 +184,22 @@ fn search_hits_from_batch(batch: &RecordBatch) -> Vec<SearchHit> {
 
     let mut hits = Vec::with_capacity(batch.num_rows());
     for row in 0..batch.num_rows() {
+        let source_path = source_paths.value(row).to_string();
+        let score = score_f32.map(|scores| scores.value(row) as f64);
+        let source_file = Path::new(&source_path)
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_else(|| source_path.clone());
         hits.push(SearchHit {
             id: ids.value(row).to_string(),
             text: texts.value(row).to_string(),
             wing: wings.value(row).to_string(),
             room: rooms.value(row).to_string(),
-            source_path: source_paths.value(row).to_string(),
+            source_file,
+            source_path,
             chunk_index: chunk_indices.value(row),
-            score: score_f32.map(|scores| scores.value(row) as f64),
+            similarity: score.map(|distance| (1.0 - distance).clamp(0.0, 1.0)),
+            score,
         });
     }
     hits

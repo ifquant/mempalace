@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use serde_json::{Value, json};
 
 use crate::config::AppConfig;
@@ -216,20 +214,15 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
             let limit = arguments.get("limit").and_then(Value::as_u64).unwrap_or(5) as usize;
             let results = app.search(query, wing, room, limit).await?;
             Ok(json!({
-                "query": query,
-                "filters": {"wing": wing, "room": room},
+                "query": results.query,
+                "filters": results.filters,
                 "results": results.results.into_iter().map(|hit| {
-                    let source_file = Path::new(&hit.source_path)
-                        .file_name()
-                        .map(|name| name.to_string_lossy().to_string())
-                        .unwrap_or_else(|| hit.source_path.clone());
-                    let similarity = hit.score.map(|score| (1.0 - score).clamp(0.0, 1.0));
                     json!({
                         "text": hit.text,
                         "wing": hit.wing,
                         "room": hit.room,
-                        "source_file": source_file,
-                        "similarity": similarity.map(|value| (value * 1000.0).round() / 1000.0),
+                        "source_file": hit.source_file,
+                        "similarity": hit.similarity.map(|value| (value * 1000.0).round() / 1000.0),
                     })
                 }).collect::<Vec<_>>()
             }))

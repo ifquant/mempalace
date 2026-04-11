@@ -19,13 +19,23 @@ pub struct SearchHit {
     pub text: String,
     pub wing: String,
     pub room: String,
+    pub source_file: String,
     pub source_path: String,
     pub chunk_index: i32,
+    pub similarity: Option<f64>,
     pub score: Option<f64>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SearchFilters {
+    pub wing: Option<String>,
+    pub room: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SearchResults {
+    pub query: String,
+    pub filters: SearchFilters,
     pub results: Vec<SearchHit>,
 }
 
