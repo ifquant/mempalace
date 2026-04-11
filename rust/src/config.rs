@@ -19,6 +19,7 @@ pub struct EmbeddingSettings {
     pub backend: EmbeddingBackend,
     pub model: String,
     pub cache_dir: PathBuf,
+    pub hf_endpoint: Option<String>,
     pub show_download_progress: bool,
 }
 
@@ -108,6 +109,9 @@ fn resolve_embedding_settings(
             .map(|home| home.join(".mempalace-rs").join("models"))
             .unwrap_or_else(|| palace_path.join("models")),
     };
+    let hf_endpoint = std::env::var("MEMPALACE_RS_HF_ENDPOINT")
+        .ok()
+        .or_else(|| std::env::var("HF_ENDPOINT").ok());
     let show_download_progress = std::env::var("MEMPALACE_RS_EMBED_SHOW_DOWNLOAD_PROGRESS")
         .map(|value| !matches!(value.to_ascii_lowercase().as_str(), "0" | "false" | "no"))
         .unwrap_or(true);
@@ -116,6 +120,7 @@ fn resolve_embedding_settings(
         backend,
         model,
         cache_dir,
+        hf_endpoint,
         show_download_progress,
     })
 }

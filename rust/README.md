@@ -35,6 +35,7 @@ Useful env vars:
 - `MEMPALACE_RS_EMBED_PROVIDER=fastembed|hash`
 - `MEMPALACE_RS_EMBED_MODEL=MultilingualE5Small`
 - `MEMPALACE_RS_EMBED_CACHE_DIR=/path/to/model-cache`
+- `MEMPALACE_RS_HF_ENDPOINT=https://hf-mirror.com`
 - `MEMPALACE_RS_EMBED_SHOW_DOWNLOAD_PROGRESS=true|false`
 
 Useful verification command:
@@ -42,11 +43,12 @@ Useful verification command:
 - `cargo run -- --palace /tmp/mempalace doctor`
 - `cargo run -- --palace /tmp/mempalace doctor --warm-embedding`
 - `cargo run -- --palace /tmp/mempalace prepare-embedding`
+- `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding`
 
 Recommended first-run flow for fastembed:
 
 1. `cargo run -- --palace /tmp/mempalace doctor`
-2. `cargo run -- --palace /tmp/mempalace prepare-embedding --attempts 3 --wait-ms 1000`
+2. `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding --attempts 3 --wait-ms 1000`
 3. `cargo run -- --palace /tmp/mempalace mine /path/to/project`
 
 Local runtime note:

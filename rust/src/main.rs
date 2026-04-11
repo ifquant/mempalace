@@ -11,6 +11,8 @@ use mempalace_rs::service::App;
 struct Cli {
     #[arg(long)]
     palace: Option<PathBuf>,
+    #[arg(long)]
+    hf_endpoint: Option<String>,
     #[command(subcommand)]
     command: Command,
 }
@@ -56,12 +58,17 @@ enum Command {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let Cli { palace, command } = Cli::parse();
+    let Cli {
+        palace,
+        hf_endpoint,
+        command,
+    } = Cli::parse();
 
     match command {
         Command::Init { dir } => {
             let palace_path = palace.as_ref().unwrap_or(&dir);
-            let config = AppConfig::resolve(Some(palace_path))?;
+            let mut config = AppConfig::resolve(Some(palace_path))?;
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = App::new(config)?;
             let summary = app.init().await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
@@ -73,7 +80,8 @@ async fn main() -> anyhow::Result<()> {
             no_gitignore,
             include_ignored,
         } => {
-            let config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = AppConfig::resolve(palace.as_ref())?;
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = App::new(config)?;
             let summary = app
                 .mine_project(
@@ -92,7 +100,8 @@ async fn main() -> anyhow::Result<()> {
             room,
             results,
         } => {
-            let config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = AppConfig::resolve(palace.as_ref())?;
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = App::new(config)?;
             let summary = app
                 .search(&query, wing.as_deref(), room.as_deref(), results)
@@ -100,28 +109,38 @@ async fn main() -> anyhow::Result<()> {
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
         Command::Status => {
-            let config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = AppConfig::resolve(palace.as_ref())?;
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = App::new(config)?;
             let summary = app.status().await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
         Command::Doctor { warm_embedding } => {
-            let config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = AppConfig::resolve(palace.as_ref())?;
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = App::new(config)?;
             let summary = app.doctor(warm_embedding).await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
         Command::PrepareEmbedding { attempts, wait_ms } => {
-            let config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = AppConfig::resolve(palace.as_ref())?;
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = App::new(config)?;
             let summary = app.prepare_embedding(attempts, wait_ms).await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
         Command::Mcp => {
-            let config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = AppConfig::resolve(palace.as_ref())?;
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             mcp::run_stdio(config).await?;
         }
     }
 
     Ok(())
+}
+
+fn apply_cli_overrides(config: &mut AppConfig, hf_endpoint: Option<&str>) {
+    if let Some(endpoint) = hf_endpoint {
+        config.embedding.hf_endpoint = Some(endpoint.to_string());
+    }
 }

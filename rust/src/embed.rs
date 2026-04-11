@@ -44,6 +44,7 @@ pub fn build_embedder(settings: &EmbeddingSettings) -> Result<Arc<dyn EmbeddingP
         EmbeddingBackend::Fastembed => Ok(Arc::new(FastEmbedder::new(
             settings.model.clone(),
             settings.cache_dir.clone(),
+            settings.hf_endpoint.clone(),
             settings.show_download_progress,
         )?)),
     }
@@ -144,6 +145,7 @@ impl EmbeddingProvider for HashEmbedder {
 
 pub struct FastEmbedder {
     cache_dir: PathBuf,
+    hf_endpoint: Option<String>,
     model_name: EmbeddingModel,
     model_code: String,
     model_file: String,
@@ -154,7 +156,12 @@ pub struct FastEmbedder {
 }
 
 impl FastEmbedder {
-    pub fn new(model: String, cache_dir: PathBuf, show_download_progress: bool) -> Result<Self> {
+    pub fn new(
+        model: String,
+        cache_dir: PathBuf,
+        hf_endpoint: Option<String>,
+        show_download_progress: bool,
+    ) -> Result<Self> {
         let model_name = EmbeddingModel::from_str(&model).map_err(|err| {
             MempalaceError::InvalidArgument(format!("Unknown fastembed model `{model}`: {err}"))
         })?;
@@ -163,6 +170,7 @@ impl FastEmbedder {
 
         Ok(Self {
             cache_dir,
+            hf_endpoint,
             model_code: model_info.model_code.clone(),
             model_file: model_info.model_file.clone(),
             use_e5_prefixes: matches!(model_name, EmbeddingModel::MultilingualE5Small),
@@ -185,6 +193,7 @@ impl FastEmbedder {
 
         if runtime.is_none() {
             configure_ort_dylib_path();
+            configure_hf_endpoint(self.hf_endpoint.as_deref());
             let options = InitOptions::new(self.model_name.clone())
                 .with_cache_dir(self.cache_dir.clone())
                 .with_show_download_progress(self.show_download_progress);
@@ -240,6 +249,20 @@ fn detect_ort_dylib_path() -> Option<PathBuf> {
     std::env::var("ORT_DYLIB_PATH").ok().map(PathBuf::from)
 }
 
+fn configure_hf_endpoint(endpoint: Option<&str>) {
+    let Some(endpoint) = endpoint else {
+        return;
+    };
+
+    if std::env::var("HF_ENDPOINT").ok().as_deref() == Some(endpoint) {
+        return;
+    }
+
+    unsafe {
+        std::env::set_var("HF_ENDPOINT", endpoint);
+    }
+}
+
 impl EmbeddingProvider for FastEmbedder {
     fn profile(&self) -> &EmbeddingProfile {
         &self.profile
@@ -280,7 +303,7 @@ impl EmbeddingProvider for FastEmbedder {
             .unwrap_or(false);
         let expected_model_file = model_cache_dir
             .as_ref()
-            .map(|path| path.join("snapshots").join(&self.model_file));
+            .and_then(|path| expected_model_file(path, &self.model_file));
         let expected_model_file_present = expected_model_file
             .as_ref()
             .map(|path| path.exists())
@@ -304,7 +327,10 @@ impl EmbeddingProvider for FastEmbedder {
             model_cache_present,
             expected_model_file: expected_model_file.map(|path| path.display().to_string()),
             expected_model_file_present,
-            hf_endpoint: std::env::var("HF_ENDPOINT").ok(),
+            hf_endpoint: self
+                .hf_endpoint
+                .clone()
+                .or_else(|| std::env::var("HF_ENDPOINT").ok()),
             ort_dylib_path: detect_ort_dylib_path().map(|path| path.display().to_string()),
             warmup_attempted: warmup,
             warmup_ok,
@@ -334,6 +360,17 @@ fn model_cache_ready(path: &std::path::Path) -> bool {
     }
 
     path.join("refs").exists()
+}
+
+fn expected_model_file(cache_dir: &std::path::Path, model_file: &str) -> Option<PathBuf> {
+    let refs_main = cache_dir.join("refs").join("main");
+    let snapshot = std::fs::read_to_string(refs_main).ok()?;
+    let snapshot = snapshot.trim();
+    if snapshot.is_empty() {
+        return None;
+    }
+
+    Some(cache_dir.join("snapshots").join(snapshot).join(model_file))
 }
 
 fn accumulate(vector: &mut [f32], token: &str) {
