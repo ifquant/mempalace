@@ -1,0 +1,242 @@
+use std::collections::BTreeMap;
+use std::path::Path;
+
+use chrono::Utc;
+use rusqlite::{Connection, OptionalExtension, params};
+
+use crate::error::Result;
+use crate::model::{DrawerInput, KgTriple, Rooms, Taxonomy};
+
+pub struct SqliteStore {
+    conn: Connection,
+}
+
+impl SqliteStore {
+    pub fn open(path: &Path) -> Result<Self> {
+        let conn = Connection::open(path)?;
+        Ok(Self { conn })
+    }
+
+    pub fn init_schema(&self) -> Result<()> {
+        self.conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS meta (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS drawers (
+                id TEXT PRIMARY KEY,
+                wing TEXT NOT NULL,
+                room TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                source_hash TEXT NOT NULL,
+                chunk_index INTEGER NOT NULL,
+                text TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_drawers_wing ON drawers(wing);
+            CREATE INDEX IF NOT EXISTS idx_drawers_room ON drawers(room);
+            CREATE INDEX IF NOT EXISTS idx_drawers_source_path ON drawers(source_path);
+
+            CREATE TABLE IF NOT EXISTS ingested_files (
+                source_path TEXT PRIMARY KEY,
+                content_hash TEXT NOT NULL,
+                wing TEXT NOT NULL,
+                room TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS kg_triples (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                subject TEXT NOT NULL,
+                predicate TEXT NOT NULL,
+                object TEXT NOT NULL,
+                valid_from TEXT,
+                valid_to TEXT,
+                created_at TEXT NOT NULL
+            );
+            "#,
+        )?;
+
+        self.conn.execute(
+            "INSERT OR REPLACE INTO meta(key, value) VALUES('schema_version', '1')",
+            [],
+        )?;
+        Ok(())
+    }
+
+    pub fn source_hash(&self, source_path: &str) -> Result<Option<String>> {
+        let value = self
+            .conn
+            .query_row(
+                "SELECT content_hash FROM ingested_files WHERE source_path = ?1",
+                [source_path],
+                |row| row.get(0),
+            )
+            .optional()?;
+        Ok(value)
+    }
+
+    pub fn replace_source(
+        &mut self,
+        source_path: &str,
+        wing: &str,
+        room: &str,
+        content_hash: &str,
+        drawers: &[DrawerInput],
+    ) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        tx.execute("DELETE FROM drawers WHERE source_path = ?1", [source_path])?;
+
+        let now = Utc::now().to_rfc3339();
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO drawers (id, wing, room, source_path, source_hash, chunk_index, text, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            )?;
+            for drawer in drawers {
+                stmt.execute(params![
+                    drawer.id,
+                    drawer.wing,
+                    drawer.room,
+                    drawer.source_path,
+                    drawer.source_hash,
+                    drawer.chunk_index,
+                    drawer.text,
+                    now,
+                ])?;
+            }
+        }
+
+        tx.execute(
+            "INSERT OR REPLACE INTO ingested_files (source_path, content_hash, wing, room, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![source_path, content_hash, wing, room, now],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn total_drawers(&self) -> Result<usize> {
+        let count = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM drawers", [], |row| {
+                row.get::<_, i64>(0)
+            })?;
+        Ok(count as usize)
+    }
+
+    pub fn list_wings(&self) -> Result<BTreeMap<String, usize>> {
+        let mut stmt = self
+            .conn
+            .prepare("SELECT wing, COUNT(*) FROM drawers GROUP BY wing ORDER BY wing")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+        })?;
+
+        let mut out = BTreeMap::new();
+        for row in rows {
+            let (wing, count) = row?;
+            out.insert(wing, count);
+        }
+        Ok(out)
+    }
+
+    pub fn list_rooms(&self, wing: Option<&str>) -> Result<Rooms> {
+        let mut out = BTreeMap::new();
+        if let Some(wing_name) = wing {
+            let mut stmt = self.conn.prepare(
+                "SELECT room, COUNT(*) FROM drawers WHERE wing = ?1 GROUP BY room ORDER BY room",
+            )?;
+            let rows = stmt.query_map([wing_name], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+            })?;
+            for row in rows {
+                let (room, count) = row?;
+                out.insert(room, count);
+            }
+            return Ok(Rooms {
+                wing: wing_name.to_string(),
+                rooms: out,
+            });
+        }
+
+        let mut stmt = self
+            .conn
+            .prepare("SELECT room, COUNT(*) FROM drawers GROUP BY room ORDER BY room")?;
+        let rows = stmt.query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+        })?;
+        for row in rows {
+            let (room, count) = row?;
+            out.insert(room, count);
+        }
+        Ok(Rooms {
+            wing: "all".to_string(),
+            rooms: out,
+        })
+    }
+
+    pub fn taxonomy(&self) -> Result<Taxonomy> {
+        let mut stmt = self.conn.prepare(
+            "SELECT wing, room, COUNT(*) FROM drawers GROUP BY wing, room ORDER BY wing, room",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)? as usize,
+            ))
+        })?;
+
+        let mut taxonomy = BTreeMap::new();
+        for row in rows {
+            let (wing, room, count) = row?;
+            taxonomy
+                .entry(wing)
+                .or_insert_with(BTreeMap::new)
+                .insert(room, count);
+        }
+        Ok(Taxonomy { taxonomy })
+    }
+
+    pub fn add_kg_triple(&self, triple: &KgTriple) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO kg_triples(subject, predicate, object, valid_from, valid_to, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                triple.subject,
+                triple.predicate,
+                triple.object,
+                triple.valid_from,
+                triple.valid_to,
+                Utc::now().to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn query_kg(&self, subject: &str) -> Result<Vec<KgTriple>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT subject, predicate, object, valid_from, valid_to
+             FROM kg_triples WHERE subject = ?1 ORDER BY id",
+        )?;
+        let rows = stmt.query_map([subject], |row| {
+            Ok(KgTriple {
+                subject: row.get(0)?,
+                predicate: row.get(1)?,
+                object: row.get(2)?,
+                valid_from: row.get(3)?,
+                valid_to: row.get(4)?,
+            })
+        })?;
+
+        let mut triples = Vec::new();
+        for row in rows {
+            triples.push(row?);
+        }
+        Ok(triples)
+    }
+}

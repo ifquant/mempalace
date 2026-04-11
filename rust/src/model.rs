@@ -1,0 +1,75 @@
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug)]
+pub struct DrawerInput {
+    pub id: String,
+    pub wing: String,
+    pub room: String,
+    pub source_path: String,
+    pub source_hash: String,
+    pub chunk_index: i32,
+    pub text: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SearchHit {
+    pub id: String,
+    pub text: String,
+    pub wing: String,
+    pub room: String,
+    pub source_path: String,
+    pub chunk_index: i32,
+    pub score: Option<f64>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct SearchResults {
+    pub results: Vec<SearchHit>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Status {
+    pub total_drawers: usize,
+    pub wings: BTreeMap<String, usize>,
+    pub rooms: BTreeMap<String, usize>,
+    pub palace_path: String,
+    pub version: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Rooms {
+    pub wing: String,
+    pub rooms: BTreeMap<String, usize>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct Taxonomy {
+    pub taxonomy: BTreeMap<String, BTreeMap<String, usize>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct KgTriple {
+    pub subject: String,
+    pub predicate: String,
+    pub object: String,
+    pub valid_from: Option<String>,
+    pub valid_to: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct MineSummary {
+    pub wing: String,
+    pub files_seen: usize,
+    pub files_mined: usize,
+    pub drawers_added: usize,
+    pub files_skipped_unchanged: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct InitSummary {
+    pub palace_path: String,
+    pub sqlite_path: String,
+    pub lance_path: String,
+}
