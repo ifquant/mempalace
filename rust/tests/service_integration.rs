@@ -331,6 +331,188 @@ async fn mine_skips_unchanged_files_and_remines_when_mtime_changes() {
 }
 
 #[tokio::test]
+async fn mine_respects_nested_gitignore_and_negation_rules() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join("subrepo").join("src")).unwrap();
+    std::fs::create_dir_all(project.join("subrepo").join("tasks")).unwrap();
+    std::fs::write(project.join(".gitignore"), "*.log\n").unwrap();
+    std::fs::write(project.join("subrepo").join(".gitignore"), "tasks/\n").unwrap();
+    std::fs::write(
+        project.join("subrepo").join("src").join("main.py"),
+        "print('main')\nprint('main')\nprint('main')\nprint('main')\nprint('main')\n",
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("subrepo").join("tasks").join("task.py"),
+        "print('task')\nprint('task')\nprint('task')\nprint('task')\nprint('task')\n",
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("subrepo").join("debug.log"),
+        "debug\n".repeat(20),
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+
+    let summary = app
+        .mine_project(
+            &project,
+            &MineRequest {
+                wing: Some("nested".to_string()),
+                mode: "projects".to_string(),
+                agent: "mempalace".to_string(),
+                limit: 0,
+                dry_run: true,
+                respect_gitignore: true,
+                include_ignored: vec![],
+                extract: "exchange".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(summary.files_seen, 1);
+    assert_eq!(summary.files_mined, 1);
+}
+
+#[tokio::test]
+async fn mine_handles_gitignore_negation_only_when_parent_dir_remains_visible() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join("generated")).unwrap();
+    std::fs::write(
+        project.join(".gitignore"),
+        "generated/*\n!generated/keep.py\n",
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("generated").join("drop.py"),
+        "print('drop')\n".repeat(20),
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("generated").join("keep.py"),
+        "print('keep')\n".repeat(20),
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+
+    let summary = app
+        .mine_project(
+            &project,
+            &MineRequest {
+                wing: Some("negation".to_string()),
+                mode: "projects".to_string(),
+                agent: "mempalace".to_string(),
+                limit: 0,
+                dry_run: true,
+                respect_gitignore: true,
+                include_ignored: vec![],
+                extract: "exchange".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(summary.files_seen, 1);
+    assert_eq!(summary.files_mined, 1);
+}
+
+#[tokio::test]
+async fn mine_does_not_reinclude_file_from_ignored_directory_without_override() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join("generated")).unwrap();
+    std::fs::write(
+        project.join(".gitignore"),
+        "generated/\n!generated/keep.py\n",
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("generated").join("drop.py"),
+        "print('drop')\n".repeat(20),
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("generated").join("keep.py"),
+        "print('keep')\n".repeat(20),
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+
+    let summary = app
+        .mine_project(
+            &project,
+            &MineRequest {
+                wing: Some("ignored-dir".to_string()),
+                mode: "projects".to_string(),
+                agent: "mempalace".to_string(),
+                limit: 0,
+                dry_run: true,
+                respect_gitignore: true,
+                include_ignored: vec![],
+                extract: "exchange".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(summary.files_seen, 0);
+    assert_eq!(summary.files_mined, 0);
+}
+
+#[tokio::test]
+async fn mine_include_override_beats_skip_dirs_without_gitignore() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join(".pytest_cache")).unwrap();
+    std::fs::write(
+        project.join(".pytest_cache").join("cache.py"),
+        "print('cache')\n".repeat(20),
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+
+    let summary = app
+        .mine_project(
+            &project,
+            &MineRequest {
+                wing: Some("skipdir".to_string()),
+                mode: "projects".to_string(),
+                agent: "mempalace".to_string(),
+                limit: 0,
+                dry_run: true,
+                respect_gitignore: false,
+                include_ignored: vec![".pytest_cache".to_string()],
+                extract: "exchange".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(summary.files_seen, 1);
+    assert_eq!(summary.files_mined, 1);
+    assert_eq!(summary.room_counts["general"], 1);
+}
+
+#[tokio::test]
 async fn init_migrates_v1_sqlite_schema_to_current() {
     let tmp = tempdir().unwrap();
     let palace = tmp.path().join("palace");

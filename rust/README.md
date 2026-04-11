@@ -22,6 +22,7 @@ Current first-phase support:
 - `mine --mode convos` and `--extract general` are accepted at the CLI boundary but currently return a structured "not implemented yet" response
 - project re-mine bookkeeping now tracks `source_mtime` so unchanged files skip more like the Python miner
 - `mine` JSON now carries per-room file counts plus the Python-style search follow-up hint
+- project scanning now matches more Python `scan_project()` edge cases around nested `.gitignore`, negation, and include-overrides for skipped directories
 - `search`
 - `migrate`
 - `repair`

@@ -501,13 +501,20 @@ fn discover_files(
     respect_gitignore: bool,
     include_ignored: &[String],
 ) -> Result<Vec<PathBuf>> {
+    let include_paths = normalize_include_paths(include_ignored);
+    let include_paths_for_filter = include_paths.clone();
+    let project_root = dir.to_path_buf();
     let mut builder = WalkBuilder::new(dir);
     builder.hidden(false);
     builder.git_ignore(respect_gitignore);
     builder.git_global(respect_gitignore);
     builder.git_exclude(respect_gitignore);
     builder.require_git(false);
-    builder.filter_entry(|entry| {
+    builder.filter_entry(move |entry| {
+        if is_force_include(entry.path(), &project_root, &include_paths_for_filter) {
+            return true;
+        }
+
         entry
             .file_name()
             .to_str()
@@ -515,7 +522,6 @@ fn discover_files(
             .unwrap_or(true)
     });
 
-    let include_paths = normalize_include_paths(include_ignored);
     let mut seen = HashSet::new();
     let mut files = Vec::new();
     for result in builder.build() {
@@ -752,6 +758,22 @@ fn is_exact_force_include(
         .ok()
         .map(|relative| relative.to_string_lossy().replace('\\', "/"))
         .is_some_and(|relative| include_paths.contains(relative.trim_matches('/')))
+}
+
+fn is_force_include(path: &Path, project_path: &Path, include_paths: &HashSet<String>) -> bool {
+    if include_paths.is_empty() {
+        return false;
+    }
+
+    path.strip_prefix(project_path)
+        .ok()
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        .is_some_and(|relative| {
+            let relative = relative.trim_matches('/');
+            include_paths
+                .iter()
+                .any(|include| relative == include || relative.starts_with(&format!("{include}/")))
+        })
 }
 
 fn sanitize_slug(value: &str) -> String {
