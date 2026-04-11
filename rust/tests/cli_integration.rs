@@ -30,6 +30,9 @@ fn cli_init_status_mine_search_round_trip() {
         ])
         .assert()
         .success()
+        .stdout(contains("\"kind\": \"init\""))
+        .stdout(contains("\"version\":"))
+        .stdout(contains("\"schema_version\": 2"))
         .stdout(contains("palace.sqlite3"));
 
     Command::cargo_bin("mempalace-rs")
@@ -43,6 +46,10 @@ fn cli_init_status_mine_search_round_trip() {
         ])
         .assert()
         .success()
+        .stdout(contains("\"kind\": \"mine\""))
+        .stdout(contains("\"project_path\":"))
+        .stdout(contains("\"palace_path\":"))
+        .stdout(contains("\"filters\":"))
         .stdout(contains("\"files_mined\": 1"));
 
     Command::cargo_bin("mempalace-rs")

@@ -17,6 +17,8 @@ async fn init_is_idempotent_and_status_starts_empty() {
     let status = app.status().await.unwrap();
 
     assert_eq!(first.palace_path, second.palace_path);
+    assert_eq!(first.kind, "init");
+    assert_eq!(first.version, env!("CARGO_PKG_VERSION"));
     assert_eq!(status.total_drawers, 0);
     assert!(status.wings.is_empty());
     assert!(status.rooms.is_empty());
@@ -109,7 +111,10 @@ rooms:
         .mine_project(&project, None, 0, true, &[])
         .await
         .unwrap();
+    assert_eq!(summary.kind, "mine");
     assert_eq!(summary.wing, "alpha");
+    assert_eq!(summary.project_path, project.display().to_string());
+    assert_eq!(summary.version, env!("CARGO_PKG_VERSION"));
     assert_eq!(summary.files_seen, 2);
     assert_eq!(summary.files_mined, 2);
 

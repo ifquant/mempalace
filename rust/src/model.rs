@@ -74,7 +74,12 @@ pub struct KgTriple {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MineSummary {
+    pub kind: String,
     pub wing: String,
+    pub project_path: String,
+    pub palace_path: String,
+    pub version: String,
+    pub filters: SearchFilters,
     pub files_seen: usize,
     pub files_mined: usize,
     pub drawers_added: usize,
@@ -83,9 +88,12 @@ pub struct MineSummary {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct InitSummary {
+    pub kind: String,
     pub palace_path: String,
     pub sqlite_path: String,
     pub lance_path: String,
+    pub version: String,
+    pub schema_version: i64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

@@ -100,11 +100,15 @@ impl App {
         let _ = vector
             .ensure_table(self.embedder.profile().dimension)
             .await?;
+        let schema_version = sqlite.schema_version()?.unwrap_or(CURRENT_SCHEMA_VERSION);
 
         Ok(InitSummary {
+            kind: "init".to_string(),
             palace_path: self.config.palace_path.display().to_string(),
             sqlite_path: self.config.sqlite_path().display().to_string(),
             lance_path: self.config.lance_path().display().to_string(),
+            version: VERSION.to_string(),
+            schema_version,
         })
     }
 
@@ -415,7 +419,15 @@ impl App {
         }
 
         Ok(MineSummary {
+            kind: "mine".to_string(),
             wing,
+            project_path: dir.display().to_string(),
+            palace_path: self.config.palace_path.display().to_string(),
+            version: VERSION.to_string(),
+            filters: SearchFilters {
+                wing: wing_override.map(ToOwned::to_owned),
+                room: None,
+            },
             files_seen,
             files_mined,
             drawers_added,
