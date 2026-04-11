@@ -4,6 +4,7 @@ use clap::{Parser, Subcommand};
 use mempalace_rs::config::AppConfig;
 use mempalace_rs::mcp;
 use mempalace_rs::service::App;
+use serde_json::json;
 
 #[derive(Parser)]
 #[command(name = "mempalace-rs")]
@@ -135,6 +136,10 @@ async fn main() -> anyhow::Result<()> {
         } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+            if !palace_exists(&config) {
+                print_no_palace(&config)?;
+                std::process::exit(1);
+            }
             let app = App::new(config)?;
             let summary = app
                 .search(&query, wing.as_deref(), room.as_deref(), results)
@@ -158,6 +163,10 @@ async fn main() -> anyhow::Result<()> {
         Command::Status => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+            if !palace_exists(&config) {
+                print_no_palace(&config)?;
+                return Ok(());
+            }
             let app = App::new(config)?;
             let summary = app.status().await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
@@ -190,4 +199,18 @@ fn apply_cli_overrides(config: &mut AppConfig, hf_endpoint: Option<&str>) {
     if let Some(endpoint) = hf_endpoint {
         config.embedding.hf_endpoint = Some(endpoint.to_string());
     }
+}
+
+fn palace_exists(config: &AppConfig) -> bool {
+    config.sqlite_path().exists() || config.lance_path().exists()
+}
+
+fn print_no_palace(config: &AppConfig) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": "No palace found",
+        "hint": "Run: mempalace init <dir> && mempalace mine <dir>",
+        "palace_path": config.palace_path.display().to_string(),
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
 }

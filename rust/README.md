@@ -33,6 +33,7 @@ Current first-phase support:
 - `status`, `migrate`, and `repair` now carry stable `kind`/path/version context fields
 - `init` and `mine` now also carry stable `kind`/path/version context fields
 - `doctor` and `prepare-embedding` now also carry stable `kind`/path/version context fields
+- CLI `status/search` now return Python-style `error + hint` when no palace exists
 
 Current project-mining behavior:
 

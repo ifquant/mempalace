@@ -137,6 +137,40 @@ fn cli_search_help_mentions_filters_and_results() {
 }
 
 #[test]
+fn cli_status_reports_no_palace_with_python_style_hint() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("missing-palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--palace", palace.to_str().unwrap(), "status"])
+        .assert()
+        .success()
+        .stdout(contains("\"error\": \"No palace found\""))
+        .stdout(contains(
+            "Run: mempalace init <dir> && mempalace mine <dir>",
+        ))
+        .stdout(contains("\"palace_path\":"));
+}
+
+#[test]
+fn cli_search_reports_no_palace_with_python_style_hint() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("missing-palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--palace", palace.to_str().unwrap(), "search", "GraphQL"])
+        .assert()
+        .failure()
+        .stdout(contains("\"error\": \"No palace found\""))
+        .stdout(contains(
+            "Run: mempalace init <dir> && mempalace mine <dir>",
+        ))
+        .stdout(contains("\"palace_path\":"));
+}
+
+#[test]
 #[ignore = "requires fastembed runtime and model warm-up"]
 fn cli_fastembed_prepare_mine_search_smoke() {
     let tmp = tempdir().unwrap();
