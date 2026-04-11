@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use ignore::WalkBuilder;
+use serde::Deserialize;
 
 use crate::VERSION;
 use crate::config::AppConfig;
@@ -15,6 +16,64 @@ use crate::model::{
 };
 use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::VectorStore;
+
+const READABLE_EXTENSIONS: &[&str] = &[
+    ".txt", ".md", ".py", ".js", ".ts", ".jsx", ".tsx", ".json", ".yaml", ".yml", ".html", ".css",
+    ".java", ".go", ".rs", ".rb", ".sh", ".csv", ".sql", ".toml",
+];
+
+const SKIP_FILENAMES: &[&str] = &[
+    "mempalace.yaml",
+    "mempalace.yml",
+    "mempal.yaml",
+    "mempal.yml",
+    ".gitignore",
+    "package-lock.json",
+];
+
+const SKIP_DIRS: &[&str] = &[
+    ".git",
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "env",
+    "dist",
+    "build",
+    ".next",
+    "coverage",
+    ".mempalace",
+    ".ruff_cache",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".cache",
+    ".tox",
+    ".nox",
+    ".idea",
+    ".vscode",
+    ".ipynb_checkpoints",
+    ".eggs",
+    "htmlcov",
+    "target",
+];
+
+const CHUNK_SIZE: usize = 800;
+const CHUNK_OVERLAP: usize = 100;
+const MIN_CHUNK_SIZE: usize = 50;
+const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
+
+#[derive(Clone, Debug, Deserialize)]
+struct ProjectConfig {
+    wing: Option<String>,
+    rooms: Option<Vec<ProjectRoom>>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ProjectRoom {
+    name: String,
+    #[serde(default)]
+    keywords: Vec<String>,
+}
 
 #[derive(Clone)]
 pub struct App {
@@ -178,10 +237,17 @@ impl App {
 
         self.init().await?;
         let wing = wing_override.map(ToOwned::to_owned).unwrap_or_else(|| {
-            dir.file_name()
-                .map(|name| name.to_string_lossy().to_string())
+            load_project_config(dir)
+                .ok()
+                .flatten()
+                .and_then(|config| config.wing)
+                .or_else(|| {
+                    dir.file_name()
+                        .map(|name| name.to_string_lossy().to_string())
+                })
                 .unwrap_or_else(|| "project".to_string())
         });
+        let rooms = load_project_rooms(dir)?;
 
         let files = discover_files(dir, respect_gitignore, include_ignored)?;
         let vector = VectorStore::connect(&self.config.lance_path()).await?;
@@ -209,7 +275,7 @@ impl App {
                 continue;
             }
 
-            let room = derive_room(dir, &path);
+            let room = detect_room(dir, &path, &contents, &rooms);
             let chunks = chunk_text(&contents);
             if chunks.is_empty() {
                 continue;
@@ -276,7 +342,15 @@ fn discover_files(
     builder.git_global(respect_gitignore);
     builder.git_exclude(respect_gitignore);
     builder.require_git(false);
+    builder.filter_entry(|entry| {
+        entry
+            .file_name()
+            .to_str()
+            .map(|name| !should_skip_dir(name))
+            .unwrap_or(true)
+    });
 
+    let include_paths = normalize_include_paths(include_ignored);
     let mut seen = HashSet::new();
     let mut files = Vec::new();
     for result in builder.build() {
@@ -285,7 +359,27 @@ fn discover_files(
             Err(_) => continue,
         };
         let path = entry.path();
-        if path.is_file() && seen.insert(path.to_path_buf()) {
+        if !path.is_file() {
+            continue;
+        }
+        if path.is_symlink() {
+            continue;
+        }
+
+        let exact_force_include = is_exact_force_include(path, dir, &include_paths);
+        if !exact_force_include && should_skip_file(path) {
+            continue;
+        }
+
+        let stat = match path.metadata() {
+            Ok(stat) => stat,
+            Err(_) => continue,
+        };
+        if stat.len() > MAX_FILE_SIZE {
+            continue;
+        }
+
+        if seen.insert(path.to_path_buf()) {
             files.push(path.to_path_buf());
         }
     }
@@ -309,60 +403,190 @@ fn read_text_file(path: &Path) -> Result<Option<String>> {
     }
 }
 
-fn derive_room(root: &Path, path: &Path) -> String {
-    let relative = path.strip_prefix(root).unwrap_or(path);
-    relative
-        .parent()
-        .and_then(|parent| {
-            if parent.as_os_str().is_empty() {
-                None
-            } else {
-                parent
-                    .file_name()
-                    .map(|name| name.to_string_lossy().to_string())
+fn detect_room(root: &Path, path: &Path, content: &str, rooms: &[ProjectRoom]) -> String {
+    if rooms.is_empty() {
+        return "general".to_string();
+    }
+
+    let relative = path
+        .strip_prefix(root)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .to_ascii_lowercase()
+        .replace('\\', "/");
+    let filename = path
+        .file_stem()
+        .map(|name| name.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
+    let content_lower = content
+        .chars()
+        .take(2_000)
+        .collect::<String>()
+        .to_ascii_lowercase();
+
+    for part in relative
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .take_while(|part| !part.contains('.'))
+    {
+        for room in rooms {
+            let mut candidates = vec![room.name.to_ascii_lowercase()];
+            candidates.extend(
+                room.keywords
+                    .iter()
+                    .map(|keyword| keyword.to_ascii_lowercase()),
+            );
+            if candidates.iter().any(|candidate| {
+                part == candidate || candidate.contains(part) || part.contains(candidate)
+            }) {
+                return room.name.clone();
             }
-        })
-        .unwrap_or_else(|| "root".to_string())
+        }
+    }
+
+    for room in rooms {
+        let room_name = room.name.to_ascii_lowercase();
+        if filename.contains(&room_name) || room_name.contains(&filename) {
+            return room.name.clone();
+        }
+    }
+
+    let mut best_room = None;
+    let mut best_score = 0;
+    for room in rooms {
+        let mut score = content_lower
+            .matches(&room.name.to_ascii_lowercase())
+            .count();
+        for keyword in &room.keywords {
+            score += content_lower.matches(&keyword.to_ascii_lowercase()).count();
+        }
+        if score > best_score {
+            best_score = score;
+            best_room = Some(room.name.clone());
+        }
+    }
+
+    best_room.unwrap_or_else(|| "general".to_string())
 }
 
 fn chunk_text(text: &str) -> Vec<String> {
-    const MAX_CHARS: usize = 1200;
-
-    let mut chunks = Vec::new();
-    let mut current = String::new();
-
-    for paragraph in text.split("\n\n") {
-        let trimmed = paragraph.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-
-        if !current.is_empty() && current.len() + trimmed.len() + 2 > MAX_CHARS {
-            chunks.push(current.trim().to_string());
-            current.clear();
-        }
-
-        if trimmed.len() > MAX_CHARS {
-            for window in trimmed.as_bytes().chunks(MAX_CHARS) {
-                let part = String::from_utf8_lossy(window).trim().to_string();
-                if !part.is_empty() {
-                    chunks.push(part);
-                }
-            }
-            continue;
-        }
-
-        if !current.is_empty() {
-            current.push_str("\n\n");
-        }
-        current.push_str(trimmed);
+    let content = text.trim();
+    if content.is_empty() {
+        return Vec::new();
     }
 
-    if !current.trim().is_empty() {
-        chunks.push(current.trim().to_string());
+    let mut chunks = Vec::new();
+    let mut start = 0;
+    while start < content.len() {
+        let mut end = std::cmp::min(start + CHUNK_SIZE, content.len());
+        if end < content.len() {
+            if let Some(newline_pos) = content[start..end].rfind("\n\n") {
+                let absolute = start + newline_pos;
+                if absolute > start + CHUNK_SIZE / 2 {
+                    end = absolute;
+                } else if let Some(newline_pos) = content[start..end].rfind('\n') {
+                    let absolute = start + newline_pos;
+                    if absolute > start + CHUNK_SIZE / 2 {
+                        end = absolute;
+                    }
+                }
+            } else if let Some(newline_pos) = content[start..end].rfind('\n') {
+                let absolute = start + newline_pos;
+                if absolute > start + CHUNK_SIZE / 2 {
+                    end = absolute;
+                }
+            }
+        }
+
+        let chunk = content[start..end].trim();
+        if chunk.len() >= MIN_CHUNK_SIZE {
+            chunks.push(chunk.to_string());
+        }
+
+        start = if end < content.len() {
+            end.saturating_sub(CHUNK_OVERLAP)
+        } else {
+            end
+        };
     }
 
     chunks
+}
+
+fn load_project_rooms(project_dir: &Path) -> Result<Vec<ProjectRoom>> {
+    let config = load_project_config(project_dir)?;
+    Ok(config
+        .and_then(|config| config.rooms)
+        .filter(|rooms| !rooms.is_empty())
+        .unwrap_or_else(|| {
+            vec![ProjectRoom {
+                name: "general".to_string(),
+                keywords: Vec::new(),
+            }]
+        }))
+}
+
+fn load_project_config(project_dir: &Path) -> Result<Option<ProjectConfig>> {
+    for name in ["mempalace.yaml", "mempal.yaml"] {
+        let path = project_dir.join(name);
+        if !path.exists() {
+            continue;
+        }
+
+        let content = fs::read_to_string(path)?;
+        let config = serde_yml::from_str::<ProjectConfig>(&content).map_err(|err| {
+            MempalaceError::InvalidArgument(format!("Invalid project config: {err}"))
+        })?;
+        return Ok(Some(config));
+    }
+
+    Ok(None)
+}
+
+fn should_skip_dir(dirname: &str) -> bool {
+    SKIP_DIRS.contains(&dirname) || dirname.ends_with(".egg-info")
+}
+
+fn should_skip_file(path: &Path) -> bool {
+    let Some(filename) = path.file_name().and_then(|name| name.to_str()) else {
+        return true;
+    };
+    if SKIP_FILENAMES.contains(&filename) {
+        return true;
+    }
+
+    let ext = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| format!(".{}", ext.to_ascii_lowercase()))
+        .unwrap_or_default();
+    !READABLE_EXTENSIONS
+        .iter()
+        .any(|candidate| *candidate == ext)
+}
+
+fn normalize_include_paths(include_ignored: &[String]) -> HashSet<String> {
+    include_ignored
+        .iter()
+        .map(|raw| raw.trim().trim_matches('/'))
+        .filter(|raw| !raw.is_empty())
+        .map(|raw| Path::new(raw).to_string_lossy().replace('\\', "/"))
+        .collect()
+}
+
+fn is_exact_force_include(
+    path: &Path,
+    project_path: &Path,
+    include_paths: &HashSet<String>,
+) -> bool {
+    if include_paths.is_empty() {
+        return false;
+    }
+
+    path.strip_prefix(project_path)
+        .ok()
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        .is_some_and(|relative| include_paths.contains(relative.trim_matches('/')))
 }
 
 fn sanitize_slug(value: &str) -> String {
@@ -390,9 +614,22 @@ mod tests {
     }
 
     #[test]
-    fn derive_room_uses_parent_folder() {
+    fn detect_room_uses_path_and_keyword_rules() {
         let root = Path::new("/tmp/project");
-        let path = Path::new("/tmp/project/src/lib.rs");
-        assert_eq!(derive_room(root, path), "src");
+        let path = Path::new("/tmp/project/src/security.txt");
+        let rooms = vec![
+            ProjectRoom {
+                name: "auth".to_string(),
+                keywords: vec!["jwt".to_string(), "token".to_string()],
+            },
+            ProjectRoom {
+                name: "docs".to_string(),
+                keywords: vec!["guide".to_string()],
+            },
+        ];
+        assert_eq!(
+            detect_room(root, path, "JWT token handling and auth flows", &rooms),
+            "auth"
+        );
     }
 }

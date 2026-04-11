@@ -24,6 +24,14 @@ Current first-phase support:
 - read-only MCP tools for `status`, `list_wings`, `list_rooms`, `get_taxonomy`, `search`
 - provider-based embedding layer with batch document embedding
 
+Current project-mining behavior:
+
+- reads `mempalace.yaml` or legacy `mempal.yaml` when present
+- uses config-defined `wing` and `rooms`
+- routes files to rooms using path, filename, and keyword scoring
+- skips known generated/cache directories and non-readable extensions by default
+- supports explicit `--include-ignored` paths for `.gitignore`d files
+
 Embedding configuration:
 
 - default provider: `fastembed`

@@ -40,7 +40,7 @@ async fn kg_round_trip_and_taxonomy_work() {
         .unwrap();
 
     let taxonomy = app.taxonomy().await.unwrap();
-    assert_eq!(taxonomy.taxonomy["project"]["src"], 1);
+    assert_eq!(taxonomy.taxonomy["project"]["general"], 1);
 
     let triple = KgTriple {
         subject: "GraphQL".to_string(),
@@ -55,4 +55,107 @@ async fn kg_round_trip_and_taxonomy_work() {
     assert_eq!(triples.len(), 1);
     assert_eq!(triples[0].predicate, "depends_on");
     assert_eq!(triples[0].object, "Postgres");
+}
+
+#[tokio::test]
+async fn mine_respects_project_config_room_detection_and_scan_rules() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::create_dir_all(project.join("docs")).unwrap();
+    std::fs::create_dir_all(project.join("node_modules")).unwrap();
+    std::fs::write(
+        project.join("mempalace.yaml"),
+        r#"
+wing: alpha
+rooms:
+  - name: auth
+    keywords: [jwt, clerk, token]
+  - name: docs
+    keywords: [guide, architecture]
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("src").join("security.txt"),
+        "JWT token rotation and Clerk auth flow are documented here.\n\nUse secure auth tokens everywhere.",
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("docs").join("guide.md"),
+        "Architecture guide for the Rust rewrite.\n\nThis guide explains room taxonomy and project docs.",
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("notes.bin"),
+        "this should not be scanned because the extension is not readable",
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("node_modules").join("ignore.txt"),
+        "this should be skipped",
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+
+    let summary = app
+        .mine_project(&project, None, 0, true, &[])
+        .await
+        .unwrap();
+    assert_eq!(summary.wing, "alpha");
+    assert_eq!(summary.files_seen, 2);
+    assert_eq!(summary.files_mined, 2);
+
+    let taxonomy = app.taxonomy().await.unwrap();
+    assert!(taxonomy.taxonomy["alpha"].contains_key("auth"));
+    assert!(taxonomy.taxonomy["alpha"].contains_key("docs"));
+    assert!(!taxonomy.taxonomy["alpha"].contains_key("src"));
+}
+
+#[tokio::test]
+async fn mine_can_force_include_gitignored_paths() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join("secret")).unwrap();
+    std::fs::write(project.join(".gitignore"), "secret/\n").unwrap();
+    std::fs::write(
+        project.join("mempalace.yaml"),
+        r#"
+wing: forced
+rooms:
+  - name: secrets
+    keywords: [secret]
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        project.join("secret").join("plan.md"),
+        "Secret rollout plan.\n\nThis file should only be mined when force included.",
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+
+    let skipped = app
+        .mine_project(&project, None, 0, true, &[])
+        .await
+        .unwrap();
+    assert_eq!(skipped.files_seen, 0);
+
+    let included = app
+        .mine_project(&project, None, 0, true, &[String::from("secret/plan.md")])
+        .await
+        .unwrap();
+    assert_eq!(included.files_seen, 1);
+    assert_eq!(included.files_mined, 1);
+
+    let taxonomy = app.taxonomy().await.unwrap();
+    assert!(taxonomy.taxonomy["forced"].contains_key("secrets"));
 }
