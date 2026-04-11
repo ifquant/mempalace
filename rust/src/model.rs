@@ -73,3 +73,18 @@ pub struct InitSummary {
     pub sqlite_path: String,
     pub lance_path: String,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DoctorSummary {
+    pub palace_path: String,
+    pub provider: String,
+    pub model: String,
+    pub dimension: usize,
+    pub cache_dir: Option<String>,
+    pub model_cache_dir: Option<String>,
+    pub model_cache_present: bool,
+    pub ort_dylib_path: Option<String>,
+    pub warmup_attempted: bool,
+    pub warmup_ok: bool,
+    pub warmup_error: Option<String>,
+}

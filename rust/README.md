@@ -19,6 +19,7 @@ Current first-phase support:
 - `mine` for project files
 - `search`
 - `status`
+- `doctor`
 - read-only MCP tools for `status`, `list_wings`, `list_rooms`, `get_taxonomy`, `search`
 - provider-based embedding layer with batch document embedding
 
@@ -34,6 +35,11 @@ Useful env vars:
 - `MEMPALACE_RS_EMBED_MODEL=MultilingualE5Small`
 - `MEMPALACE_RS_EMBED_CACHE_DIR=/path/to/model-cache`
 - `MEMPALACE_RS_EMBED_SHOW_DOWNLOAD_PROGRESS=true|false`
+
+Useful verification command:
+
+- `cargo run -- --palace /tmp/mempalace doctor`
+- `cargo run -- --palace /tmp/mempalace doctor --warm-embedding`
 
 Local runtime note:
 

@@ -8,6 +8,7 @@ use regex::Regex;
 
 use crate::config::{EmbeddingBackend, EmbeddingSettings};
 use crate::error::{MempalaceError, Result};
+use crate::model::DoctorSummary;
 
 pub const HASH_EMBEDDING_DIM: usize = 64;
 pub const HASH_PROVIDER_NAME: &str = "hash";
@@ -34,6 +35,7 @@ pub trait EmbeddingProvider: Send + Sync {
     fn profile(&self) -> &EmbeddingProfile;
     fn embed_documents(&self, documents: &[String]) -> Result<Vec<Vec<f32>>>;
     fn embed_query(&self, query: &str) -> Result<Vec<f32>>;
+    fn doctor(&self, palace_path: &str, warmup: bool) -> DoctorSummary;
 }
 
 pub fn build_embedder(settings: &EmbeddingSettings) -> Result<Arc<dyn EmbeddingProvider>> {
@@ -119,11 +121,28 @@ impl EmbeddingProvider for HashEmbedder {
     fn embed_query(&self, query: &str) -> Result<Vec<f32>> {
         Ok(Self::embed_text(query))
     }
+
+    fn doctor(&self, palace_path: &str, warmup: bool) -> DoctorSummary {
+        DoctorSummary {
+            palace_path: palace_path.to_string(),
+            provider: self.profile.provider.clone(),
+            model: self.profile.model.clone(),
+            dimension: self.profile.dimension,
+            cache_dir: None,
+            model_cache_dir: None,
+            model_cache_present: false,
+            ort_dylib_path: None,
+            warmup_attempted: warmup,
+            warmup_ok: true,
+            warmup_error: None,
+        }
+    }
 }
 
 pub struct FastEmbedder {
     cache_dir: PathBuf,
     model_name: EmbeddingModel,
+    model_code: String,
     profile: EmbeddingProfile,
     runtime: Mutex<Option<TextEmbedding>>,
     show_download_progress: bool,
@@ -135,10 +154,12 @@ impl FastEmbedder {
         let model_name = EmbeddingModel::from_str(&model).map_err(|err| {
             MempalaceError::InvalidArgument(format!("Unknown fastembed model `{model}`: {err}"))
         })?;
-        let dimension = TextEmbedding::get_model_info(&model_name)?.dim;
+        let model_info = TextEmbedding::get_model_info(&model_name)?;
+        let dimension = model_info.dim;
 
         Ok(Self {
             cache_dir,
+            model_code: model_info.model_code.clone(),
             use_e5_prefixes: matches!(model_name, EmbeddingModel::MultilingualE5Small),
             model_name,
             profile: EmbeddingProfile {
@@ -193,18 +214,25 @@ fn configure_ort_dylib_path() {
         return;
     }
 
+    if let Some(path) = detect_ort_dylib_path() {
+        // Prefer a local system runtime over flaky prebuilt downloads.
+        unsafe {
+            std::env::set_var("ORT_DYLIB_PATH", path);
+        }
+    }
+}
+
+fn detect_ort_dylib_path() -> Option<PathBuf> {
     for candidate in [
         "/opt/homebrew/opt/onnxruntime/lib/libonnxruntime.dylib",
         "/usr/local/opt/onnxruntime/lib/libonnxruntime.dylib",
     ] {
         if std::path::Path::new(candidate).exists() {
-            // Prefer a local system runtime over flaky prebuilt downloads.
-            unsafe {
-                std::env::set_var("ORT_DYLIB_PATH", candidate);
-            }
-            break;
+            return Some(PathBuf::from(candidate));
         }
     }
+
+    std::env::var("ORT_DYLIB_PATH").ok().map(PathBuf::from)
 }
 
 impl EmbeddingProvider for FastEmbedder {
@@ -235,6 +263,62 @@ impl EmbeddingProvider for FastEmbedder {
             })
         })
     }
+
+    fn doctor(&self, palace_path: &str, warmup: bool) -> DoctorSummary {
+        let model_cache_dir = Some(
+            self.cache_dir
+                .join(format!("models--{}", self.model_code.replace('/', "--"))),
+        );
+        let model_cache_present = model_cache_dir
+            .as_ref()
+            .map(|path| model_cache_ready(path))
+            .unwrap_or(false);
+        let (warmup_ok, warmup_error) = if warmup {
+            match self.embed_query("health check") {
+                Ok(_) => (true, None),
+                Err(err) => (false, Some(err.to_string())),
+            }
+        } else {
+            (false, None)
+        };
+
+        DoctorSummary {
+            palace_path: palace_path.to_string(),
+            provider: self.profile.provider.clone(),
+            model: self.profile.model.clone(),
+            dimension: self.profile.dimension,
+            cache_dir: Some(self.cache_dir.display().to_string()),
+            model_cache_dir: model_cache_dir.map(|path| path.display().to_string()),
+            model_cache_present,
+            ort_dylib_path: detect_ort_dylib_path().map(|path| path.display().to_string()),
+            warmup_attempted: warmup,
+            warmup_ok,
+            warmup_error,
+        }
+    }
+}
+
+fn model_cache_ready(path: &std::path::Path) -> bool {
+    if !path.exists() {
+        return false;
+    }
+
+    if let Ok(entries) = std::fs::read_dir(path.join("blobs")) {
+        for entry in entries.flatten() {
+            let candidate = entry.path();
+            if candidate
+                .extension()
+                .is_some_and(|ext| ext == "part" || ext == "lock")
+            {
+                continue;
+            }
+            if candidate.is_file() {
+                return true;
+            }
+        }
+    }
+
+    path.join("refs").exists()
 }
 
 fn accumulate(vector: &mut [f32], token: &str) {

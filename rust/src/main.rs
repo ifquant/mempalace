@@ -41,6 +41,10 @@ enum Command {
         results: usize,
     },
     Status,
+    Doctor {
+        #[arg(long)]
+        warm_embedding: bool,
+    },
     Mcp,
 }
 
@@ -93,6 +97,12 @@ async fn main() -> anyhow::Result<()> {
             let config = AppConfig::resolve(palace.as_ref())?;
             let app = App::new(config)?;
             let summary = app.status().await?;
+            println!("{}", serde_json::to_string_pretty(&summary)?);
+        }
+        Command::Doctor { warm_embedding } => {
+            let config = AppConfig::resolve(palace.as_ref())?;
+            let app = App::new(config)?;
+            let summary = app.doctor(warm_embedding).await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
         Command::Mcp => {

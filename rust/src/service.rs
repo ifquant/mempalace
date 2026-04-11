@@ -10,7 +10,8 @@ use crate::config::AppConfig;
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
-    DrawerInput, InitSummary, KgTriple, MineSummary, Rooms, SearchResults, Status, Taxonomy,
+    DoctorSummary, DrawerInput, InitSummary, KgTriple, MineSummary, Rooms, SearchResults, Status,
+    Taxonomy,
 };
 use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::VectorStore;
@@ -60,6 +61,14 @@ impl App {
             palace_path: self.config.palace_path.display().to_string(),
             version: VERSION.to_string(),
         })
+    }
+
+    pub async fn doctor(&self, warm_embedding: bool) -> Result<DoctorSummary> {
+        self.config.ensure_dirs()?;
+        Ok(self.embedder.doctor(
+            &self.config.palace_path.display().to_string(),
+            warm_embedding,
+        ))
     }
 
     pub async fn list_wings(&self) -> Result<BTreeMap<String, usize>> {
