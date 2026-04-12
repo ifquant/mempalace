@@ -12,8 +12,9 @@ use crate::config::AppConfig;
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
-    DoctorSummary, DrawerInput, InitSummary, KgTriple, MigrateSummary, MineRequest, MineSummary,
-    PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters, SearchResults, Status, Taxonomy,
+    DoctorSummary, DrawerInput, InitSummary, KgTriple, MigrateSummary, MineProgressEvent,
+    MineRequest, MineSummary, PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters,
+    SearchResults, Status, Taxonomy,
 };
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
 use crate::storage::vector::VectorStore;
@@ -343,6 +344,18 @@ impl App {
     }
 
     pub async fn mine_project(&self, dir: &Path, request: &MineRequest) -> Result<MineSummary> {
+        self.mine_project_with_progress(dir, request, |_| {}).await
+    }
+
+    pub async fn mine_project_with_progress<F>(
+        &self,
+        dir: &Path,
+        request: &MineRequest,
+        mut on_progress: F,
+    ) -> Result<MineSummary>
+    where
+        F: FnMut(MineProgressEvent),
+    {
         if !dir.exists() {
             return Err(MempalaceError::InvalidArgument(format!(
                 "Project directory does not exist: {}",
@@ -387,6 +400,7 @@ impl App {
         let mut files_skipped_unchanged = 0_usize;
         let mut drawers_added = 0_usize;
         let mut room_counts = BTreeMap::new();
+        let total = files_planned;
 
         for path in files.into_iter().take(if request.limit == 0 {
             usize::MAX
@@ -460,6 +474,11 @@ impl App {
             *room_counts.entry(room.clone()).or_insert(0) += 1;
 
             if request.dry_run {
+                on_progress(MineProgressEvent::DryRun {
+                    file_name: source_file,
+                    room,
+                    drawers: drawers.len(),
+                });
                 continue;
             }
 
@@ -475,6 +494,12 @@ impl App {
                 source_mtime,
                 &drawers,
             )?;
+            on_progress(MineProgressEvent::Filed {
+                index: files_mined + files_skipped_unchanged,
+                total,
+                file_name: source_file,
+                drawers: drawers.len(),
+            });
         }
 
         Ok(MineSummary {

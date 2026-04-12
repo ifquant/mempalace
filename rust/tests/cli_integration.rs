@@ -153,7 +153,8 @@ fn cli_mine_help_mentions_mode_agent_and_extract() {
         .success()
         .stdout(contains("Ingest mode: 'projects' for code/docs"))
         .stdout(contains("Your name"))
-        .stdout(contains("Extraction strategy for convos mode"));
+        .stdout(contains("Extraction strategy for convos mode"))
+        .stdout(contains("per-file mining progress"));
 }
 
 #[test]
@@ -247,6 +248,66 @@ fn cli_mine_dry_run_reports_preview_without_writing_drawers() {
     let status: Value = serde_json::from_slice(&status_output).unwrap();
     assert_eq!(status["kind"], "status");
     assert_eq!(status["total_drawers"], 0);
+}
+
+#[test]
+fn cli_mine_progress_prints_to_stderr_while_stdout_stays_json() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("src").join("auth.txt"),
+        "JWT authentication tokens are stored locally.\n\nThe team switched to Clerk for auth.",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+            "--progress",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"kind\": \"mine\""))
+        .stdout(contains("\"files_mined\": 1"))
+        .stderr(contains("auth.txt"))
+        .stderr(contains("+1"));
+}
+
+#[test]
+fn cli_mine_dry_run_progress_prints_python_style_preview_to_stderr() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("src").join("notes.md"),
+        "Graph search notes.\n\nDry run should not persist drawers.",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+            "--dry-run",
+            "--progress",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"dry_run\": true"))
+        .stderr(contains("[DRY RUN]"))
+        .stderr(contains("room:general"));
 }
 
 #[test]

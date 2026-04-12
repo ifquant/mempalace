@@ -112,6 +112,21 @@ pub struct MineRequest {
     pub extract: String,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum MineProgressEvent {
+    DryRun {
+        file_name: String,
+        room: String,
+        drawers: usize,
+    },
+    Filed {
+        index: usize,
+        total: usize,
+        file_name: String,
+        drawers: usize,
+    },
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct InitSummary {
     pub kind: String,

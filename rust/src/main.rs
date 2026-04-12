@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use clap::{Parser, Subcommand};
 use mempalace_rs::config::AppConfig;
 use mempalace_rs::mcp;
-use mempalace_rs::model::MineRequest;
+use mempalace_rs::model::{MineProgressEvent, MineRequest};
 use mempalace_rs::service::App;
 use serde_json::json;
 
@@ -65,6 +65,11 @@ enum Command {
             help = "Extraction strategy for convos mode: 'exchange' (default) or 'general' (5 memory types)"
         )]
         extract: String,
+        #[arg(long)]
+        #[arg(
+            help = "Print Python-style per-file mining progress to stderr while keeping JSON on stdout"
+        )]
+        progress: bool,
     },
     #[command(about = "Find anything, exact words")]
     Search {
@@ -132,6 +137,7 @@ async fn main() -> anyhow::Result<()> {
             include_ignored,
             agent,
             extract,
+            progress,
         } => {
             if mode != "projects" {
                 print_unsupported_mine_mode(&mode, &extract, &dir)?;
@@ -150,7 +156,28 @@ async fn main() -> anyhow::Result<()> {
                 include_ignored,
                 extract,
             };
-            let summary = app.mine_project(&dir, &request).await?;
+            let summary = if progress {
+                app.mine_project_with_progress(&dir, &request, |event| match event {
+                    MineProgressEvent::DryRun {
+                        file_name,
+                        room,
+                        drawers,
+                    } => {
+                        eprintln!("    [DRY RUN] {file_name} -> room:{room} ({drawers} drawers)");
+                    }
+                    MineProgressEvent::Filed {
+                        index,
+                        total,
+                        file_name,
+                        drawers,
+                    } => {
+                        eprintln!("  [ {index:>4}/{total}] {file_name:<50} +{drawers}");
+                    }
+                })
+                .await?
+            } else {
+                app.mine_project(&dir, &request).await?
+            };
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
         Command::Search {

@@ -25,6 +25,7 @@ Current first-phase support:
 - project scanning now matches more Python `scan_project()` edge cases around nested `.gitignore`, negation, and include-overrides for skipped directories
 - SQLite drawer records now persist Python-style project metadata: `source_file`, `source_mtime`, `added_by`, and `filed_at`
 - `mine` JSON now also carries Python-style header context: configured room names and the planned file count after applying `--limit`
+- `mine --progress` prints Python-style per-file progress to `stderr` while keeping the final JSON summary on `stdout`
 - `search`
 - `migrate`
 - `repair`
