@@ -25,7 +25,10 @@ pub struct SearchHit {
     pub room: String,
     pub source_file: String,
     pub source_path: String,
+    pub source_mtime: Option<f64>,
     pub chunk_index: i32,
+    pub added_by: Option<String>,
+    pub filed_at: Option<String>,
     pub similarity: Option<f64>,
     pub score: Option<f64>,
 }

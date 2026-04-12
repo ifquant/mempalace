@@ -589,6 +589,9 @@ fn cli_search_json_matches_python_style_shape() {
     assert_eq!(search["filters"]["room"], Value::Null);
     let first = &search["results"].as_array().unwrap()[0];
     assert!(first["source_file"].as_str().unwrap().ends_with("auth.txt"));
+    assert_eq!(first["added_by"], "mempalace");
+    assert!(first["source_mtime"].as_f64().is_some());
+    assert!(first["filed_at"].as_str().is_some());
     assert!(first.get("similarity").is_some());
 }
 

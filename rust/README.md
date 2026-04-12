@@ -26,6 +26,8 @@ Current first-phase support:
 - SQLite drawer records now persist Python-style project metadata: `source_file`, `source_mtime`, `added_by`, and `filed_at`
 - `mine` JSON now also carries Python-style header context: configured room names and the planned file count after applying `--limit`
 - `mine --progress` prints Python-style per-file progress to `stderr` while keeping the final JSON summary on `stdout`
+- LanceDB drawer rows now persist Python-style metadata too: `source_file`, `source_mtime`, `added_by`, `filed_at`
+- legacy LanceDB tables are upgraded in place with those metadata columns during `init`/`mine`/`search`
 - `search`
 - `migrate`
 - `repair`
@@ -39,6 +41,7 @@ Current first-phase support:
 - `repair` provides non-destructive palace diagnostics
 - CLI help and command descriptions are now closer to the Python entrypoint
 - `search` CLI JSON now carries Python-style `query`, `filters`, `source_file`, and `similarity`
+- `search` CLI JSON now also exposes vector-backed `source_mtime`, `added_by`, and `filed_at`
 - `status`, `migrate`, and `repair` now carry stable `kind`/path/version context fields
 - `init` and `mine` now also carry stable `kind`/path/version context fields
 - `doctor` and `prepare-embedding` now also carry stable `kind`/path/version context fields

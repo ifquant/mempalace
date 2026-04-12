@@ -1,3 +1,9 @@
+use futures::TryStreamExt;
+use std::sync::Arc;
+
+use arrow_schema::{DataType, Field, Schema};
+use lancedb::connect;
+use lancedb::query::{ExecutableQuery, QueryBase, Select};
 use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::model::{KgTriple, MineRequest};
 use mempalace_rs::service::App;
@@ -395,6 +401,153 @@ async fn mine_persists_python_style_drawer_metadata() {
     assert_eq!(added_by, "codex");
     assert!(!filed_at.is_empty());
     assert!(!created_at.is_empty());
+}
+
+#[tokio::test]
+async fn mine_persists_python_style_metadata_into_vector_store() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::write(
+        project.join("src").join("auth.txt"),
+        "JWT authentication tokens are stored locally.\n\nThe team switched to Clerk for auth.",
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let lance_path = config.lance_path();
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+    app.mine_project(
+        &project,
+        &MineRequest {
+            wing: Some("project".to_string()),
+            mode: "projects".to_string(),
+            agent: "codex".to_string(),
+            limit: 0,
+            dry_run: false,
+            respect_gitignore: true,
+            include_ignored: vec![],
+            extract: "exchange".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let conn = connect(lance_path.to_string_lossy().as_ref())
+        .execute()
+        .await
+        .unwrap();
+    let table = conn.open_table("drawers").execute().await.unwrap();
+    let schema = table.schema().await.unwrap();
+    assert!(schema.field_with_name("source_file").is_ok());
+    assert!(schema.field_with_name("source_mtime").is_ok());
+    assert!(schema.field_with_name("added_by").is_ok());
+    assert!(schema.field_with_name("filed_at").is_ok());
+
+    let batches = table
+        .query()
+        .select(Select::columns(&[
+            "source_file",
+            "source_mtime",
+            "added_by",
+            "filed_at",
+        ]))
+        .execute()
+        .await
+        .unwrap()
+        .try_collect::<Vec<_>>()
+        .await
+        .unwrap();
+    let batch = &batches[0];
+    let source_file = batch["source_file"]
+        .as_any()
+        .downcast_ref::<arrow_array::StringArray>()
+        .unwrap()
+        .value(0)
+        .to_string();
+    let source_mtime = batch["source_mtime"]
+        .as_any()
+        .downcast_ref::<arrow_array::Float64Array>()
+        .unwrap()
+        .value(0);
+    let added_by = batch["added_by"]
+        .as_any()
+        .downcast_ref::<arrow_array::StringArray>()
+        .unwrap()
+        .value(0)
+        .to_string();
+    let filed_at = batch["filed_at"]
+        .as_any()
+        .downcast_ref::<arrow_array::StringArray>()
+        .unwrap()
+        .value(0)
+        .to_string();
+
+    assert_eq!(source_file, "auth.txt");
+    assert!(source_mtime > 0.0);
+    assert_eq!(added_by, "codex");
+    assert!(!filed_at.is_empty());
+
+    let search = app
+        .search("Clerk auth", Some("project"), None, 3)
+        .await
+        .unwrap();
+    let first = &search.results[0];
+    assert_eq!(first.source_file, "auth.txt");
+    assert_eq!(first.added_by.as_deref(), Some("codex"));
+    assert!(first.source_mtime.is_some());
+    assert!(
+        first
+            .filed_at
+            .as_deref()
+            .is_some_and(|value| !value.is_empty())
+    );
+}
+
+#[tokio::test]
+async fn init_upgrades_legacy_vector_table_with_python_style_metadata_columns() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    config.ensure_dirs().unwrap();
+
+    let conn = connect(config.lance_path().to_string_lossy().as_ref())
+        .execute()
+        .await
+        .unwrap();
+    let legacy_schema = Arc::new(Schema::new(vec![
+        Field::new("id", DataType::Utf8, false),
+        Field::new("wing", DataType::Utf8, false),
+        Field::new("room", DataType::Utf8, false),
+        Field::new("source_path", DataType::Utf8, false),
+        Field::new("chunk_index", DataType::Int32, false),
+        Field::new("text", DataType::Utf8, false),
+        Field::new(
+            "vector",
+            DataType::FixedSizeList(Arc::new(Field::new("item", DataType::Float32, true)), 64),
+            true,
+        ),
+    ]));
+    conn.create_empty_table("drawers", legacy_schema)
+        .execute()
+        .await
+        .unwrap();
+
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+
+    let conn = connect(app.config.lance_path().to_string_lossy().as_ref())
+        .execute()
+        .await
+        .unwrap();
+    let table = conn.open_table("drawers").execute().await.unwrap();
+    let schema = table.schema().await.unwrap();
+    assert!(schema.field_with_name("source_file").is_ok());
+    assert!(schema.field_with_name("source_mtime").is_ok());
+    assert!(schema.field_with_name("added_by").is_ok());
+    assert!(schema.field_with_name("filed_at").is_ok());
 }
 
 #[tokio::test]
