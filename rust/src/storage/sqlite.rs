@@ -9,7 +9,7 @@ use crate::embed::EmbeddingProfile;
 use crate::error::Result;
 use crate::model::{DrawerInput, KgTriple, Rooms, Taxonomy};
 
-pub const CURRENT_SCHEMA_VERSION: i64 = 3;
+pub const CURRENT_SCHEMA_VERSION: i64 = 4;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct IngestedFileState {
@@ -30,7 +30,7 @@ impl SqliteStore {
     pub fn init_schema(&self) -> Result<()> {
         self.ensure_meta_table()?;
 
-        let version = self.schema_version()?.unwrap_or_else(|| {
+        let mut version = self.schema_version()?.unwrap_or_else(|| {
             if self.has_user_tables().unwrap_or(false) {
                 1
             } else {
@@ -38,15 +38,30 @@ impl SqliteStore {
             }
         });
 
-        match version {
-            0 => self.bootstrap_schema()?,
-            1 => self.migrate_v1_to_v2()?,
-            2 => self.migrate_v2_to_v3()?,
-            CURRENT_SCHEMA_VERSION => {}
-            other => {
-                return Err(crate::error::MempalaceError::InvalidArgument(format!(
-                    "Unsupported palace schema_version {other}; expected <= {CURRENT_SCHEMA_VERSION}"
-                )));
+        loop {
+            match version {
+                0 => {
+                    self.bootstrap_schema()?;
+                    break;
+                }
+                1 => {
+                    self.migrate_v1_to_v2()?;
+                    version = 2;
+                }
+                2 => {
+                    self.migrate_v2_to_v3()?;
+                    version = 3;
+                }
+                3 => {
+                    self.migrate_v3_to_v4()?;
+                    version = 4;
+                }
+                CURRENT_SCHEMA_VERSION => break,
+                other => {
+                    return Err(crate::error::MempalaceError::InvalidArgument(format!(
+                        "Unsupported palace schema_version {other}; expected <= {CURRENT_SCHEMA_VERSION}"
+                    )));
+                }
             }
         }
 
@@ -84,9 +99,13 @@ impl SqliteStore {
                 id TEXT PRIMARY KEY,
                 wing TEXT NOT NULL,
                 room TEXT NOT NULL,
+                source_file TEXT NOT NULL,
                 source_path TEXT NOT NULL,
                 source_hash TEXT NOT NULL,
+                source_mtime REAL,
                 chunk_index INTEGER NOT NULL,
+                added_by TEXT NOT NULL,
+                filed_at TEXT NOT NULL,
                 text TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
@@ -140,7 +159,7 @@ impl SqliteStore {
             );
             "#,
         )?;
-        self.set_meta("schema_version", &CURRENT_SCHEMA_VERSION.to_string())?;
+        self.set_meta("schema_version", "2")?;
         self.record_migration(
             2,
             "add schema_migrations table and promote schema version metadata",
@@ -153,10 +172,71 @@ impl SqliteStore {
             "ALTER TABLE ingested_files ADD COLUMN source_mtime REAL",
             [],
         )?;
-        self.set_meta("schema_version", &CURRENT_SCHEMA_VERSION.to_string())?;
+        self.set_meta("schema_version", "3")?;
+        self.record_migration(3, "add source_mtime tracking for project re-mine parity")?;
+        Ok(())
+    }
+
+    fn migrate_v3_to_v4(&self) -> Result<()> {
+        self.conn.execute_batch(
+            r#"
+            ALTER TABLE drawers RENAME TO drawers_v3;
+
+            CREATE TABLE drawers (
+                id TEXT PRIMARY KEY,
+                wing TEXT NOT NULL,
+                room TEXT NOT NULL,
+                source_file TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                source_hash TEXT NOT NULL,
+                source_mtime REAL,
+                chunk_index INTEGER NOT NULL,
+                added_by TEXT NOT NULL,
+                filed_at TEXT NOT NULL,
+                text TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            INSERT INTO drawers (
+                id,
+                wing,
+                room,
+                source_file,
+                source_path,
+                source_hash,
+                source_mtime,
+                chunk_index,
+                added_by,
+                filed_at,
+                text,
+                created_at
+            )
+            SELECT
+                id,
+                wing,
+                room,
+                source_path,
+                source_path,
+                source_hash,
+                NULL,
+                chunk_index,
+                'mempalace',
+                created_at,
+                text,
+                created_at
+            FROM drawers_v3;
+
+            DROP TABLE drawers_v3;
+
+            CREATE INDEX IF NOT EXISTS idx_drawers_wing ON drawers(wing);
+            CREATE INDEX IF NOT EXISTS idx_drawers_room ON drawers(room);
+            CREATE INDEX IF NOT EXISTS idx_drawers_source_path ON drawers(source_path);
+            "#,
+        )?;
+        self.set_meta("schema_version", "4")?;
         self.record_migration(
-            CURRENT_SCHEMA_VERSION,
-            "add source_mtime tracking for project re-mine parity",
+            4,
+            "add python-style drawer metadata fields: source_file, source_mtime, added_by, filed_at",
         )?;
         Ok(())
     }
@@ -271,19 +351,23 @@ impl SqliteStore {
         let now = Utc::now().to_rfc3339();
         {
             let mut stmt = tx.prepare(
-                "INSERT INTO drawers (id, wing, room, source_path, source_hash, chunk_index, text, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                "INSERT INTO drawers (id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, text, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             )?;
             for drawer in drawers {
                 stmt.execute(params![
-                    drawer.id,
-                    drawer.wing,
-                    drawer.room,
-                    drawer.source_path,
-                    drawer.source_hash,
+                    &drawer.id,
+                    &drawer.wing,
+                    &drawer.room,
+                    &drawer.source_file,
+                    &drawer.source_path,
+                    &drawer.source_hash,
+                    drawer.source_mtime,
                     drawer.chunk_index,
-                    drawer.text,
-                    now,
+                    &drawer.added_by,
+                    &drawer.filed_at,
+                    &drawer.text,
+                    &now,
                 ])?;
             }
         }

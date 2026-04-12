@@ -331,6 +331,69 @@ async fn mine_skips_unchanged_files_and_remines_when_mtime_changes() {
 }
 
 #[tokio::test]
+async fn mine_persists_python_style_drawer_metadata() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    let source = project.join("src").join("auth.txt");
+    std::fs::write(
+        &source,
+        "JWT authentication tokens are stored locally.\n\nThe team switched to Clerk for auth.",
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let sqlite_path = config.sqlite_path();
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+    app.mine_project(
+        &project,
+        &MineRequest {
+            wing: Some("project".to_string()),
+            mode: "projects".to_string(),
+            agent: "codex".to_string(),
+            limit: 0,
+            dry_run: false,
+            respect_gitignore: true,
+            include_ignored: vec![],
+            extract: "exchange".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let conn = Connection::open(sqlite_path).unwrap();
+    let (source_file, source_mtime, added_by, filed_at, created_at): (
+        String,
+        Option<f64>,
+        String,
+        String,
+        String,
+    ) = conn
+        .query_row(
+            "SELECT source_file, source_mtime, added_by, filed_at, created_at FROM drawers LIMIT 1",
+            [],
+            |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            },
+        )
+        .unwrap();
+
+    assert_eq!(source_file, "auth.txt");
+    assert!(source_mtime.is_some());
+    assert_eq!(added_by, "codex");
+    assert!(!filed_at.is_empty());
+    assert!(!created_at.is_empty());
+}
+
+#[tokio::test]
 async fn mine_respects_nested_gitignore_and_negation_rules() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
@@ -574,4 +637,13 @@ async fn init_migrates_v1_sqlite_schema_to_current() {
         sqlite.schema_version().unwrap(),
         Some(CURRENT_SCHEMA_VERSION)
     );
+    let drawer_columns: i64 = Connection::open(config.sqlite_path())
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM pragma_table_info('drawers') WHERE name IN ('source_file', 'source_mtime', 'added_by', 'filed_at')",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(drawer_columns, 4);
 }

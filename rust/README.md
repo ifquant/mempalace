@@ -23,6 +23,7 @@ Current first-phase support:
 - project re-mine bookkeeping now tracks `source_mtime` so unchanged files skip more like the Python miner
 - `mine` JSON now carries per-room file counts plus the Python-style search follow-up hint
 - project scanning now matches more Python `scan_project()` edge cases around nested `.gitignore`, negation, and include-overrides for skipped directories
+- SQLite drawer records now persist Python-style project metadata: `source_file`, `source_mtime`, `added_by`, and `filed_at`
 - `search`
 - `migrate`
 - `repair`

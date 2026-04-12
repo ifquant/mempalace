@@ -7,9 +7,13 @@ pub struct DrawerInput {
     pub id: String,
     pub wing: String,
     pub room: String,
+    pub source_file: String,
     pub source_path: String,
     pub source_hash: String,
+    pub source_mtime: Option<f64>,
     pub chunk_index: i32,
+    pub added_by: String,
+    pub filed_at: String,
     pub text: String,
 }
 

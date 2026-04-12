@@ -3,6 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use chrono::Utc;
 use ignore::WalkBuilder;
 use serde::Deserialize;
 
@@ -415,6 +416,11 @@ impl App {
             if chunks.is_empty() {
                 continue;
             }
+            let source_file = path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| source_path.clone());
+            let filed_at = Utc::now().to_rfc3339();
 
             let drawers: Vec<DrawerInput> = chunks
                 .iter()
@@ -429,9 +435,13 @@ impl App {
                     ),
                     wing: wing.clone(),
                     room: room.clone(),
+                    source_file: source_file.clone(),
                     source_path: source_path.clone(),
                     source_hash: source_hash.clone(),
+                    source_mtime,
                     chunk_index: idx as i32,
+                    added_by: request.agent.clone(),
+                    filed_at: filed_at.clone(),
                     text: chunk.clone(),
                 })
                 .collect();
