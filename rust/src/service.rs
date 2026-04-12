@@ -363,8 +363,17 @@ impl App {
                 .unwrap_or_else(|| "project".to_string())
         });
         let rooms = load_project_rooms(dir)?;
+        let configured_rooms = rooms
+            .iter()
+            .map(|room| room.name.clone())
+            .collect::<Vec<_>>();
 
         let files = discover_files(dir, request.respect_gitignore, &request.include_ignored)?;
+        let files_planned = if request.limit == 0 {
+            files.len()
+        } else {
+            files.len().min(request.limit)
+        };
         let vector = if request.dry_run {
             None
         } else {
@@ -474,6 +483,7 @@ impl App {
             extract: request.extract.clone(),
             agent: request.agent.clone(),
             wing,
+            configured_rooms,
             project_path: dir.display().to_string(),
             palace_path: self.config.palace_path.display().to_string(),
             version: VERSION.to_string(),
@@ -484,6 +494,7 @@ impl App {
             },
             respect_gitignore: request.respect_gitignore,
             include_ignored: request.include_ignored.clone(),
+            files_planned,
             files_seen,
             files_mined,
             drawers_added,

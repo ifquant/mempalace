@@ -50,10 +50,12 @@ fn cli_init_status_mine_search_round_trip() {
         .stdout(contains("\"mode\": \"projects\""))
         .stdout(contains("\"extract\": \"exchange\""))
         .stdout(contains("\"agent\": \"mempalace\""))
+        .stdout(contains("\"configured_rooms\":"))
         .stdout(contains("\"dry_run\": false"))
         .stdout(contains("\"project_path\":"))
         .stdout(contains("\"palace_path\":"))
         .stdout(contains("\"filters\":"))
+        .stdout(contains("\"files_planned\": 1"))
         .stdout(contains("\"room_counts\":"))
         .stdout(contains("\"next_hint\":"))
         .stdout(contains("\"files_mined\": 1"));
@@ -221,7 +223,9 @@ fn cli_mine_dry_run_reports_preview_without_writing_drawers() {
     assert_eq!(mine["mode"], "projects");
     assert_eq!(mine["extract"], "exchange");
     assert_eq!(mine["agent"], "mempalace");
+    assert_eq!(mine["configured_rooms"][0], "general");
     assert_eq!(mine["dry_run"], true);
+    assert_eq!(mine["files_planned"], 1);
     assert_eq!(mine["files_mined"], 1);
     assert_eq!(mine["respect_gitignore"], true);
     assert_eq!(mine["include_ignored"], Value::Array(vec![]));

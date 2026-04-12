@@ -150,11 +150,13 @@ rooms:
     assert_eq!(summary.extract, "exchange");
     assert_eq!(summary.agent, "mempalace");
     assert_eq!(summary.wing, "alpha");
+    assert_eq!(summary.configured_rooms, vec!["auth", "docs"]);
     assert_eq!(summary.project_path, project.display().to_string());
     assert_eq!(summary.version, env!("CARGO_PKG_VERSION"));
     assert!(!summary.dry_run);
     assert!(summary.respect_gitignore);
     assert!(summary.include_ignored.is_empty());
+    assert_eq!(summary.files_planned, 2);
     assert_eq!(summary.files_seen, 2);
     assert_eq!(summary.files_mined, 2);
     assert_eq!(summary.room_counts["auth"], 1);
@@ -276,6 +278,8 @@ async fn mine_dry_run_reports_work_without_writing_drawers() {
     assert!(summary.dry_run);
     assert_eq!(summary.agent, "codex");
     assert_eq!(summary.mode, "projects");
+    assert_eq!(summary.configured_rooms, vec!["general"]);
+    assert_eq!(summary.files_planned, 1);
     assert_eq!(summary.files_seen, 1);
     assert_eq!(summary.files_mined, 1);
     assert!(summary.drawers_added > 0);
