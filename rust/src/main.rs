@@ -84,6 +84,9 @@ enum Command {
         #[arg(long, default_value_t = 5)]
         #[arg(help = "Number of results")]
         results: usize,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable search output instead of JSON")]
+        human: bool,
     },
     #[command(about = "Upgrade palace SQLite metadata to the current schema version")]
     Migrate,
@@ -185,6 +188,7 @@ async fn main() -> anyhow::Result<()> {
             wing,
             room,
             results,
+            human,
         } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
@@ -196,7 +200,11 @@ async fn main() -> anyhow::Result<()> {
             let summary = app
                 .search(&query, wing.as_deref(), room.as_deref(), results)
                 .await?;
-            println!("{}", serde_json::to_string_pretty(&summary)?);
+            if human {
+                print_search_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
         }
         Command::Migrate => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
@@ -265,6 +273,40 @@ fn print_no_palace(config: &AppConfig) -> anyhow::Result<()> {
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
+}
+
+fn print_search_human(summary: &mempalace_rs::model::SearchResults) {
+    if summary.results.is_empty() {
+        println!("\n  No results found for: \"{}\"", summary.query);
+        return;
+    }
+
+    println!("\n{}", "=".repeat(60));
+    println!("  Results for: \"{}\"", summary.query);
+    if let Some(wing) = &summary.filters.wing {
+        println!("  Wing: {wing}");
+    }
+    if let Some(room) = &summary.filters.room {
+        println!("  Room: {room}");
+    }
+    println!("{}\n", "=".repeat(60));
+
+    for (index, hit) in summary.results.iter().enumerate() {
+        let similarity = hit
+            .similarity
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "?".to_string());
+        println!("  [{}] {} / {}", index + 1, hit.wing, hit.room);
+        println!("      Source: {}", hit.source_file);
+        println!("      Match:  {similarity}");
+        println!();
+        for line in hit.text.trim().lines() {
+            println!("      {line}");
+        }
+        println!();
+        println!("  {}", "─".repeat(56));
+    }
+    println!();
 }
 
 fn print_unsupported_mine_mode(mode: &str, extract: &str, dir: &Path) -> anyhow::Result<()> {

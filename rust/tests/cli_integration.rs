@@ -141,7 +141,8 @@ fn cli_search_help_mentions_filters_and_results() {
         .success()
         .stdout(contains("Find anything, exact words"))
         .stdout(contains("Limit to one project/wing"))
-        .stdout(contains("Number of results"));
+        .stdout(contains("Number of results"))
+        .stdout(contains("human-readable search output"));
 }
 
 #[test]
@@ -593,6 +594,109 @@ fn cli_search_json_matches_python_style_shape() {
     assert!(first["source_mtime"].as_f64().is_some());
     assert!(first["filed_at"].as_str().is_some());
     assert!(first.get("similarity").is_some());
+}
+
+#[test]
+fn cli_search_human_prints_python_style_result_blocks() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("src").join("auth.txt"),
+        "JWT authentication tokens are stored locally.\n\nThe team switched to Clerk for auth.",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+            "--wing",
+            "my_app",
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "search",
+            "Clerk auth",
+            "--wing",
+            "my_app",
+            "--room",
+            "general",
+            "--results",
+            "3",
+            "--human",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("Results for: \"Clerk auth\""))
+        .stdout(contains("Wing: my_app"))
+        .stdout(contains("Room: general"))
+        .stdout(contains("[1] my_app / general"))
+        .stdout(contains("Source: auth.txt"))
+        .stdout(contains("Match:"))
+        .stdout(contains("The team switched to Clerk for auth."));
+}
+
+#[test]
+fn cli_search_human_reports_no_results_like_python() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "search",
+            "xyzzy_nonexistent_query",
+            "--results",
+            "1",
+            "--human",
+        ])
+        .assert()
+        .success()
+        .stdout(contains(
+            "No results found for: \"xyzzy_nonexistent_query\"",
+        ));
 }
 
 fn run_cli_json(
