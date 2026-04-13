@@ -14,7 +14,7 @@ use crate::error::{MempalaceError, Result};
 use crate::model::{
     DoctorSummary, DrawerInput, InitSummary, KgTriple, MigrateSummary, MineProgressEvent,
     MineRequest, MineSummary, PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters,
-    SearchResults, Status, Taxonomy,
+    SearchHit, SearchResults, Status, Taxonomy,
 };
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
 use crate::storage::vector::VectorStore;
@@ -332,7 +332,7 @@ impl App {
         sqlite.ensure_embedding_profile(self.embedder.profile())?;
         let vector = VectorStore::connect(&self.config.lance_path()).await?;
         let embedding = self.embedder.embed_query(query)?;
-        let hits = vector.search(&embedding, wing, room, limit).await?;
+        let hits = normalize_search_hits(vector.search(&embedding, wing, room, limit).await?);
         Ok(SearchResults {
             query: query.to_string(),
             filters: SearchFilters {
@@ -835,6 +835,50 @@ fn sanitize_slug(value: &str) -> String {
         .collect()
 }
 
+fn normalize_search_hits(mut hits: Vec<SearchHit>) -> Vec<SearchHit> {
+    for hit in &mut hits {
+        hit.source_file = normalize_source_file(&hit.source_file, &hit.source_path);
+        hit.similarity = hit.similarity.map(round_similarity);
+    }
+
+    hits.sort_by(|left, right| compare_search_hits(left, right));
+    hits
+}
+
+fn normalize_source_file(source_file: &str, source_path: &str) -> String {
+    let candidate = if source_file.is_empty() {
+        source_path
+    } else {
+        source_file
+    };
+
+    Path::new(candidate)
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| {
+            if candidate.is_empty() {
+                "?".to_string()
+            } else {
+                candidate.to_string()
+            }
+        })
+}
+
+fn round_similarity(value: f64) -> f64 {
+    (value * 1000.0).round() / 1000.0
+}
+
+fn compare_search_hits(left: &SearchHit, right: &SearchHit) -> std::cmp::Ordering {
+    right
+        .similarity
+        .unwrap_or(f64::NEG_INFINITY)
+        .total_cmp(&left.similarity.unwrap_or(f64::NEG_INFINITY))
+        .then_with(|| left.source_file.cmp(&right.source_file))
+        .then_with(|| left.chunk_index.cmp(&right.chunk_index))
+        .then_with(|| left.id.cmp(&right.id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -864,5 +908,82 @@ mod tests {
             detect_room(root, path, "JWT token handling and auth flows", &rooms),
             "auth"
         );
+    }
+
+    #[test]
+    fn normalize_search_hits_uses_python_style_similarity_and_basename() {
+        let hits = normalize_search_hits(vec![
+            SearchHit {
+                id: "b".to_string(),
+                text: "second".to_string(),
+                wing: "project".to_string(),
+                room: "auth".to_string(),
+                source_file: "/tmp/project/src/auth.txt".to_string(),
+                source_path: "/tmp/project/src/auth.txt".to_string(),
+                source_mtime: Some(1.0),
+                chunk_index: 1,
+                added_by: Some("codex".to_string()),
+                filed_at: Some("2026-04-13T00:00:00Z".to_string()),
+                similarity: Some(0.81249),
+                score: Some(0.18751),
+            },
+            SearchHit {
+                id: "a".to_string(),
+                text: "first".to_string(),
+                wing: "project".to_string(),
+                room: "auth".to_string(),
+                source_file: "".to_string(),
+                source_path: "/tmp/project/src/zeta.txt".to_string(),
+                source_mtime: Some(1.0),
+                chunk_index: 0,
+                added_by: Some("codex".to_string()),
+                filed_at: Some("2026-04-13T00:00:00Z".to_string()),
+                similarity: Some(0.81251),
+                score: Some(0.18749),
+            },
+        ]);
+
+        assert_eq!(hits[0].source_file, "zeta.txt");
+        assert_eq!(hits[0].similarity, Some(0.813));
+        assert_eq!(hits[1].source_file, "auth.txt");
+        assert_eq!(hits[1].similarity, Some(0.812));
+    }
+
+    #[test]
+    fn normalize_search_hits_keeps_duplicate_files_as_separate_hits() {
+        let hits = normalize_search_hits(vec![
+            SearchHit {
+                id: "chunk-2".to_string(),
+                text: "later".to_string(),
+                wing: "project".to_string(),
+                room: "auth".to_string(),
+                source_file: "auth.txt".to_string(),
+                source_path: "/tmp/project/src/auth.txt".to_string(),
+                source_mtime: None,
+                chunk_index: 2,
+                added_by: None,
+                filed_at: None,
+                similarity: Some(0.7),
+                score: Some(0.3),
+            },
+            SearchHit {
+                id: "chunk-1".to_string(),
+                text: "earlier".to_string(),
+                wing: "project".to_string(),
+                room: "auth".to_string(),
+                source_file: "auth.txt".to_string(),
+                source_path: "/tmp/project/src/auth.txt".to_string(),
+                source_mtime: None,
+                chunk_index: 1,
+                added_by: None,
+                filed_at: None,
+                similarity: Some(0.7),
+                score: Some(0.3),
+            },
+        ]);
+
+        assert_eq!(hits.len(), 2);
+        assert_eq!(hits[0].id, "chunk-1");
+        assert_eq!(hits[1].id, "chunk-2");
     }
 }

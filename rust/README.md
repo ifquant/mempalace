@@ -42,6 +42,7 @@ Current first-phase support:
 - CLI help and command descriptions are now closer to the Python entrypoint
 - `search` CLI JSON now carries Python-style `query`, `filters`, `source_file`, and `similarity`
 - `search` CLI JSON now also exposes vector-backed `source_mtime`, `added_by`, and `filed_at`
+- `search` now normalizes `source_file` to a basename, rounds `similarity` to 3 decimals, and keeps duplicate chunks as separate hits like Python
 - `status`, `migrate`, and `repair` now carry stable `kind`/path/version context fields
 - `init` and `mine` now also carry stable `kind`/path/version context fields
 - `doctor` and `prepare-embedding` now also carry stable `kind`/path/version context fields

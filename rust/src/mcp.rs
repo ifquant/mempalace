@@ -226,7 +226,7 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                         "wing": hit.wing,
                         "room": hit.room,
                         "source_file": hit.source_file,
-                        "similarity": hit.similarity.map(|value| (value * 1000.0).round() / 1000.0),
+                        "similarity": hit.similarity,
                     })
                 }).collect::<Vec<_>>()
             }))
