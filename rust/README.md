@@ -57,6 +57,7 @@ Current first-phase support:
 - `migrate --human` prints a Python-style readable migration summary while the default CLI output stays JSON
 - `migrate --human` now also formats execution-time failures, such as a broken SQLite file, into readable migrate-specific text before exiting non-zero
 - `init --human` prints a Python-style readable init summary while the default CLI output stays JSON
+- `init --human` now also formats execution-time failures, such as a broken SQLite file already present under the palace path, into readable init-specific text before exiting non-zero
 - `doctor --human` prints a Python-style readable embedding diagnostics summary while the default CLI output stays JSON, including cache-state conclusions and a suggested next step when warm-up fails
 - `prepare-embedding --human` prints a Python-style readable embedding preparation summary while the default CLI output stays JSON, including a suggested next step when model warm-up still fails
 - `mine --human` prints a Python-style readable mine summary while the default CLI output stays JSON and `--progress` keeps using stderr

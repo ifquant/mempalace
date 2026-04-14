@@ -151,7 +151,14 @@ async fn main() -> anyhow::Result<()> {
             let mut config = AppConfig::resolve(Some(palace_path))?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = App::new(config)?;
-            let summary = app.init().await?;
+            let summary = match app.init().await {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_init_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
             if human {
                 print_init_human(&summary);
             } else {
@@ -594,6 +601,11 @@ fn print_init_human(summary: &mempalace_rs::model::InitSummary) {
     println!("\n  Palace initialized.");
     println!("\n{}", "=".repeat(55));
     println!();
+}
+
+fn print_init_error_human(message: &str) {
+    println!("\n  Init error: {message}");
+    println!("  Check the palace path and SQLite file, then rerun `mempalace-rs init <dir>`.");
 }
 
 fn print_mine_human(summary: &mempalace_rs::model::MineSummary) {

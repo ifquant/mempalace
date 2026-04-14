@@ -254,6 +254,34 @@ fn cli_init_human_prints_python_style_summary() {
 }
 
 #[test]
+fn cli_init_human_reports_broken_sqlite_with_text_error() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+    let palace = tmp.path().join("palace");
+    fs::create_dir_all(&palace).unwrap();
+    fs::write(palace.join("palace.sqlite3"), "not a sqlite database").unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+            "--human",
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Init error:"))
+        .stdout(contains("file is not a database"))
+        .stdout(contains(
+            "Check the palace path and SQLite file, then rerun `mempalace-rs init <dir>`.",
+        ));
+}
+
+#[test]
 fn cli_doctor_human_prints_embedding_diagnostics() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
