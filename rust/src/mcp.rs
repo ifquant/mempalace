@@ -1,5 +1,6 @@
 use serde_json::{Value, json};
 
+use crate::audit::WriteAheadLog;
 use crate::config::AppConfig;
 use crate::error::{MempalaceError, Result};
 use crate::service::App;
@@ -498,6 +499,18 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
             };
             let source_file = arguments.get("source_file").and_then(Value::as_str);
             let added_by = arguments.get("added_by").and_then(Value::as_str);
+            best_effort_wal_log(
+                config,
+                "add_drawer",
+                json!({
+                    "wing": wing,
+                    "room": room,
+                    "added_by": added_by.unwrap_or("mcp"),
+                    "content_length": content.chars().count(),
+                    "content_preview": truncate_duplicate_content(content),
+                    "source_file": source_file.unwrap_or(""),
+                }),
+            );
             match app
                 .add_drawer(wing, room, content, source_file, added_by)
                 .await
@@ -519,6 +532,13 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                     "Provide drawer_id, then rerun mempalace_delete_drawer.",
                 ));
             };
+            best_effort_wal_log(
+                config,
+                "delete_drawer",
+                json!({
+                    "drawer_id": drawer_id,
+                }),
+            );
             match app.delete_drawer(drawer_id).await {
                 Ok(result) => Ok(serde_json::to_value(result)?),
                 Err(err) => Ok(tool_error(
@@ -592,6 +612,16 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                 ));
             };
             let valid_from = arguments.get("valid_from").and_then(Value::as_str);
+            best_effort_wal_log(
+                config,
+                "kg_add",
+                json!({
+                    "subject": subject,
+                    "predicate": predicate,
+                    "object": object,
+                    "valid_from": valid_from,
+                }),
+            );
             match app.kg_add(subject, predicate, object, valid_from).await {
                 Ok(result) => Ok(serde_json::to_value(result)?),
                 Err(err) => Ok(tool_error(
@@ -627,6 +657,16 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                 ));
             };
             let ended = arguments.get("ended").and_then(Value::as_str);
+            best_effort_wal_log(
+                config,
+                "kg_invalidate",
+                json!({
+                    "subject": subject,
+                    "predicate": predicate,
+                    "object": object,
+                    "ended": ended,
+                }),
+            );
             match app.kg_invalidate(subject, predicate, object, ended).await {
                 Ok(result) => Ok(serde_json::to_value(result)?),
                 Err(err) => Ok(tool_error(
@@ -686,6 +726,16 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                 .get("topic")
                 .and_then(Value::as_str)
                 .unwrap_or("general");
+            best_effort_wal_log(
+                config,
+                "diary_write",
+                json!({
+                    "agent_name": agent_name,
+                    "topic": topic,
+                    "entry_length": entry.chars().count(),
+                    "entry_preview": truncate_duplicate_content(entry),
+                }),
+            );
             match app.diary_write(agent_name, entry, topic).await {
                 Ok(result) => Ok(serde_json::to_value(result)?),
                 Err(err) => Ok(tool_error(
@@ -880,4 +930,15 @@ fn required_str<'a>(arguments: &'a Value, key: &str, tool_name: &str) -> Result<
         .get(key)
         .and_then(Value::as_str)
         .ok_or_else(|| MempalaceError::Mcp(format!("{tool_name} requires {key}")))
+}
+
+fn best_effort_wal_log(config: &AppConfig, operation: &str, params: Value) {
+    match WriteAheadLog::for_palace(&config.palace_path) {
+        Ok(wal) => {
+            if let Err(err) = wal.log(operation, params, None) {
+                tracing::error!("WAL write failed: {err}");
+            }
+        }
+        Err(err) => tracing::error!("WAL init failed: {err}"),
+    }
 }

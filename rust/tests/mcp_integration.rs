@@ -698,6 +698,60 @@ async fn mcp_diary_tools_return_tool_level_errors_for_missing_args() {
     );
 }
 
+#[tokio::test]
+async fn mcp_write_tools_append_palace_local_wal_entries() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+
+    handle_request(
+        json!({"method":"tools/call","id":50,"params":{"name":"mempalace_add_drawer","arguments":{"wing":"Project Notes","room":"Backend","content":"Verbatim architecture notes for WAL coverage.","added_by":"codex"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    handle_request(
+        json!({"method":"tools/call","id":51,"params":{"name":"mempalace_kg_add","arguments":{"subject":"Max","predicate":"works_on","object":"WAL","valid_from":"2026-04-14"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    handle_request(
+        json!({"method":"tools/call","id":52,"params":{"name":"mempalace_diary_write","arguments":{"agent_name":"Codex","entry":"SESSION: tested WAL logging","topic":"audit"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let wal_path = config.palace_path.join("wal").join("write_log.jsonl");
+    assert!(wal_path.exists());
+
+    let lines = std::fs::read_to_string(&wal_path)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .collect::<Vec<_>>();
+
+    assert_eq!(lines.len(), 3);
+    assert_eq!(lines[0]["operation"], "add_drawer");
+    assert_eq!(lines[1]["operation"], "kg_add");
+    assert_eq!(lines[2]["operation"], "diary_write");
+    assert_eq!(lines[0]["params"]["added_by"], "codex");
+    assert_eq!(lines[1]["params"]["subject"], "Max");
+    assert_eq!(lines[2]["params"]["topic"], "audit");
+    assert!(
+        lines[0]["params"]["content_preview"]
+            .as_str()
+            .unwrap()
+            .contains("Verbatim")
+    );
+}
+
 async fn seed_graph_palace(config: &AppConfig) {
     let app = App::new(config.clone()).unwrap();
     app.init().await.unwrap();
