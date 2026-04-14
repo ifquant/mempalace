@@ -215,6 +215,49 @@ fn cli_search_human_reports_no_palace_with_python_style_text() {
 }
 
 #[test]
+fn cli_search_human_reports_query_errors_with_python_style_text() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let sqlite = Connection::open(palace.join("palace.sqlite3")).unwrap();
+    sqlite
+        .execute(
+            "UPDATE meta SET value = 'broken-provider' WHERE key = 'embedding_provider'",
+            [],
+        )
+        .unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "search",
+            "GraphQL",
+            "--human",
+        ])
+        .assert()
+        .failure()
+        .stdout(contains("Search error:"))
+        .stdout(contains("Palace embedding profile mismatch"));
+}
+
+#[test]
 fn cli_mine_dry_run_reports_preview_without_writing_drawers() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");

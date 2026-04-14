@@ -45,6 +45,7 @@ Current first-phase support:
 - `search` now normalizes `source_file` to a basename, rounds `similarity` to 3 decimals, and keeps duplicate chunks as separate hits like Python
 - `search --human` prints a Python-style readable result view while the default CLI output stays JSON
 - `search --human` now also uses Python-style text for the no-palace path instead of JSON
+- `search --human` also prints `Search error: ...` text when the search fails after palace startup checks
 - `status`, `migrate`, and `repair` now carry stable `kind`/path/version context fields
 - `init` and `mine` now also carry stable `kind`/path/version context fields
 - `doctor` and `prepare-embedding` now also carry stable `kind`/path/version context fields
