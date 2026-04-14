@@ -216,7 +216,14 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
             let wing = arguments.get("wing").and_then(Value::as_str);
             let room = arguments.get("room").and_then(Value::as_str);
             let limit = arguments.get("limit").and_then(Value::as_u64).unwrap_or(5) as usize;
-            let results = app.search(query, wing, room, limit).await?;
+            let results = match app.search(query, wing, room, limit).await {
+                Ok(results) => results,
+                Err(err) => {
+                    return Ok(json!({
+                        "error": format!("Search error: {err}"),
+                    }));
+                }
+            };
             Ok(json!({
                 "query": results.query,
                 "filters": results.filters,

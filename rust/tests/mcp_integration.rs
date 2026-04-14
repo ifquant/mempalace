@@ -2,6 +2,7 @@ use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::mcp::handle_request;
 use mempalace_rs::model::MineRequest;
 use mempalace_rs::service::App;
+use rusqlite::Connection;
 use serde_json::json;
 use tempfile::tempdir;
 
@@ -112,4 +113,38 @@ async fn mcp_read_tools_return_python_style_no_palace_response() {
     let text = status["result"]["content"][0]["text"].as_str().unwrap();
     assert!(text.contains("\"error\": \"No palace found\""));
     assert!(text.contains("Run: mempalace init <dir> && mempalace mine <dir>"));
+}
+
+#[tokio::test]
+async fn mcp_search_returns_tool_level_error_payload_on_query_failure() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let sqlite_path = config.sqlite_path();
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let sqlite = Connection::open(sqlite_path).unwrap();
+    sqlite
+        .execute(
+            "UPDATE meta SET value = 'broken-provider' WHERE key = 'embedding_provider'",
+            [],
+        )
+        .unwrap();
+
+    let search = handle_request(
+        json!({"method":"tools/call","id":4,"params":{"name":"mempalace_search","arguments":{"query":"GraphQL","limit":"3"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    assert!(search.get("error").is_none());
+    let search_text = search["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(search_text.contains("\"error\": \"Search error:"));
+    assert!(search_text.contains("Palace embedding profile mismatch"));
 }
