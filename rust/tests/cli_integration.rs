@@ -590,6 +590,39 @@ fn cli_mine_human_prints_python_style_summary() {
 }
 
 #[test]
+fn cli_mine_human_empty_project_reports_no_matching_files() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("target")).unwrap();
+    fs::write(
+        project.join("target").join("generated.bin"),
+        "opaque build artifact",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+            "--human",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Mine"))
+        .stdout(contains("Files:    0"))
+        .stdout(contains("Files processed: 0"))
+        .stdout(contains("No matching files found."))
+        .stdout(contains(
+            "Check your project path, ignore rules, and supported file types.",
+        ));
+}
+
+#[test]
 fn cli_mine_progress_prints_to_stderr_while_stdout_stays_json() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");

@@ -560,6 +560,10 @@ fn print_mine_human(summary: &mempalace_rs::model::MineSummary) {
     if summary.dry_run {
         println!("  Mode:            DRY RUN");
     }
+    if summary.files_planned == 0 {
+        println!("\n  No matching files found.");
+        println!("  Check your project path, ignore rules, and supported file types.");
+    }
     if !summary.room_counts.is_empty() {
         println!("\n  Rooms filed:");
         for (room, count) in &summary.room_counts {

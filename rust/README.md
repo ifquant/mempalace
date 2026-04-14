@@ -57,6 +57,7 @@ Current first-phase support:
 - `prepare-embedding --human` prints a Python-style readable embedding preparation summary while the default CLI output stays JSON, including a suggested next step when model warm-up still fails
 - `mine --human` prints a Python-style readable mine summary while the default CLI output stays JSON and `--progress` keeps using stderr
 - `mine --human --mode convos` now also fails with a readable text hint instead of a JSON blob, while the default unsupported-mode path stays JSON
+- `mine --human` now also explains when project scanning found no matching files, instead of only showing zero counts
 - `init` and `mine` now also carry stable `kind`/path/version context fields
 - `doctor` and `prepare-embedding` now also carry stable `kind`/path/version context fields
 - CLI `status/search` now return Python-style `error + hint` when no palace exists
