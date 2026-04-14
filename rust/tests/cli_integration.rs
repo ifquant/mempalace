@@ -1,6 +1,7 @@
 use std::fs;
 
 use assert_cmd::Command;
+use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 use rusqlite::Connection;
 use serde_json::Value;
@@ -587,6 +588,40 @@ fn cli_mine_human_prints_python_style_summary() {
         .stdout(contains("Drawers filed:"))
         .stdout(contains("mempalace search"))
         .stderr(contains("auth.txt"));
+}
+
+#[test]
+fn cli_mine_human_dry_run_reports_preview_only() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("src").join("notes.md"),
+        "Dry run should preview mining without writing drawers.",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+            "--dry-run",
+            "--human",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Mine"))
+        .stdout(contains("Mode:            DRY RUN"))
+        .stdout(contains("Drawers previewed: 1"))
+        .stdout(contains(
+            "Persistence:     preview only, no drawers were written",
+        ))
+        .stdout(contains("Drawers filed:").not());
 }
 
 #[test]

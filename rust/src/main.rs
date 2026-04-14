@@ -556,9 +556,12 @@ fn print_mine_human(summary: &mempalace_rs::model::MineSummary) {
     println!();
     println!("  Files processed: {}", summary.files_mined);
     println!("  Files skipped:   {}", summary.files_skipped_unchanged);
-    println!("  Drawers filed:   {}", summary.drawers_added);
     if summary.dry_run {
+        println!("  Drawers previewed: {}", summary.drawers_added);
         println!("  Mode:            DRY RUN");
+        println!("  Persistence:     preview only, no drawers were written");
+    } else {
+        println!("  Drawers filed:   {}", summary.drawers_added);
     }
     if summary.files_planned == 0 {
         println!("\n  No matching files found.");

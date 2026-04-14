@@ -58,6 +58,7 @@ Current first-phase support:
 - `mine --human` prints a Python-style readable mine summary while the default CLI output stays JSON and `--progress` keeps using stderr
 - `mine --human --mode convos` now also fails with a readable text hint instead of a JSON blob, while the default unsupported-mode path stays JSON
 - `mine --human` now also explains when project scanning found no matching files, instead of only showing zero counts
+- `mine --human --dry-run` now makes it explicit that the run was preview-only, labels drawer counts as previewed, and states that nothing was written
 - `init` and `mine` now also carry stable `kind`/path/version context fields
 - `doctor` and `prepare-embedding` now also carry stable `kind`/path/version context fields
 - CLI `status/search` now return Python-style `error + hint` when no palace exists
