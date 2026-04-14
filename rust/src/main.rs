@@ -188,7 +188,10 @@ async fn main() -> anyhow::Result<()> {
                     print_mine_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_mine_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = match App::new(config) {
@@ -197,7 +200,10 @@ async fn main() -> anyhow::Result<()> {
                     print_mine_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_mine_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             let request = MineRequest {
                 wing,
@@ -237,7 +243,10 @@ async fn main() -> anyhow::Result<()> {
                     print_mine_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_mine_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             if human {
                 print_mine_human(&summary);
@@ -258,7 +267,10 @@ async fn main() -> anyhow::Result<()> {
                     print_search_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_search_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             if !palace_exists(&config) {
@@ -542,6 +554,14 @@ fn print_search_error_human(message: &str) {
 fn print_search_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Search error: {message}"),
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
+fn print_mine_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Mine error: {message}"),
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())

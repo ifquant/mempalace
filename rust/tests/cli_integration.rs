@@ -568,6 +568,20 @@ fn cli_search_human_reports_invalid_provider_with_text_error() {
 }
 
 #[test]
+fn cli_search_reports_invalid_provider_with_structured_error() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "broken")
+        .args(["search", "GraphQL"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("\"error\":"))
+        .stdout(contains("Search error:"))
+        .stdout(contains("Unsupported embedding provider: broken"));
+}
+
+#[test]
 fn cli_search_json_reports_query_errors_with_structured_error() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
@@ -716,6 +730,24 @@ fn cli_mine_human_reports_invalid_provider_with_text_error() {
         .stdout(contains(
             "Check the embedding provider and project path, then rerun `mempalace-rs mine <dir>`.",
         ));
+}
+
+#[test]
+fn cli_mine_reports_invalid_provider_with_structured_error() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "broken")
+        .args(["mine", project.to_str().unwrap()])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("\"error\":"))
+        .stdout(contains("Mine error:"))
+        .stdout(contains("Unsupported embedding provider: broken"));
 }
 
 #[test]
