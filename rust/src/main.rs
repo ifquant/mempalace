@@ -277,7 +277,14 @@ async fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
             let app = App::new(config)?;
-            let summary = app.repair().await?;
+            let summary = match app.repair().await {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_repair_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
             if human {
                 print_repair_human(&summary);
             } else {
@@ -495,10 +502,15 @@ fn print_repair_human(summary: &mempalace_rs::model::RepairSummary) {
     if summary.issues.is_empty() {
         println!("\n  Repair diagnostics look healthy.");
     } else {
+        println!("\n  Repair diagnostics found problems.");
         println!("\n  Issues:");
         for issue in &summary.issues {
             println!("    - {issue}");
         }
+        println!("\n  Suggested next step:");
+        println!(
+            "    Fix the missing or mismatched palace components, then rerun `mempalace-rs repair`."
+        );
     }
 
     println!("\n{}", "=".repeat(55));
@@ -507,6 +519,11 @@ fn print_repair_human(summary: &mempalace_rs::model::RepairSummary) {
 
 fn print_repair_no_palace_human(config: &AppConfig) {
     println!("\n  No palace found at {}", config.palace_path.display());
+}
+
+fn print_repair_error_human(message: &str) {
+    println!("\n  Repair error: {message}");
+    println!("  Check the palace files, then rerun `mempalace-rs repair`.");
 }
 
 fn print_migrate_human(summary: &mempalace_rs::model::MigrateSummary) {

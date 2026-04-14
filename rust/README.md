@@ -52,6 +52,7 @@ Current first-phase support:
 - `status --human` prints a Python-style readable palace summary while the default CLI output stays JSON
 - `status --human` now also explains when the palace exists but is still empty, with a direct `mempalace mine <dir>` next step
 - `repair --human` prints a Python-style readable diagnostics summary while the default CLI output stays JSON
+- `repair --human` now also formats execution-time failures, such as a broken SQLite file, into readable repair-specific text before exiting non-zero
 - `migrate --human` prints a Python-style readable migration summary while the default CLI output stays JSON
 - `init --human` prints a Python-style readable init summary while the default CLI output stays JSON
 - `doctor --human` prints a Python-style readable embedding diagnostics summary while the default CLI output stays JSON, including cache-state conclusions and a suggested next step when warm-up fails

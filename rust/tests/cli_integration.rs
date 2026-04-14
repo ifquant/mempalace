@@ -1004,6 +1004,26 @@ fn cli_repair_human_reports_missing_palace_with_python_style_text() {
 }
 
 #[test]
+fn cli_repair_human_reports_issue_summary_and_next_step() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("broken-palace");
+    fs::create_dir_all(&palace).unwrap();
+    fs::write(palace.join("palace.sqlite3"), "not a sqlite database").unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--palace", palace.to_str().unwrap(), "repair", "--human"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Repair error:"))
+        .stdout(contains("file is not a database"))
+        .stdout(contains(
+            "Check the palace files, then rerun `mempalace-rs repair`.",
+        ));
+}
+
+#[test]
 fn cli_repair_reports_healthy_hash_palace() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
