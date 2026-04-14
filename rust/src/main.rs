@@ -126,6 +126,9 @@ enum Command {
         #[arg(long, default_value_t = 1000)]
         #[arg(help = "Milliseconds to wait between attempts")]
         wait_ms: u64,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable prepare summary instead of JSON")]
+        human: bool,
     },
     #[command(about = "Run the read-only MCP server on stdio")]
     Mcp,
@@ -307,12 +310,20 @@ async fn main() -> anyhow::Result<()> {
                 println!("{}", serde_json::to_string_pretty(&summary)?);
             }
         }
-        Command::PrepareEmbedding { attempts, wait_ms } => {
+        Command::PrepareEmbedding {
+            attempts,
+            wait_ms,
+            human,
+        } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = App::new(config)?;
             let summary = app.prepare_embedding(attempts, wait_ms).await?;
-            println!("{}", serde_json::to_string_pretty(&summary)?);
+            if human {
+                print_prepare_embedding_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
         }
         Command::Mcp => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
@@ -575,6 +586,47 @@ fn print_doctor_human(summary: &mempalace_rs::model::DoctorSummary) {
             println!("  Warmup err: {error}");
         }
     }
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_prepare_embedding_human(summary: &mempalace_rs::model::PrepareEmbeddingSummary) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Prepare Embedding");
+    println!("{}\n", "=".repeat(55));
+    println!("  Palace:    {}", summary.palace_path);
+    println!("  Provider:  {}", summary.provider);
+    println!("  Model:     {}", summary.model);
+    println!("  Attempts:  {}", summary.attempts);
+    println!(
+        "  Result:    {}",
+        if summary.success { "ok" } else { "failed" }
+    );
+    if let Some(error) = &summary.last_error {
+        println!("  Last err:  {error}");
+    }
+    println!(
+        "  Warmup:    {}",
+        if summary.doctor.warmup_ok {
+            "ok"
+        } else {
+            "failed"
+        }
+    );
+    if let Some(path) = &summary.doctor.model_cache_dir {
+        println!("  Model dir: {path}");
+    }
+    if let Some(path) = &summary.doctor.expected_model_file {
+        println!("  Model file: {path}");
+    }
+    println!(
+        "  Model file present: {}",
+        if summary.doctor.expected_model_file_present {
+            "yes"
+        } else {
+            "no"
+        }
+    );
     println!("\n{}", "=".repeat(55));
     println!();
 }

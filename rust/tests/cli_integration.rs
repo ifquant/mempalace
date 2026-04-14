@@ -155,6 +155,19 @@ fn cli_doctor_help_mentions_human_output() {
 }
 
 #[test]
+fn cli_prepare_embedding_help_mentions_human_output() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["prepare-embedding", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "Prepare the local embedding runtime and model cache",
+        ))
+        .stdout(contains("human-readable prepare summary"));
+}
+
+#[test]
 fn cli_status_help_mentions_human_output() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
@@ -261,6 +274,49 @@ fn cli_doctor_human_prints_embedding_diagnostics() {
         .stdout(contains("Provider:   hash"))
         .stdout(contains("Model:      hash-v1"))
         .stdout(contains("Dimension:  64"));
+}
+
+#[test]
+fn cli_prepare_embedding_human_prints_embedding_preparation_summary() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "prepare-embedding",
+            "--attempts",
+            "1",
+            "--wait-ms",
+            "0",
+            "--human",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Prepare Embedding"))
+        .stdout(contains("Palace:"))
+        .stdout(contains("Provider:  hash"))
+        .stdout(contains("Model:     hash-v1"))
+        .stdout(contains("Attempts:  1"))
+        .stdout(contains("Result:    ok"))
+        .stdout(contains("Warmup:    ok"));
 }
 
 #[test]
