@@ -12,9 +12,10 @@ use crate::config::AppConfig;
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
-    DiaryReadResult, DiaryWriteResult, DoctorSummary, DrawerInput, GraphStats, GraphStatsTunnel,
-    GraphTraversalError, GraphTraversalNode, GraphTraversalResult, InitSummary, KgQueryResult,
-    KgStats, KgTimelineResult, KgTriple, MigrateSummary, MineProgressEvent, MineRequest,
+    DiaryReadResult, DiaryWriteResult, DoctorSummary, DrawerDeleteResult, DrawerInput,
+    DrawerWriteResult, GraphStats, GraphStatsTunnel, GraphTraversalError, GraphTraversalNode,
+    GraphTraversalResult, InitSummary, KgInvalidateResult, KgQueryResult, KgStats,
+    KgTimelineResult, KgTriple, KgWriteResult, MigrateSummary, MineProgressEvent, MineRequest,
     MineSummary, PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters, SearchHit,
     SearchResults, Status, Taxonomy, TunnelRoom,
 };
@@ -707,7 +708,7 @@ impl App {
     pub async fn add_kg_triple(&self, triple: &KgTriple) -> Result<()> {
         self.init().await?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.add_kg_triple(triple)
+        sqlite.add_kg_triple(triple).map(|_| ())
     }
 
     pub async fn query_kg(&self, subject: &str) -> Result<Vec<KgTriple>> {
@@ -743,6 +744,116 @@ impl App {
         self.init().await?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
         sqlite.kg_stats()
+    }
+
+    pub async fn kg_add(
+        &self,
+        subject: &str,
+        predicate: &str,
+        object: &str,
+        valid_from: Option<&str>,
+    ) -> Result<KgWriteResult> {
+        self.init().await?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.add_kg_triple(&KgTriple {
+            subject: sanitize_name(subject, "subject")?,
+            predicate: sanitize_name(predicate, "predicate")?,
+            object: sanitize_name(object, "object")?,
+            valid_from: valid_from.map(ToOwned::to_owned),
+            valid_to: None,
+        })
+    }
+
+    pub async fn kg_invalidate(
+        &self,
+        subject: &str,
+        predicate: &str,
+        object: &str,
+        ended: Option<&str>,
+    ) -> Result<KgInvalidateResult> {
+        self.init().await?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.invalidate_kg_triple(
+            &sanitize_name(subject, "subject")?,
+            &sanitize_name(predicate, "predicate")?,
+            &sanitize_name(object, "object")?,
+            ended,
+        )
+    }
+
+    pub async fn add_drawer(
+        &self,
+        wing: &str,
+        room: &str,
+        content: &str,
+        source_file: Option<&str>,
+        added_by: Option<&str>,
+    ) -> Result<DrawerWriteResult> {
+        self.init().await?;
+
+        let sanitized_wing = sanitize_name(wing, "wing")?;
+        let sanitized_room = sanitize_name(room, "room")?;
+        let sanitized_content = sanitize_content(content)?;
+        let sanitized_added_by = sanitize_name(added_by.unwrap_or("mcp"), "added_by")?;
+        let normalized_source_file = source_file.unwrap_or_default().trim().to_string();
+        let content_preview = sanitized_content
+            .char_indices()
+            .nth(100)
+            .map(|(idx, _)| &sanitized_content[..idx])
+            .unwrap_or(&sanitized_content);
+        let wing_slug = identifier_fragment(&sanitized_wing);
+        let room_slug = identifier_fragment(&sanitized_room);
+        let drawer_id = format!(
+            "drawer_{}_{}_{}",
+            wing_slug,
+            room_slug,
+            &blake3::hash(
+                format!("{sanitized_wing}|{sanitized_room}|{content_preview}").as_bytes()
+            )
+            .to_hex()
+            .to_string()[..24]
+        );
+        let drawer = DrawerInput {
+            id: drawer_id.clone(),
+            wing: sanitized_wing.clone(),
+            room: sanitized_room.clone(),
+            source_file: normalized_source_file.clone(),
+            source_path: if normalized_source_file.is_empty() {
+                format!("mcp://{wing_slug}/{room_slug}/{drawer_id}")
+            } else {
+                normalized_source_file
+            },
+            source_hash: blake3::hash(sanitized_content.as_bytes())
+                .to_hex()
+                .to_string(),
+            source_mtime: None,
+            chunk_index: 0,
+            added_by: sanitized_added_by,
+            filed_at: Utc::now().to_rfc3339(),
+            text: sanitized_content.clone(),
+        };
+
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        let sqlite_result = sqlite.insert_drawer(&drawer)?;
+        if sqlite_result.reason.as_deref() == Some("already_exists") {
+            return Ok(sqlite_result);
+        }
+
+        let embedding = self.embedder.embed_query(&sanitized_content)?;
+        let vector = VectorStore::connect(&self.config.lance_path()).await?;
+        vector.add_drawers(&[drawer], &[embedding]).await?;
+        Ok(sqlite_result)
+    }
+
+    pub async fn delete_drawer(&self, drawer_id: &str) -> Result<DrawerDeleteResult> {
+        self.init().await?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        let result = sqlite.delete_drawer(drawer_id)?;
+        let vector = VectorStore::connect(&self.config.lance_path()).await?;
+        vector
+            .delete_drawer(self.embedder.profile().dimension, drawer_id)
+            .await?;
+        Ok(result)
     }
 
     pub async fn diary_write(
@@ -1167,6 +1278,92 @@ fn compare_search_hits(left: &SearchHit, right: &SearchHit) -> std::cmp::Orderin
         .then_with(|| left.source_file.cmp(&right.source_file))
         .then_with(|| left.chunk_index.cmp(&right.chunk_index))
         .then_with(|| left.id.cmp(&right.id))
+}
+
+fn sanitize_name(value: &str, field_name: &str) -> Result<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(MempalaceError::InvalidArgument(format!(
+            "{field_name} must be a non-empty string"
+        )));
+    }
+
+    if trimmed.len() > 128 {
+        return Err(MempalaceError::InvalidArgument(format!(
+            "{field_name} exceeds maximum length of 128 characters"
+        )));
+    }
+
+    if trimmed.contains("..") || trimmed.contains('/') || trimmed.contains('\\') {
+        return Err(MempalaceError::InvalidArgument(format!(
+            "{field_name} contains invalid path characters"
+        )));
+    }
+
+    if trimmed.contains('\0') {
+        return Err(MempalaceError::InvalidArgument(format!(
+            "{field_name} contains null bytes"
+        )));
+    }
+
+    let valid = trimmed.chars().enumerate().all(|(idx, ch)| {
+        let allowed = ch.is_ascii_alphanumeric() || matches!(ch, '_' | ' ' | '.' | '\'' | '-');
+        if !allowed {
+            return false;
+        }
+        if (idx == 0 || idx == trimmed.len() - 1) && !ch.is_ascii_alphanumeric() {
+            return false;
+        }
+        true
+    });
+
+    if !valid {
+        return Err(MempalaceError::InvalidArgument(format!(
+            "{field_name} contains invalid characters"
+        )));
+    }
+
+    Ok(trimmed.to_string())
+}
+
+fn sanitize_content(value: &str) -> Result<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err(MempalaceError::InvalidArgument(
+            "content cannot be empty".to_string(),
+        ));
+    }
+    if trimmed.len() > 100_000 {
+        return Err(MempalaceError::InvalidArgument(
+            "content exceeds maximum length of 100000 characters".to_string(),
+        ));
+    }
+    if trimmed.contains('\0') {
+        return Err(MempalaceError::InvalidArgument(
+            "content contains null bytes".to_string(),
+        ));
+    }
+    Ok(trimmed.to_string())
+}
+
+fn identifier_fragment(value: &str) -> String {
+    let fragment = value
+        .trim()
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() {
+                ch.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    let fragment = fragment.trim_matches('-').to_string();
+    if fragment.is_empty() {
+        "item".to_string()
+    } else {
+        fragment
+    }
 }
 
 #[cfg(test)]

@@ -174,6 +174,32 @@ fn tools() -> Vec<Value> {
             }),
         ),
         tool(
+            "mempalace_add_drawer",
+            "File verbatim content into the palace.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "wing": {"type":"string","description":"Wing name"},
+                    "room": {"type":"string","description":"Room name"},
+                    "content": {"type":"string","description":"Verbatim content to store"},
+                    "source_file": {"type":"string","description":"Optional original source path or label"},
+                    "added_by": {"type":"string","description":"Who is filing this drawer (default: mcp)"}
+                },
+                "required": ["wing", "room", "content"]
+            }),
+        ),
+        tool(
+            "mempalace_delete_drawer",
+            "Delete a drawer by ID.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "drawer_id": {"type":"string","description":"Drawer ID to delete"}
+                },
+                "required": ["drawer_id"]
+            }),
+        ),
+        tool(
             "mempalace_get_aaak_spec",
             "Return the AAAK dialect specification.",
             json!({"type":"object","properties":{}}),
@@ -189,6 +215,34 @@ fn tools() -> Vec<Value> {
                     "direction": {"type":"string","description":"outgoing, incoming, or both (default: both)"}
                 },
                 "required": ["entity"]
+            }),
+        ),
+        tool(
+            "mempalace_kg_add",
+            "Add a fact to the knowledge graph. Subject → predicate → object with optional valid_from date.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "subject": {"type":"string","description":"The entity doing or being something"},
+                    "predicate": {"type":"string","description":"Relationship type such as loves, works_on, or child_of"},
+                    "object": {"type":"string","description":"The connected entity"},
+                    "valid_from": {"type":"string","description":"When this fact became true (YYYY-MM-DD, optional)"}
+                },
+                "required": ["subject", "predicate", "object"]
+            }),
+        ),
+        tool(
+            "mempalace_kg_invalidate",
+            "Mark a fact as no longer true by setting its end date.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "subject": {"type":"string","description":"Entity"},
+                    "predicate": {"type":"string","description":"Relationship"},
+                    "object": {"type":"string","description":"Connected entity"},
+                    "ended": {"type":"string","description":"When it stopped being true (YYYY-MM-DD, optional)"}
+                },
+                "required": ["subject", "predicate", "object"]
             }),
         ),
         tool(
@@ -417,6 +471,63 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                 "matches": matches,
             }))
         }
+        "mempalace_add_drawer" => {
+            let wing = required_str(&arguments, "wing", "mempalace_add_drawer");
+            let Ok(wing) = wing else {
+                return Ok(tool_error(
+                    "Add drawer error",
+                    &MempalaceError::Mcp("mempalace_add_drawer requires wing".to_string()),
+                    "Provide wing, room, and content, then rerun mempalace_add_drawer.",
+                ));
+            };
+            let room = required_str(&arguments, "room", "mempalace_add_drawer");
+            let Ok(room) = room else {
+                return Ok(tool_error(
+                    "Add drawer error",
+                    &MempalaceError::Mcp("mempalace_add_drawer requires room".to_string()),
+                    "Provide wing, room, and content, then rerun mempalace_add_drawer.",
+                ));
+            };
+            let content = required_str(&arguments, "content", "mempalace_add_drawer");
+            let Ok(content) = content else {
+                return Ok(tool_error(
+                    "Add drawer error",
+                    &MempalaceError::Mcp("mempalace_add_drawer requires content".to_string()),
+                    "Provide wing, room, and content, then rerun mempalace_add_drawer.",
+                ));
+            };
+            let source_file = arguments.get("source_file").and_then(Value::as_str);
+            let added_by = arguments.get("added_by").and_then(Value::as_str);
+            match app
+                .add_drawer(wing, room, content, source_file, added_by)
+                .await
+            {
+                Ok(result) => Ok(serde_json::to_value(result)?),
+                Err(err) => Ok(tool_error(
+                    "Add drawer error",
+                    &err,
+                    "Check wing, room, content, and palace files, then rerun mempalace_add_drawer.",
+                )),
+            }
+        }
+        "mempalace_delete_drawer" => {
+            let drawer_id = required_str(&arguments, "drawer_id", "mempalace_delete_drawer");
+            let Ok(drawer_id) = drawer_id else {
+                return Ok(tool_error(
+                    "Delete drawer error",
+                    &MempalaceError::Mcp("mempalace_delete_drawer requires drawer_id".to_string()),
+                    "Provide drawer_id, then rerun mempalace_delete_drawer.",
+                ));
+            };
+            match app.delete_drawer(drawer_id).await {
+                Ok(result) => Ok(serde_json::to_value(result)?),
+                Err(err) => Ok(tool_error(
+                    "Delete drawer error",
+                    &err,
+                    "Check the drawer_id and palace files, then rerun mempalace_delete_drawer.",
+                )),
+            }
+        }
         "mempalace_get_aaak_spec" => Ok(json!({
             "aaak_spec": AAAK_SPEC,
         })),
@@ -452,6 +563,76 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                     "KG query error",
                     &err,
                     "Check the palace files and query inputs, then rerun mempalace_kg_query.",
+                )),
+            }
+        }
+        "mempalace_kg_add" => {
+            let subject = required_str(&arguments, "subject", "mempalace_kg_add");
+            let Ok(subject) = subject else {
+                return Ok(tool_error(
+                    "KG add error",
+                    &MempalaceError::Mcp("mempalace_kg_add requires subject".to_string()),
+                    "Provide subject, predicate, and object, then rerun mempalace_kg_add.",
+                ));
+            };
+            let predicate = required_str(&arguments, "predicate", "mempalace_kg_add");
+            let Ok(predicate) = predicate else {
+                return Ok(tool_error(
+                    "KG add error",
+                    &MempalaceError::Mcp("mempalace_kg_add requires predicate".to_string()),
+                    "Provide subject, predicate, and object, then rerun mempalace_kg_add.",
+                ));
+            };
+            let object = required_str(&arguments, "object", "mempalace_kg_add");
+            let Ok(object) = object else {
+                return Ok(tool_error(
+                    "KG add error",
+                    &MempalaceError::Mcp("mempalace_kg_add requires object".to_string()),
+                    "Provide subject, predicate, and object, then rerun mempalace_kg_add.",
+                ));
+            };
+            let valid_from = arguments.get("valid_from").and_then(Value::as_str);
+            match app.kg_add(subject, predicate, object, valid_from).await {
+                Ok(result) => Ok(serde_json::to_value(result)?),
+                Err(err) => Ok(tool_error(
+                    "KG add error",
+                    &err,
+                    "Check the fact fields and palace files, then rerun mempalace_kg_add.",
+                )),
+            }
+        }
+        "mempalace_kg_invalidate" => {
+            let subject = required_str(&arguments, "subject", "mempalace_kg_invalidate");
+            let Ok(subject) = subject else {
+                return Ok(tool_error(
+                    "KG invalidate error",
+                    &MempalaceError::Mcp("mempalace_kg_invalidate requires subject".to_string()),
+                    "Provide subject, predicate, and object, then rerun mempalace_kg_invalidate.",
+                ));
+            };
+            let predicate = required_str(&arguments, "predicate", "mempalace_kg_invalidate");
+            let Ok(predicate) = predicate else {
+                return Ok(tool_error(
+                    "KG invalidate error",
+                    &MempalaceError::Mcp("mempalace_kg_invalidate requires predicate".to_string()),
+                    "Provide subject, predicate, and object, then rerun mempalace_kg_invalidate.",
+                ));
+            };
+            let object = required_str(&arguments, "object", "mempalace_kg_invalidate");
+            let Ok(object) = object else {
+                return Ok(tool_error(
+                    "KG invalidate error",
+                    &MempalaceError::Mcp("mempalace_kg_invalidate requires object".to_string()),
+                    "Provide subject, predicate, and object, then rerun mempalace_kg_invalidate.",
+                ));
+            };
+            let ended = arguments.get("ended").and_then(Value::as_str);
+            match app.kg_invalidate(subject, predicate, object, ended).await {
+                Ok(result) => Ok(serde_json::to_value(result)?),
+                Err(err) => Ok(tool_error(
+                    "KG invalidate error",
+                    &err,
+                    "Check the fact fields and palace files, then rerun mempalace_kg_invalidate.",
                 )),
             }
         }
@@ -609,7 +790,10 @@ fn palace_exists(config: &AppConfig) -> bool {
 }
 
 fn requires_existing_palace(tool_name: &str) -> bool {
-    !matches!(tool_name, "mempalace_diary_write")
+    !matches!(
+        tool_name,
+        "mempalace_diary_write" | "mempalace_add_drawer" | "mempalace_kg_add"
+    )
 }
 
 fn no_palace() -> Value {
@@ -649,6 +833,10 @@ fn coerce_argument_types(tool_name: &str, arguments: &mut Value) {
                 }
             }
         }
+        "mempalace_kg_add"
+        | "mempalace_kg_invalidate"
+        | "mempalace_add_drawer"
+        | "mempalace_delete_drawer" => {}
         "mempalace_traverse" => {
             if let Some(value) = args.get("max_hops").cloned() {
                 let coerced = match value {
@@ -685,4 +873,11 @@ fn truncate_duplicate_content(text: &str) -> String {
         let preview = text.chars().take(PREVIEW_LIMIT).collect::<String>();
         format!("{preview}...")
     }
+}
+
+fn required_str<'a>(arguments: &'a Value, key: &str, tool_name: &str) -> Result<&'a str> {
+    arguments
+        .get(key)
+        .and_then(Value::as_str)
+        .ok_or_else(|| MempalaceError::Mcp(format!("{tool_name} requires {key}")))
 }

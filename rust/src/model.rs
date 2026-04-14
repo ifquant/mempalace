@@ -163,6 +163,21 @@ pub struct KgStats {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct KgWriteResult {
+    pub success: bool,
+    pub triple_id: String,
+    pub fact: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct KgInvalidateResult {
+    pub success: bool,
+    pub fact: String,
+    pub ended: String,
+    pub updated: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DiaryWriteResult {
     pub success: bool,
     pub entry_id: String,
@@ -186,6 +201,21 @@ pub struct DiaryReadResult {
     pub total: usize,
     pub showing: usize,
     pub message: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DrawerWriteResult {
+    pub success: bool,
+    pub drawer_id: String,
+    pub wing: String,
+    pub room: String,
+    pub reason: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DrawerDeleteResult {
+    pub success: bool,
+    pub drawer_id: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

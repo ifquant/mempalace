@@ -59,8 +59,12 @@ async fn mcp_read_tools_work() {
     assert!(tool_names.contains(&"mempalace_check_duplicate"));
     assert!(tool_names.contains(&"mempalace_get_aaak_spec"));
     assert!(tool_names.contains(&"mempalace_kg_query"));
+    assert!(tool_names.contains(&"mempalace_kg_add"));
+    assert!(tool_names.contains(&"mempalace_kg_invalidate"));
     assert!(tool_names.contains(&"mempalace_kg_timeline"));
     assert!(tool_names.contains(&"mempalace_kg_stats"));
+    assert!(tool_names.contains(&"mempalace_add_drawer"));
+    assert!(tool_names.contains(&"mempalace_delete_drawer"));
     assert!(tool_names.contains(&"mempalace_diary_write"));
     assert!(tool_names.contains(&"mempalace_diary_read"));
     assert!(tool_names.contains(&"mempalace_traverse"));
@@ -459,6 +463,149 @@ async fn mcp_kg_query_returns_tool_level_error_for_bad_direction() {
     assert_eq!(
         payload["hint"].as_str().unwrap(),
         "Use direction=outgoing, incoming, or both, then rerun mempalace_kg_query."
+    );
+}
+
+#[tokio::test]
+async fn mcp_kg_write_tools_work() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+
+    let add = handle_request(
+        json!({"method":"tools/call","id":34,"params":{"name":"mempalace_kg_add","arguments":{"subject":"Max","predicate":"works_on","object":"Mempalace","valid_from":"2026-04-14"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let add_text = add["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(add_text.contains("\"success\": true"));
+    assert!(add_text.contains("\"triple_id\""));
+    assert!(add_text.contains("Max → works_on → Mempalace"));
+
+    let invalidate = handle_request(
+        json!({"method":"tools/call","id":35,"params":{"name":"mempalace_kg_invalidate","arguments":{"subject":"Max","predicate":"works_on","object":"Mempalace","ended":"2026-04-15"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let invalidate_text = invalidate["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(invalidate_text.contains("\"success\": true"));
+    assert!(invalidate_text.contains("\"updated\": 1"));
+    assert!(invalidate_text.contains("\"ended\": \"2026-04-15\""));
+}
+
+#[tokio::test]
+async fn mcp_kg_write_tools_return_tool_level_errors_for_missing_args() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let add = handle_request(
+        json!({"method":"tools/call","id":36,"params":{"name":"mempalace_kg_add","arguments":{"predicate":"works_on","object":"Mempalace"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let add_payload: serde_json::Value =
+        serde_json::from_str(add["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        add_payload["error"].as_str().unwrap(),
+        "KG add error: MCP error: mempalace_kg_add requires subject"
+    );
+
+    let invalidate = handle_request(
+        json!({"method":"tools/call","id":37,"params":{"name":"mempalace_kg_invalidate","arguments":{"subject":"Max","object":"Mempalace"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let invalidate_payload: serde_json::Value =
+        serde_json::from_str(invalidate["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        invalidate_payload["error"].as_str().unwrap(),
+        "KG invalidate error: MCP error: mempalace_kg_invalidate requires predicate"
+    );
+}
+
+#[tokio::test]
+async fn mcp_add_and_delete_drawer_work() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+
+    let add = handle_request(
+        json!({"method":"tools/call","id":38,"params":{"name":"mempalace_add_drawer","arguments":{"wing":"Project Notes","room":"Backend","content":"Verbatim architecture notes for the Rust rewrite.","source_file":"notes/backend.md","added_by":"codex"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let add_payload: serde_json::Value =
+        serde_json::from_str(add["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(add_payload["success"], true);
+    let drawer_id = add_payload["drawer_id"].as_str().unwrap().to_string();
+    assert_eq!(add_payload["wing"], "Project Notes");
+    assert_eq!(add_payload["room"], "Backend");
+
+    let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    assert_eq!(sqlite.total_drawers().unwrap(), 1);
+
+    let delete = handle_request(
+        json!({"method":"tools/call","id":39,"params":{"name":"mempalace_delete_drawer","arguments":{"drawer_id":drawer_id}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let delete_payload: serde_json::Value =
+        serde_json::from_str(delete["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(delete_payload["success"], true);
+
+    let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    assert_eq!(sqlite.total_drawers().unwrap(), 0);
+}
+
+#[tokio::test]
+async fn mcp_drawer_write_tools_return_tool_level_errors_for_missing_args() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let add = handle_request(
+        json!({"method":"tools/call","id":40,"params":{"name":"mempalace_add_drawer","arguments":{"room":"backend","content":"hello"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let add_payload: serde_json::Value =
+        serde_json::from_str(add["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        add_payload["error"].as_str().unwrap(),
+        "Add drawer error: MCP error: mempalace_add_drawer requires wing"
+    );
+
+    let delete = handle_request(
+        json!({"method":"tools/call","id":41,"params":{"name":"mempalace_delete_drawer","arguments":{}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let delete_payload: serde_json::Value =
+        serde_json::from_str(delete["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        delete_payload["error"].as_str().unwrap(),
+        "Delete drawer error: MCP error: mempalace_delete_drawer requires drawer_id"
     );
 }
 

@@ -8,8 +8,9 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::embed::EmbeddingProfile;
 use crate::error::Result;
 use crate::model::{
-    DiaryEntry, DiaryReadResult, DiaryWriteResult, DrawerInput, KgFact, KgStats, KgTimelineResult,
-    KgTriple, Rooms, Taxonomy,
+    DiaryEntry, DiaryReadResult, DiaryWriteResult, DrawerDeleteResult, DrawerInput,
+    DrawerWriteResult, KgFact, KgInvalidateResult, KgStats, KgTimelineResult, KgTriple,
+    KgWriteResult, Rooms, Taxonomy,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -428,6 +429,72 @@ impl SqliteStore {
         Ok(())
     }
 
+    pub fn drawer_exists(&self, drawer_id: &str) -> Result<bool> {
+        let exists = self
+            .conn
+            .query_row(
+                "SELECT 1 FROM drawers WHERE id = ?1 LIMIT 1",
+                [drawer_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?;
+        Ok(exists.is_some())
+    }
+
+    pub fn insert_drawer(&self, drawer: &DrawerInput) -> Result<DrawerWriteResult> {
+        if self.drawer_exists(&drawer.id)? {
+            return Ok(DrawerWriteResult {
+                success: true,
+                drawer_id: drawer.id.clone(),
+                wing: drawer.wing.clone(),
+                room: drawer.room.clone(),
+                reason: Some("already_exists".to_string()),
+            });
+        }
+
+        self.conn.execute(
+            "INSERT INTO drawers (id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, text, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                &drawer.id,
+                &drawer.wing,
+                &drawer.room,
+                &drawer.source_file,
+                &drawer.source_path,
+                &drawer.source_hash,
+                drawer.source_mtime,
+                drawer.chunk_index,
+                &drawer.added_by,
+                &drawer.filed_at,
+                &drawer.text,
+                Utc::now().to_rfc3339(),
+            ],
+        )?;
+
+        Ok(DrawerWriteResult {
+            success: true,
+            drawer_id: drawer.id.clone(),
+            wing: drawer.wing.clone(),
+            room: drawer.room.clone(),
+            reason: None,
+        })
+    }
+
+    pub fn delete_drawer(&self, drawer_id: &str) -> Result<DrawerDeleteResult> {
+        let deleted = self
+            .conn
+            .execute("DELETE FROM drawers WHERE id = ?1", [drawer_id])?;
+        if deleted == 0 {
+            return Err(crate::error::MempalaceError::InvalidArgument(format!(
+                "Drawer not found: {drawer_id}"
+            )));
+        }
+        Ok(DrawerDeleteResult {
+            success: true,
+            drawer_id: drawer_id.to_string(),
+        })
+    }
+
     pub fn source_mtime(path: &Path) -> Option<f64> {
         let modified = path.metadata().ok()?.modified().ok()?;
         let duration = modified.duration_since(UNIX_EPOCH).ok()?;
@@ -539,7 +606,27 @@ impl SqliteStore {
         Ok(out)
     }
 
-    pub fn add_kg_triple(&self, triple: &KgTriple) -> Result<()> {
+    pub fn add_kg_triple(&self, triple: &KgTriple) -> Result<KgWriteResult> {
+        let triple_id = format!(
+            "t_{}_{}_{}_{}",
+            normalize_entity_fragment(&triple.subject),
+            normalize_entity_fragment(&triple.predicate),
+            normalize_entity_fragment(&triple.object),
+            blake3::hash(
+                format!(
+                    "{}|{}|{}|{}|{}|{}",
+                    triple.subject,
+                    triple.predicate,
+                    triple.object,
+                    triple.valid_from.as_deref().unwrap_or(""),
+                    triple.valid_to.as_deref().unwrap_or(""),
+                    Utc::now().to_rfc3339(),
+                )
+                .as_bytes()
+            )
+            .to_hex()[..12]
+                .to_string()
+        );
         self.conn.execute(
             "INSERT INTO kg_triples(subject, predicate, object, valid_from, valid_to, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -552,7 +639,38 @@ impl SqliteStore {
                 Utc::now().to_rfc3339(),
             ],
         )?;
-        Ok(())
+        Ok(KgWriteResult {
+            success: true,
+            triple_id,
+            fact: format!(
+                "{} → {} → {}",
+                triple.subject, triple.predicate, triple.object
+            ),
+        })
+    }
+
+    pub fn invalidate_kg_triple(
+        &self,
+        subject: &str,
+        predicate: &str,
+        object: &str,
+        ended: Option<&str>,
+    ) -> Result<KgInvalidateResult> {
+        let ended_value = ended
+            .map(ToOwned::to_owned)
+            .unwrap_or_else(|| Utc::now().format("%Y-%m-%d").to_string());
+        let updated = self.conn.execute(
+            "UPDATE kg_triples
+             SET valid_to = ?1
+             WHERE subject = ?2 AND predicate = ?3 AND object = ?4 AND valid_to IS NULL",
+            params![ended_value, subject, predicate, object],
+        )?;
+        Ok(KgInvalidateResult {
+            success: true,
+            fact: format!("{subject} → {predicate} → {object}"),
+            ended: ended_value,
+            updated,
+        })
     }
 
     pub fn query_kg(&self, subject: &str) -> Result<Vec<KgTriple>> {
@@ -855,4 +973,18 @@ fn normalize_agent_name(agent_name: &str) -> String {
         .to_lowercase()
         .replace(' ', "_")
         .replace('-', "_")
+}
+
+fn normalize_entity_fragment(value: &str) -> String {
+    let mut normalized = value
+        .trim()
+        .to_lowercase()
+        .replace([' ', '-'], "_")
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+        .collect::<String>();
+    if normalized.is_empty() {
+        normalized = "item".to_string();
+    }
+    normalized
 }

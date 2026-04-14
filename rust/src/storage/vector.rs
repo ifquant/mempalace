@@ -94,6 +94,44 @@ impl VectorStore {
         }
         Ok(hits)
     }
+
+    pub async fn add_drawers(
+        &self,
+        drawers: &[DrawerInput],
+        embeddings: &[Vec<f32>],
+    ) -> Result<()> {
+        if drawers.is_empty() {
+            return Ok(());
+        }
+        let dimension = embeddings.first().map(Vec::len).ok_or_else(|| {
+            crate::error::MempalaceError::InvalidArgument("missing embeddings".to_string())
+        })?;
+        let table = self.ensure_table(dimension).await?;
+        let batch = record_batch(drawers, embeddings, dimension)?;
+        table.add(batch).execute().await?;
+        Ok(())
+    }
+
+    pub async fn drawer_exists(&self, dimension: usize, drawer_id: &str) -> Result<bool> {
+        let table = self.ensure_table(dimension).await?;
+        let escaped = drawer_id.replace('\'', "''");
+        let batches = table
+            .query()
+            .only_if(format!("id = '{escaped}'"))
+            .limit(1)
+            .execute()
+            .await?
+            .try_collect::<Vec<_>>()
+            .await?;
+        Ok(batches.iter().any(|batch| batch.num_rows() > 0))
+    }
+
+    pub async fn delete_drawer(&self, dimension: usize, drawer_id: &str) -> Result<()> {
+        let table = self.ensure_table(dimension).await?;
+        let escaped = drawer_id.replace('\'', "''");
+        table.delete(&format!("id = '{escaped}'")).await?;
+        Ok(())
+    }
 }
 
 impl VectorStore {
