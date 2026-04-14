@@ -974,6 +974,26 @@ fn cli_migrate_human_prints_python_style_summary() {
 }
 
 #[test]
+fn cli_migrate_human_reports_broken_sqlite_with_text_error() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("broken-palace");
+    fs::create_dir_all(&palace).unwrap();
+    fs::write(palace.join("palace.sqlite3"), "not a sqlite database").unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--palace", palace.to_str().unwrap(), "migrate", "--human"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Migrate error:"))
+        .stdout(contains("file is not a database"))
+        .stdout(contains(
+            "Check the palace SQLite file, then rerun `mempalace-rs migrate`.",
+        ));
+}
+
+#[test]
 fn cli_repair_reports_missing_palace_non_destructively() {
     let tmp = tempdir().unwrap();
     let palace = tmp.path().join("missing-palace");

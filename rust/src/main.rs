@@ -262,7 +262,14 @@ async fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
             let app = App::new(config)?;
-            let summary = app.migrate().await?;
+            let summary = match app.migrate().await {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_migrate_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
             if human {
                 print_migrate_human(&summary);
             } else {
@@ -551,6 +558,11 @@ fn print_migrate_human(summary: &mempalace_rs::model::MigrateSummary) {
 
 fn print_migrate_no_palace_human(config: &AppConfig) {
     println!("\n  No palace found at {}", config.palace_path.display());
+}
+
+fn print_migrate_error_human(message: &str) {
+    println!("\n  Migrate error: {message}");
+    println!("  Check the palace SQLite file, then rerun `mempalace-rs migrate`.");
 }
 
 fn print_init_human(summary: &mempalace_rs::model::InitSummary) {
