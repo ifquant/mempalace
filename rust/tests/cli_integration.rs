@@ -677,6 +677,38 @@ fn cli_mine_rejects_unsupported_convos_mode_with_json_hint() {
 }
 
 #[test]
+fn cli_mine_human_rejects_unsupported_convos_mode_with_text_hint() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("chats");
+    fs::create_dir_all(&project).unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+            "--mode",
+            "convos",
+            "--extract",
+            "general",
+            "--human",
+        ])
+        .assert()
+        .failure()
+        .code(2)
+        .stdout(contains("MemPalace Mine"))
+        .stdout(contains("Mode:     convos"))
+        .stdout(contains("Extract:  general"))
+        .stdout(contains(
+            "Conversation and general extraction are not implemented in Rust yet.",
+        ))
+        .stdout(contains("Retry with --mode projects"));
+}
+
+#[test]
 #[ignore = "requires fastembed runtime and model warm-up"]
 fn cli_fastembed_prepare_mine_search_smoke() {
     let tmp = tempdir().unwrap();

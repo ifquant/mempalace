@@ -172,7 +172,7 @@ async fn main() -> anyhow::Result<()> {
             human,
         } => {
             if mode != "projects" {
-                print_unsupported_mine_mode(&mode, &extract, &dir)?;
+                print_unsupported_mine_mode(&mode, &extract, &dir, human)?;
                 std::process::exit(2);
             }
             let mut config = AppConfig::resolve(palace.as_ref())?;
@@ -709,7 +709,16 @@ fn render_prepare_embedding_human(
     out
 }
 
-fn print_unsupported_mine_mode(mode: &str, extract: &str, dir: &Path) -> anyhow::Result<()> {
+fn print_unsupported_mine_mode(
+    mode: &str,
+    extract: &str,
+    dir: &Path,
+    human: bool,
+) -> anyhow::Result<()> {
+    if human {
+        print_unsupported_mine_mode_human(mode, extract, dir);
+        return Ok(());
+    }
     let payload = json!({
         "error": "Unsupported mine mode",
         "hint": "Rust currently supports only `mempalace mine <dir>` project ingest. Conversation and general extraction modes are not implemented yet.",
@@ -719,6 +728,25 @@ fn print_unsupported_mine_mode(mode: &str, extract: &str, dir: &Path) -> anyhow:
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
+}
+
+fn print_unsupported_mine_mode_human(mode: &str, extract: &str, dir: &Path) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Mine");
+    println!("{}\n", "=".repeat(55));
+    println!("  Project:  {}", dir.display());
+    println!("  Mode:     {mode}");
+    println!("  Extract:  {extract}");
+    println!();
+    println!("  Conversation and general extraction are not implemented in Rust yet.");
+    println!("  Supported today: mempalace-rs mine <dir>");
+    println!();
+    println!("  Suggested next step:");
+    println!(
+        "    Retry with --mode projects, or keep using the Python CLI for conversation mining."
+    );
+    println!("\n{}", "=".repeat(55));
+    println!();
 }
 
 #[cfg(test)]
