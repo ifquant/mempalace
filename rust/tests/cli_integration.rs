@@ -325,6 +325,26 @@ fn cli_init_reports_invalid_provider_with_structured_error() {
 }
 
 #[test]
+fn cli_init_human_reports_invalid_provider_with_text_error() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "broken")
+        .args(["init", project.to_str().unwrap(), "--human"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Init error:"))
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains(
+            "Check the palace path and SQLite file, then rerun `mempalace-rs init <dir>`.",
+        ));
+}
+
+#[test]
 fn cli_doctor_human_prints_embedding_diagnostics() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
@@ -527,6 +547,22 @@ fn cli_status_reports_invalid_provider_with_structured_error() {
         .stdout(contains("\"error\":"))
         .stdout(contains("Status error:"))
         .stdout(contains("Unsupported embedding provider: broken"));
+}
+
+#[test]
+fn cli_status_human_reports_invalid_provider_with_text_error() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "broken")
+        .args(["status", "--human"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Status error:"))
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains(
+            "Check the palace files, then rerun `mempalace-rs status`.",
+        ));
 }
 
 #[test]
@@ -1143,6 +1179,22 @@ fn cli_migrate_reports_invalid_provider_with_structured_error() {
 }
 
 #[test]
+fn cli_migrate_human_reports_invalid_provider_with_text_error() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "broken")
+        .args(["migrate", "--human"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Migrate error:"))
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains(
+            "Check the palace SQLite file, then rerun `mempalace-rs migrate`.",
+        ));
+}
+
+#[test]
 fn cli_migrate_human_prints_python_style_summary() {
     let tmp = tempdir().unwrap();
     let palace = tmp.path().join("palace");
@@ -1284,6 +1336,22 @@ fn cli_repair_reports_invalid_provider_with_structured_error() {
         .stdout(contains("\"error\":"))
         .stdout(contains("Repair error:"))
         .stdout(contains("Unsupported embedding provider: broken"));
+}
+
+#[test]
+fn cli_repair_human_reports_invalid_provider_with_text_error() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "broken")
+        .args(["repair", "--human"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Repair error:"))
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains(
+            "Check the palace files, then rerun `mempalace-rs repair`.",
+        ));
 }
 
 #[test]
