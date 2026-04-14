@@ -12,11 +12,11 @@ use crate::config::AppConfig;
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
-    DoctorSummary, DrawerInput, GraphStats, GraphStatsTunnel, GraphTraversalError,
-    GraphTraversalNode, GraphTraversalResult, InitSummary, KgQueryResult, KgStats,
-    KgTimelineResult, KgTriple, MigrateSummary, MineProgressEvent, MineRequest, MineSummary,
-    PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters, SearchHit, SearchResults, Status,
-    Taxonomy, TunnelRoom,
+    DiaryReadResult, DiaryWriteResult, DoctorSummary, DrawerInput, GraphStats, GraphStatsTunnel,
+    GraphTraversalError, GraphTraversalNode, GraphTraversalResult, InitSummary, KgQueryResult,
+    KgStats, KgTimelineResult, KgTriple, MigrateSummary, MineProgressEvent, MineRequest,
+    MineSummary, PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters, SearchHit,
+    SearchResults, Status, Taxonomy, TunnelRoom,
 };
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, GraphRoomRow, SqliteStore};
 use crate::storage::vector::VectorStore;
@@ -743,6 +743,23 @@ impl App {
         self.init().await?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
         sqlite.kg_stats()
+    }
+
+    pub async fn diary_write(
+        &self,
+        agent_name: &str,
+        entry: &str,
+        topic: &str,
+    ) -> Result<DiaryWriteResult> {
+        self.init().await?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.add_diary_entry(agent_name, topic, entry)
+    }
+
+    pub async fn diary_read(&self, agent_name: &str, last_n: usize) -> Result<DiaryReadResult> {
+        self.init().await?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.read_diary_entries(agent_name, last_n)
     }
 }
 

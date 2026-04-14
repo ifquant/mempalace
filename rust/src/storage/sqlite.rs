@@ -7,7 +7,10 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::embed::EmbeddingProfile;
 use crate::error::Result;
-use crate::model::{DrawerInput, KgFact, KgStats, KgTimelineResult, KgTriple, Rooms, Taxonomy};
+use crate::model::{
+    DiaryEntry, DiaryReadResult, DiaryWriteResult, DrawerInput, KgFact, KgStats, KgTimelineResult,
+    KgTriple, Rooms, Taxonomy,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GraphRoomRow {
@@ -16,7 +19,7 @@ pub struct GraphRoomRow {
     pub filed_at: Option<String>,
 }
 
-pub const CURRENT_SCHEMA_VERSION: i64 = 4;
+pub const CURRENT_SCHEMA_VERSION: i64 = 5;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct IngestedFileState {
@@ -62,6 +65,10 @@ impl SqliteStore {
                 3 => {
                     self.migrate_v3_to_v4()?;
                     version = 4;
+                }
+                4 => {
+                    self.migrate_v4_to_v5()?;
+                    version = 5;
                 }
                 CURRENT_SCHEMA_VERSION => break,
                 other => {
@@ -144,6 +151,18 @@ impl SqliteStore {
                 version INTEGER PRIMARY KEY,
                 applied_at TEXT NOT NULL,
                 note TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS diary_entries (
+                id TEXT PRIMARY KEY,
+                agent_name TEXT NOT NULL,
+                wing TEXT NOT NULL,
+                room TEXT NOT NULL,
+                topic TEXT NOT NULL,
+                entry TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                date TEXT NOT NULL,
+                created_at TEXT NOT NULL
             );
             "#,
         )?;
@@ -245,6 +264,27 @@ impl SqliteStore {
             4,
             "add python-style drawer metadata fields: source_file, source_mtime, added_by, filed_at",
         )?;
+        Ok(())
+    }
+
+    fn migrate_v4_to_v5(&self) -> Result<()> {
+        self.conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS diary_entries (
+                id TEXT PRIMARY KEY,
+                agent_name TEXT NOT NULL,
+                wing TEXT NOT NULL,
+                room TEXT NOT NULL,
+                topic TEXT NOT NULL,
+                entry TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                date TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            "#,
+        )?;
+        self.set_meta("schema_version", "5")?;
+        self.record_migration(5, "add agent diary entries table")?;
         Ok(())
     }
 
@@ -730,4 +770,89 @@ impl SqliteStore {
             relationship_types,
         })
     }
+
+    pub fn add_diary_entry(
+        &self,
+        agent_name: &str,
+        topic: &str,
+        entry: &str,
+    ) -> Result<DiaryWriteResult> {
+        let wing = format!("wing_{}", normalize_agent_name(agent_name));
+        let room = "diary";
+        let timestamp = Utc::now().to_rfc3339();
+        let date = timestamp.split('T').next().unwrap_or_default().to_string();
+        let entry_id = format!(
+            "diary_{wing}_{}_{}",
+            date.replace('-', ""),
+            blake3::hash(format!("{agent_name}|{topic}|{timestamp}|{entry}").as_bytes()).to_hex()
+        );
+        self.conn.execute(
+            "INSERT INTO diary_entries (id, agent_name, wing, room, topic, entry, timestamp, date, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                entry_id,
+                agent_name,
+                wing,
+                room,
+                topic,
+                entry,
+                timestamp,
+                date,
+                Utc::now().to_rfc3339(),
+            ],
+        )?;
+        Ok(DiaryWriteResult {
+            success: true,
+            entry_id,
+            agent: agent_name.to_string(),
+            topic: topic.to_string(),
+            timestamp,
+        })
+    }
+
+    pub fn read_diary_entries(&self, agent_name: &str, last_n: usize) -> Result<DiaryReadResult> {
+        let total = self.conn.query_row(
+            "SELECT COUNT(*) FROM diary_entries WHERE agent_name = ?1",
+            [agent_name],
+            |row| row.get::<_, i64>(0),
+        )? as usize;
+
+        let mut stmt = self.conn.prepare(
+            "SELECT date, timestamp, topic, entry
+             FROM diary_entries
+             WHERE agent_name = ?1
+             ORDER BY timestamp DESC
+             LIMIT ?2",
+        )?;
+        let entries = stmt
+            .query_map(params![agent_name, last_n as i64], |row| {
+                Ok(DiaryEntry {
+                    date: row.get(0)?,
+                    timestamp: row.get(1)?,
+                    topic: row.get(2)?,
+                    content: row.get(3)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(DiaryReadResult {
+            agent: agent_name.to_string(),
+            total,
+            showing: entries.len(),
+            message: if total == 0 {
+                Some("No diary entries yet.".to_string())
+            } else {
+                None
+            },
+            entries,
+        })
+    }
+}
+
+fn normalize_agent_name(agent_name: &str) -> String {
+    agent_name
+        .trim()
+        .to_lowercase()
+        .replace(' ', "_")
+        .replace('-', "_")
 }

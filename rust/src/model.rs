@@ -163,6 +163,32 @@ pub struct KgStats {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DiaryWriteResult {
+    pub success: bool,
+    pub entry_id: String,
+    pub agent: String,
+    pub topic: String,
+    pub timestamp: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DiaryEntry {
+    pub date: String,
+    pub timestamp: String,
+    pub topic: String,
+    pub content: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DiaryReadResult {
+    pub agent: String,
+    pub entries: Vec<DiaryEntry>,
+    pub total: usize,
+    pub showing: usize,
+    pub message: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MineSummary {
     pub kind: String,
     pub mode: String,

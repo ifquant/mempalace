@@ -207,6 +207,31 @@ fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{}}),
         ),
         tool(
+            "mempalace_diary_write",
+            "Write a timestamped diary entry for an agent with an optional topic.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "agent_name": {"type":"string","description":"Agent name"},
+                    "entry": {"type":"string","description":"Diary content"},
+                    "topic": {"type":"string","description":"Topic label (default: general)"}
+                },
+                "required": ["agent_name", "entry"]
+            }),
+        ),
+        tool(
+            "mempalace_diary_read",
+            "Read recent diary entries for an agent.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "agent_name": {"type":"string","description":"Agent name"},
+                    "last_n": {"type":"integer","description":"How many recent entries to return (default: 10)"}
+                },
+                "required": ["agent_name"]
+            }),
+        ),
+        tool(
             "mempalace_traverse",
             "Walk the palace graph from a room. Shows connected ideas across wings — the tunnels.",
             json!({
@@ -246,7 +271,7 @@ fn tool(name: &str, description: &str, input_schema: Value) -> Value {
 }
 
 async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<Value> {
-    if !palace_exists(config) {
+    if requires_existing_palace(name) && !palace_exists(config) {
         return Ok(no_palace());
     }
 
@@ -449,6 +474,73 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                 "Check the palace files, then rerun mempalace_kg_stats.",
             )),
         },
+        "mempalace_diary_write" => {
+            let agent_name = arguments
+                .get("agent_name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    MempalaceError::Mcp("mempalace_diary_write requires agent_name".to_string())
+                });
+            let Ok(agent_name) = agent_name else {
+                return Ok(tool_error(
+                    "Diary write error",
+                    &MempalaceError::Mcp("mempalace_diary_write requires agent_name".to_string()),
+                    "Provide agent_name and entry, then rerun mempalace_diary_write.",
+                ));
+            };
+            let entry = arguments
+                .get("entry")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    MempalaceError::Mcp("mempalace_diary_write requires entry".to_string())
+                });
+            let Ok(entry) = entry else {
+                return Ok(tool_error(
+                    "Diary write error",
+                    &MempalaceError::Mcp("mempalace_diary_write requires entry".to_string()),
+                    "Provide agent_name and entry, then rerun mempalace_diary_write.",
+                ));
+            };
+            let topic = arguments
+                .get("topic")
+                .and_then(Value::as_str)
+                .unwrap_or("general");
+            match app.diary_write(agent_name, entry, topic).await {
+                Ok(result) => Ok(serde_json::to_value(result)?),
+                Err(err) => Ok(tool_error(
+                    "Diary write error",
+                    &err,
+                    "Check the palace path and diary inputs, then rerun mempalace_diary_write.",
+                )),
+            }
+        }
+        "mempalace_diary_read" => {
+            let agent_name = arguments
+                .get("agent_name")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    MempalaceError::Mcp("mempalace_diary_read requires agent_name".to_string())
+                });
+            let Ok(agent_name) = agent_name else {
+                return Ok(tool_error(
+                    "Diary read error",
+                    &MempalaceError::Mcp("mempalace_diary_read requires agent_name".to_string()),
+                    "Provide agent_name, then rerun mempalace_diary_read.",
+                ));
+            };
+            let last_n = arguments
+                .get("last_n")
+                .and_then(Value::as_u64)
+                .unwrap_or(10) as usize;
+            match app.diary_read(agent_name, last_n).await {
+                Ok(result) => Ok(serde_json::to_value(result)?),
+                Err(err) => Ok(tool_error(
+                    "Diary read error",
+                    &err,
+                    "Check the palace path and agent name, then rerun mempalace_diary_read.",
+                )),
+            }
+        }
         "mempalace_traverse" => {
             let start_room = arguments
                 .get("start_room")
@@ -516,6 +608,10 @@ fn palace_exists(config: &AppConfig) -> bool {
     config.sqlite_path().exists() || config.lance_path().exists()
 }
 
+fn requires_existing_palace(tool_name: &str) -> bool {
+    !matches!(tool_name, "mempalace_diary_write")
+}
+
 fn no_palace() -> Value {
     json!({
         "error": "No palace found",
@@ -562,6 +658,18 @@ fn coerce_argument_types(tool_name: &str, arguments: &mut Value) {
                 };
                 if let Some(max_hops) = coerced {
                     args.insert("max_hops".to_string(), max_hops);
+                }
+            }
+        }
+        "mempalace_diary_read" => {
+            if let Some(value) = args.get("last_n").cloned() {
+                let coerced = match value {
+                    Value::String(text) => text.parse::<u64>().ok().map(Value::from),
+                    Value::Number(_) => value.as_u64().map(Value::from),
+                    _ => None,
+                };
+                if let Some(last_n) = coerced {
+                    args.insert("last_n".to_string(), last_n);
                 }
             }
         }

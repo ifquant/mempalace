@@ -61,6 +61,8 @@ async fn mcp_read_tools_work() {
     assert!(tool_names.contains(&"mempalace_kg_query"));
     assert!(tool_names.contains(&"mempalace_kg_timeline"));
     assert!(tool_names.contains(&"mempalace_kg_stats"));
+    assert!(tool_names.contains(&"mempalace_diary_write"));
+    assert!(tool_names.contains(&"mempalace_diary_read"));
     assert!(tool_names.contains(&"mempalace_traverse"));
     assert!(tool_names.contains(&"mempalace_find_tunnels"));
     assert!(tool_names.contains(&"mempalace_graph_stats"));
@@ -457,6 +459,95 @@ async fn mcp_kg_query_returns_tool_level_error_for_bad_direction() {
     assert_eq!(
         payload["hint"].as_str().unwrap(),
         "Use direction=outgoing, incoming, or both, then rerun mempalace_kg_query."
+    );
+}
+
+#[tokio::test]
+async fn mcp_diary_write_and_read_work() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+
+    let write = handle_request(
+        json!({"method":"tools/call","id":40,"params":{"name":"mempalace_diary_write","arguments":{"agent_name":"Codex","entry":"SESSION: shipped KG read tools","topic":"release"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let write_text = write["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(write_text.contains("\"success\": true"));
+    assert!(write_text.contains("\"agent\": \"Codex\""));
+    assert!(write_text.contains("\"topic\": \"release\""));
+
+    let read = handle_request(
+        json!({"method":"tools/call","id":41,"params":{"name":"mempalace_diary_read","arguments":{"agent_name":"Codex","last_n":"5"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let read_text = read["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(read_text.contains("\"agent\": \"Codex\""));
+    assert!(read_text.contains("\"entries\""));
+    assert!(read_text.contains("SESSION: shipped KG read tools"));
+    assert!(read_text.contains("\"showing\": 1"));
+}
+
+#[tokio::test]
+async fn mcp_diary_read_returns_empty_message_for_new_agent() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let response = handle_request(
+        json!({"method":"tools/call","id":42,"params":{"name":"mempalace_diary_read","arguments":{"agent_name":"Codex"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let text = response["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("\"message\": \"No diary entries yet.\""));
+    assert!(text.contains("\"entries\": []"));
+}
+
+#[tokio::test]
+async fn mcp_diary_tools_return_tool_level_errors_for_missing_args() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let write = handle_request(
+        json!({"method":"tools/call","id":43,"params":{"name":"mempalace_diary_write","arguments":{"agent_name":"Codex"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let write_payload: serde_json::Value =
+        serde_json::from_str(write["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        write_payload["error"].as_str().unwrap(),
+        "Diary write error: MCP error: mempalace_diary_write requires entry"
+    );
+
+    let read = handle_request(
+        json!({"method":"tools/call","id":44,"params":{"name":"mempalace_diary_read","arguments":{}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let read_payload: serde_json::Value =
+        serde_json::from_str(read["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(
+        read_payload["error"].as_str().unwrap(),
+        "Diary read error: MCP error: mempalace_diary_read requires agent_name"
     );
 }
 

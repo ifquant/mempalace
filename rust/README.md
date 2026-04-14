@@ -38,6 +38,7 @@ Current first-phase support:
 - read-only MCP tools now also include `check_duplicate` and `get_aaak_spec`, matching more of the Python MCP surface
 - read-only MCP tools now also include the room-graph trio: `traverse`, `find_tunnels`, `graph_stats`
 - read-only MCP tools now also include the KG read trio: `kg_query`, `kg_timeline`, `kg_stats`
+- MCP now also includes the first diary write/read surface: `diary_write`, `diary_read`
 - provider-based embedding layer with batch document embedding
 - SQLite schema version tracking and a minimal migration path
 - `migrate` exposes the current SQLite schema upgrade path as a CLI command
@@ -136,6 +137,7 @@ Current MCP compatibility notes:
 - `mempalace_get_aaak_spec` now exposes the standalone AAAK dialect text like the Python server
 - `mempalace_traverse`, `mempalace_find_tunnels`, and `mempalace_graph_stats` now expose a Python-style room graph built from Rust drawer metadata
 - `mempalace_kg_query`, `mempalace_kg_timeline`, and `mempalace_kg_stats` now expose a Python-style temporal KG read surface built from Rust SQLite triples
+- `mempalace_diary_write` and `mempalace_diary_read` now expose a Python-style agent diary surface backed by Rust SQLite
 - empty palaces return the Python-style `{"error":"No palace found","hint":"Run: ..."}` shape
 - execution failures in read-only MCP tools now also return tool-level `{"error":"...","hint":"..."}` payloads for `status`, `list_wings`, `list_rooms`, `get_taxonomy`, `search`, and the graph tools
 
