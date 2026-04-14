@@ -144,6 +144,17 @@ fn cli_status_help_mentions_human_output() {
 }
 
 #[test]
+fn cli_repair_help_mentions_human_output() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["repair", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Run non-destructive palace diagnostics"))
+        .stdout(contains("human-readable repair diagnostics"));
+}
+
+#[test]
 fn cli_search_help_mentions_filters_and_results() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
@@ -608,6 +619,19 @@ fn cli_repair_reports_missing_palace_non_destructively() {
 }
 
 #[test]
+fn cli_repair_human_reports_missing_palace_with_python_style_text() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("missing-palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--palace", palace.to_str().unwrap(), "repair", "--human"])
+        .assert()
+        .success()
+        .stdout(contains("No palace found at"));
+}
+
+#[test]
 fn cli_repair_reports_healthy_hash_palace() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
@@ -655,6 +679,57 @@ fn cli_repair_reports_healthy_hash_palace() {
         .stdout(contains("\"vector_accessible\": true"))
         .stdout(contains("\"embedding_provider\": \"hash\""))
         .stdout(contains("\"schema_version\": 4"));
+}
+
+#[test]
+fn cli_repair_human_prints_python_style_diagnostics() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("src").join("auth.txt"),
+        "JWT authentication tokens are stored locally.\n\nThe team switched to Clerk for auth.",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "repair", "--human"])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Repair"))
+        .stdout(contains("Palace:"))
+        .stdout(contains("Drawers found:"))
+        .stdout(contains("Schema version: 4"))
+        .stdout(contains("Embedding: hash/hash-v1/64"))
+        .stdout(contains("Vector access: ok"))
+        .stdout(contains("Repair diagnostics look healthy."));
 }
 
 #[test]

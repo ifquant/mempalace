@@ -91,7 +91,11 @@ enum Command {
     #[command(about = "Upgrade palace SQLite metadata to the current schema version")]
     Migrate,
     #[command(about = "Run non-destructive palace diagnostics")]
-    Repair,
+    Repair {
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable repair diagnostics instead of JSON")]
+        human: bool,
+    },
     #[command(about = "Show what has been filed in the palace")]
     Status {
         #[arg(long)]
@@ -232,12 +236,20 @@ async fn main() -> anyhow::Result<()> {
             let summary = app.migrate().await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
-        Command::Repair => {
+        Command::Repair { human } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+            if human && !palace_exists(&config) {
+                print_repair_no_palace_human(&config);
+                return Ok(());
+            }
             let app = App::new(config)?;
             let summary = app.repair().await?;
-            println!("{}", serde_json::to_string_pretty(&summary)?);
+            if human {
+                print_repair_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
         }
         Command::Status { human } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
@@ -381,6 +393,67 @@ fn print_status_human(
 fn print_status_no_palace_human(config: &AppConfig) {
     println!("\n  No palace found at {}", config.palace_path.display());
     println!("  Run: mempalace init <dir> then mempalace mine <dir>");
+}
+
+fn print_repair_human(summary: &mempalace_rs::model::RepairSummary) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Repair");
+    println!("{}\n", "=".repeat(55));
+    println!("  Palace: {}", summary.palace_path);
+    println!(
+        "  SQLite: {}",
+        if summary.sqlite_exists {
+            "present"
+        } else {
+            "missing"
+        }
+    );
+    println!(
+        "  LanceDB: {}",
+        if summary.lance_exists {
+            "present"
+        } else {
+            "missing"
+        }
+    );
+    if let Some(drawers) = summary.sqlite_drawer_count {
+        println!("  Drawers found: {drawers}");
+    }
+    if let Some(version) = summary.schema_version {
+        println!("  Schema version: {version}");
+    }
+    if let Some(provider) = &summary.embedding_provider {
+        let model = summary.embedding_model.as_deref().unwrap_or("unknown");
+        let dimension = summary
+            .embedding_dimension
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "?".to_string());
+        println!("  Embedding: {provider}/{model}/{dimension}");
+    }
+    println!(
+        "  Vector access: {}",
+        if summary.vector_accessible {
+            "ok"
+        } else {
+            "failed"
+        }
+    );
+
+    if summary.issues.is_empty() {
+        println!("\n  Repair diagnostics look healthy.");
+    } else {
+        println!("\n  Issues:");
+        for issue in &summary.issues {
+            println!("    - {issue}");
+        }
+    }
+
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_repair_no_palace_human(config: &AppConfig) {
+    println!("\n  No palace found at {}", config.palace_path.display());
 }
 
 fn print_unsupported_mine_mode(mode: &str, extract: &str, dir: &Path) -> anyhow::Result<()> {
