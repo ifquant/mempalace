@@ -180,9 +180,8 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
     let app = App::new(config.clone())?;
 
     match name {
-        "mempalace_status" => {
-            let status = app.status().await?;
-            Ok(json!({
+        "mempalace_status" => match app.status().await {
+            Ok(status) => Ok(json!({
                 "kind": status.kind,
                 "total_drawers": status.total_drawers,
                 "wings": status.wings,
@@ -194,34 +193,66 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                 "schema_version": status.schema_version,
                 "protocol": PALACE_PROTOCOL,
                 "aaak_dialect": AAAK_SPEC,
-            }))
-        }
-        "mempalace_list_wings" => Ok(json!({ "wings": app.list_wings().await? })),
+            })),
+            Err(err) => Ok(tool_error(
+                "Status error",
+                &err,
+                "Check the palace files, then rerun mempalace_status.",
+            )),
+        },
+        "mempalace_list_wings" => match app.list_wings().await {
+            Ok(wings) => Ok(json!({ "wings": wings })),
+            Err(err) => Ok(tool_error(
+                "List wings error",
+                &err,
+                "Check the palace files, then rerun mempalace_list_wings.",
+            )),
+        },
         "mempalace_list_rooms" => {
             let wing = arguments.get("wing").and_then(Value::as_str);
-            let rooms = app.list_rooms(wing).await?;
-            Ok(json!({
-                "wing": rooms.wing,
-                "rooms": rooms.rooms,
-            }))
+            match app.list_rooms(wing).await {
+                Ok(rooms) => Ok(json!({
+                    "wing": rooms.wing,
+                    "rooms": rooms.rooms,
+                })),
+                Err(err) => Ok(tool_error(
+                    "List rooms error",
+                    &err,
+                    "Check the palace files and wing filter, then rerun mempalace_list_rooms.",
+                )),
+            }
         }
-        "mempalace_get_taxonomy" => Ok(serde_json::to_value(app.taxonomy().await?)?),
+        "mempalace_get_taxonomy" => match app.taxonomy().await {
+            Ok(taxonomy) => Ok(serde_json::to_value(taxonomy)?),
+            Err(err) => Ok(tool_error(
+                "Taxonomy error",
+                &err,
+                "Check the palace files, then rerun mempalace_get_taxonomy.",
+            )),
+        },
         "mempalace_search" => {
             let query = arguments
                 .get("query")
                 .and_then(Value::as_str)
-                .ok_or_else(|| {
-                    MempalaceError::Mcp("mempalace_search requires query".to_string())
-                })?;
+                .ok_or_else(|| MempalaceError::Mcp("mempalace_search requires query".to_string()));
+            let Ok(query) = query else {
+                return Ok(tool_error(
+                    "Search error",
+                    &MempalaceError::Mcp("mempalace_search requires query".to_string()),
+                    "Provide a query string, then rerun mempalace_search.",
+                ));
+            };
             let wing = arguments.get("wing").and_then(Value::as_str);
             let room = arguments.get("room").and_then(Value::as_str);
             let limit = arguments.get("limit").and_then(Value::as_u64).unwrap_or(5) as usize;
             let results = match app.search(query, wing, room, limit).await {
                 Ok(results) => results,
                 Err(err) => {
-                    return Ok(json!({
-                        "error": format!("Search error: {err}"),
-                    }));
+                    return Ok(tool_error(
+                        "Search error",
+                        &err,
+                        "Check the query, embedding provider, and palace files, then rerun mempalace_search.",
+                    ));
                 }
             };
             Ok(json!({
@@ -245,6 +276,13 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
             }
         })),
     }
+}
+
+fn tool_error(prefix: &str, err: &dyn std::fmt::Display, hint: &str) -> Value {
+    json!({
+        "error": format!("{prefix}: {err}"),
+        "hint": hint,
+    })
 }
 
 fn palace_exists(config: &AppConfig) -> bool {

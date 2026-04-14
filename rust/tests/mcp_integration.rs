@@ -146,5 +146,84 @@ async fn mcp_search_returns_tool_level_error_payload_on_query_failure() {
     assert!(search.get("error").is_none());
     let search_text = search["result"]["content"][0]["text"].as_str().unwrap();
     assert!(search_text.contains("\"error\": \"Search error:"));
+    assert!(search_text.contains("\"hint\":"));
     assert!(search_text.contains("Palace embedding profile mismatch"));
+}
+
+#[tokio::test]
+async fn mcp_read_tools_return_tool_level_error_payloads_on_broken_sqlite() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let sqlite_path = config.sqlite_path();
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    std::fs::write(&sqlite_path, b"not a sqlite database").unwrap();
+
+    for tool_name in [
+        "mempalace_status",
+        "mempalace_list_wings",
+        "mempalace_list_rooms",
+        "mempalace_get_taxonomy",
+    ] {
+        let response = handle_request(
+            json!({"method":"tools/call","id":10,"params":{"name":tool_name,"arguments":{}}}),
+            &config,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert!(
+            response.get("error").is_none(),
+            "{tool_name} should not raise MCP transport error"
+        );
+        let text = response["result"]["content"][0]["text"].as_str().unwrap();
+        let payload: serde_json::Value = serde_json::from_str(text).unwrap();
+        let error = payload["error"].as_str().unwrap();
+        assert!(
+            !error.is_empty(),
+            "{tool_name} should return tool-level error payload"
+        );
+        assert!(
+            error.contains("malformed")
+                || error.contains("not a database")
+                || error.contains("disk image is malformed"),
+            "{tool_name} should surface SQLite failure, got: {error}"
+        );
+        assert!(
+            payload["hint"].as_str().is_some(),
+            "{tool_name} should include recovery hint"
+        );
+    }
+}
+
+#[tokio::test]
+async fn mcp_search_returns_tool_level_error_payload_when_query_is_missing() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let response = handle_request(
+        json!({"method":"tools/call","id":11,"params":{"name":"mempalace_search","arguments":{}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    assert!(response.get("error").is_none());
+    let text = response["result"]["content"][0]["text"].as_str().unwrap();
+    let payload: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(
+        payload["error"].as_str().unwrap(),
+        "Search error: MCP error: mempalace_search requires query"
+    );
+    assert_eq!(
+        payload["hint"].as_str().unwrap(),
+        "Provide a query string, then rerun mempalace_search."
+    );
 }

@@ -52,6 +52,7 @@ Current first-phase support:
 - `search --human` and `mine --human` also have regression coverage for broken SQLite execution failures on their readable text surface
 - default JSON `search` now also returns a structured `{"error":"Search error: ..."}` payload on query-time failures
 - `mempalace_search` in the MCP server now also returns tool-level `{"error":"Search error: ..."}` content instead of a transport error on query-time failures
+- read-only MCP tools now consistently keep execution failures inside tool content with `error + hint`, instead of escalating broken-palace reads into JSON-RPC transport errors
 - `status`, `migrate`, and `repair` now carry stable `kind`/path/version context fields
 - `status --human` prints a Python-style readable palace summary while the default CLI output stays JSON
 - `status --human` now also explains when the palace exists but is still empty, with a direct `mempalace mine <dir>` next step
@@ -129,6 +130,7 @@ Current MCP compatibility notes:
 - `status` and MCP status now expose `schema_version`
 - `mempalace_search` returns Python-style `query`, `filters`, `source_file`, and `similarity`
 - empty palaces return the Python-style `{"error":"No palace found","hint":"Run: ..."}` shape
+- execution failures in read-only MCP tools now also return tool-level `{"error":"...","hint":"..."}` payloads for `status`, `list_wings`, `list_rooms`, `get_taxonomy`, and `search`
 
 Local runtime note:
 
