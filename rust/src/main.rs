@@ -182,9 +182,23 @@ async fn main() -> anyhow::Result<()> {
                 print_unsupported_mine_mode(&mode, &extract, &dir, human)?;
                 std::process::exit(2);
             }
-            let mut config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = match AppConfig::resolve(palace.as_ref()) {
+                Ok(config) => config,
+                Err(err) if human => {
+                    print_mine_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
-            let app = App::new(config)?;
+            let app = match App::new(config) {
+                Ok(app) => app,
+                Err(err) if human => {
+                    print_mine_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
             let request = MineRequest {
                 wing,
                 mode,
@@ -213,9 +227,17 @@ async fn main() -> anyhow::Result<()> {
                         eprintln!("  [ {index:>4}/{total}] {file_name:<50} +{drawers}");
                     }
                 })
-                .await?
+                .await
             } else {
-                app.mine_project(&dir, &request).await?
+                app.mine_project(&dir, &request).await
+            };
+            let summary = match summary {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_mine_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
             };
             if human {
                 print_mine_human(&summary);
@@ -230,7 +252,14 @@ async fn main() -> anyhow::Result<()> {
             results,
             human,
         } => {
-            let mut config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = match AppConfig::resolve(palace.as_ref()) {
+                Ok(config) => config,
+                Err(err) if human => {
+                    print_search_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             if !palace_exists(&config) {
                 if human {
@@ -240,7 +269,17 @@ async fn main() -> anyhow::Result<()> {
                 }
                 std::process::exit(1);
             }
-            let app = App::new(config)?;
+            let app = match App::new(config) {
+                Ok(app) => app,
+                Err(err) if human => {
+                    print_search_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_search_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
             let summary = match app
                 .search(&query, wing.as_deref(), room.as_deref(), results)
                 .await
@@ -488,6 +527,13 @@ fn print_search_error_json(message: &str) -> anyhow::Result<()> {
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
+}
+
+fn print_mine_error_human(message: &str) {
+    println!("\n  Mine error: {message}");
+    println!(
+        "  Check the embedding provider and project path, then rerun `mempalace-rs mine <dir>`."
+    );
 }
 
 fn print_status_human(
