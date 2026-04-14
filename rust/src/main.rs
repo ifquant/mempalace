@@ -342,10 +342,31 @@ async fn main() -> anyhow::Result<()> {
             warm_embedding,
             human,
         } => {
-            let mut config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = match AppConfig::resolve(palace.as_ref()) {
+                Ok(config) => config,
+                Err(err) if human => {
+                    print_doctor_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
-            let app = App::new(config)?;
-            let summary = app.doctor(warm_embedding).await?;
+            let app = match App::new(config) {
+                Ok(app) => app,
+                Err(err) if human => {
+                    print_doctor_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
+            let summary = match app.doctor(warm_embedding).await {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_doctor_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
             if human {
                 print_doctor_human(&summary);
             } else {
@@ -357,10 +378,31 @@ async fn main() -> anyhow::Result<()> {
             wait_ms,
             human,
         } => {
-            let mut config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = match AppConfig::resolve(palace.as_ref()) {
+                Ok(config) => config,
+                Err(err) if human => {
+                    print_prepare_embedding_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
-            let app = App::new(config)?;
-            let summary = app.prepare_embedding(attempts, wait_ms).await?;
+            let app = match App::new(config) {
+                Ok(app) => app,
+                Err(err) if human => {
+                    print_prepare_embedding_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
+            let summary = match app.prepare_embedding(attempts, wait_ms).await {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_prepare_embedding_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
             if human {
                 print_prepare_embedding_human(&summary);
             } else {
@@ -646,6 +688,11 @@ fn print_doctor_human(summary: &mempalace_rs::model::DoctorSummary) {
     print!("{}", render_doctor_human(summary));
 }
 
+fn print_doctor_error_human(message: &str) {
+    println!("\n  Doctor error: {message}");
+    println!("  Check the embedding provider and local runtime, then rerun `mempalace-rs doctor`.");
+}
+
 fn render_doctor_human(summary: &mempalace_rs::model::DoctorSummary) -> String {
     let mut out = String::new();
     out.push_str(&format!("\n{}\n", "=".repeat(55)));
@@ -778,6 +825,13 @@ fn render_prepare_embedding_human(
     }
     out.push_str(&format!("\n{}\n\n", "=".repeat(55)));
     out
+}
+
+fn print_prepare_embedding_error_human(message: &str) {
+    println!("\n  Prepare embedding error: {message}");
+    println!(
+        "  Check the palace files and embedding runtime, then rerun `mempalace-rs prepare-embedding`."
+    );
 }
 
 fn print_unsupported_mine_mode(

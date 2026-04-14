@@ -316,6 +316,22 @@ fn cli_doctor_human_prints_embedding_diagnostics() {
 }
 
 #[test]
+fn cli_doctor_human_reports_invalid_provider_with_text_error() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "broken")
+        .args(["doctor", "--human"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Doctor error:"))
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains(
+            "Check the embedding provider and local runtime, then rerun `mempalace-rs doctor`.",
+        ));
+}
+
+#[test]
 fn cli_prepare_embedding_human_prints_embedding_preparation_summary() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
@@ -356,6 +372,58 @@ fn cli_prepare_embedding_human_prints_embedding_preparation_summary() {
         .stdout(contains("Attempts:  1"))
         .stdout(contains("Result:    ok"))
         .stdout(contains("Warmup:    ok"));
+}
+
+#[test]
+fn cli_prepare_embedding_human_reports_invalid_provider_with_text_error() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "broken")
+        .args([
+            "prepare-embedding",
+            "--attempts",
+            "1",
+            "--wait-ms",
+            "0",
+            "--human",
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Prepare embedding error:"))
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains(
+            "Check the palace files and embedding runtime, then rerun `mempalace-rs prepare-embedding`.",
+        ));
+}
+
+#[test]
+fn cli_prepare_embedding_human_reports_broken_sqlite_with_text_error() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("broken-palace");
+    fs::create_dir_all(&palace).unwrap();
+    fs::write(palace.join("palace.sqlite3"), "not a sqlite database").unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "prepare-embedding",
+            "--attempts",
+            "1",
+            "--wait-ms",
+            "0",
+            "--human",
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Prepare embedding error:"))
+        .stdout(contains("file is not a database"))
+        .stdout(contains(
+            "Check the palace files and embedding runtime, then rerun `mempalace-rs prepare-embedding`.",
+        ));
 }
 
 #[test]
