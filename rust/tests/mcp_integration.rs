@@ -55,6 +55,8 @@ async fn mcp_read_tools_work() {
         .collect();
     assert!(tool_names.contains(&"mempalace_status"));
     assert!(tool_names.contains(&"mempalace_search"));
+    assert!(tool_names.contains(&"mempalace_check_duplicate"));
+    assert!(tool_names.contains(&"mempalace_get_aaak_spec"));
     let search_tool = tools["result"]["tools"]
         .as_array()
         .unwrap()
@@ -94,6 +96,30 @@ async fn mcp_read_tools_work() {
     assert!(search_text.contains("\"filters\""));
     assert!(search_text.contains("\"source_file\""));
     assert!(search_text.contains("\"similarity\""));
+
+    let duplicate = handle_request(
+        json!({"method":"tools/call","id":5,"params":{"name":"mempalace_check_duplicate","arguments":{"content":"Planning notes about GraphQL migration and deployment rollout.","threshold":"0.8"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let duplicate_text = duplicate["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(duplicate_text.contains("\"is_duplicate\": true"));
+    assert!(duplicate_text.contains("\"matches\""));
+    assert!(duplicate_text.contains("\"id\""));
+    assert!(duplicate_text.contains("\"similarity\""));
+
+    let aaak = handle_request(
+        json!({"method":"tools/call","id":6,"params":{"name":"mempalace_get_aaak_spec","arguments":{}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let aaak_text = aaak["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(aaak_text.contains("\"aaak_spec\""));
+    assert!(aaak_text.contains("AAAK is a compressed memory dialect"));
 }
 
 #[tokio::test]
@@ -225,5 +251,34 @@ async fn mcp_search_returns_tool_level_error_payload_when_query_is_missing() {
     assert_eq!(
         payload["hint"].as_str().unwrap(),
         "Provide a query string, then rerun mempalace_search."
+    );
+}
+
+#[tokio::test]
+async fn mcp_check_duplicate_returns_tool_level_error_when_content_is_missing() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let response = handle_request(
+        json!({"method":"tools/call","id":12,"params":{"name":"mempalace_check_duplicate","arguments":{}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    assert!(response.get("error").is_none());
+    let text = response["result"]["content"][0]["text"].as_str().unwrap();
+    let payload: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(
+        payload["error"].as_str().unwrap(),
+        "Check duplicate error: MCP error: mempalace_check_duplicate requires content"
+    );
+    assert_eq!(
+        payload["hint"].as_str().unwrap(),
+        "Provide content text, then rerun mempalace_check_duplicate."
     );
 }

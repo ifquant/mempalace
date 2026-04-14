@@ -161,6 +161,23 @@ fn tools() -> Vec<Value> {
                 "required": ["query"]
             }),
         ),
+        tool(
+            "mempalace_check_duplicate",
+            "Check whether content is already present in the palace using similarity search.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "content": {"type":"string","description":"Content to compare against existing drawers"},
+                    "threshold": {"type":"number","description":"Minimum similarity threshold (default 0.9)"}
+                },
+                "required": ["content"]
+            }),
+        ),
+        tool(
+            "mempalace_get_aaak_spec",
+            "Return the AAAK dialect specification.",
+            json!({"type":"object","properties":{}}),
+        ),
     ]
 }
 
@@ -269,6 +286,59 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                 }).collect::<Vec<_>>()
             }))
         }
+        "mempalace_check_duplicate" => {
+            let content = arguments
+                .get("content")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    MempalaceError::Mcp("mempalace_check_duplicate requires content".to_string())
+                });
+            let Ok(content) = content else {
+                return Ok(tool_error(
+                    "Check duplicate error",
+                    &MempalaceError::Mcp("mempalace_check_duplicate requires content".to_string()),
+                    "Provide content text, then rerun mempalace_check_duplicate.",
+                ));
+            };
+            let threshold = arguments
+                .get("threshold")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.9);
+            let results = match app.search(content, None, None, 5).await {
+                Ok(results) => results,
+                Err(err) => {
+                    return Ok(tool_error(
+                        "Check duplicate error",
+                        &err,
+                        "Check the content, embedding provider, and palace files, then rerun mempalace_check_duplicate.",
+                    ));
+                }
+            };
+            let matches = results
+                .results
+                .into_iter()
+                .filter_map(|hit| {
+                    let similarity = hit.similarity?;
+                    if similarity < threshold {
+                        return None;
+                    }
+                    Some(json!({
+                        "id": hit.id,
+                        "wing": hit.wing,
+                        "room": hit.room,
+                        "similarity": similarity,
+                        "content": truncate_duplicate_content(&hit.text),
+                    }))
+                })
+                .collect::<Vec<_>>();
+            Ok(json!({
+                "is_duplicate": !matches.is_empty(),
+                "matches": matches,
+            }))
+        }
+        "mempalace_get_aaak_spec" => Ok(json!({
+            "aaak_spec": AAAK_SPEC,
+        })),
         _ => Ok(json!({
             "error": {
                 "code": -32601,
@@ -301,16 +371,41 @@ fn coerce_argument_types(tool_name: &str, arguments: &mut Value) {
         return;
     };
 
-    if tool_name == "mempalace_search"
-        && let Some(value) = args.get("limit").cloned()
-    {
-        let coerced = match value {
-            Value::String(text) => text.parse::<u64>().ok().map(Value::from),
-            Value::Number(_) => value.as_u64().map(Value::from),
-            _ => None,
-        };
-        if let Some(limit) = coerced {
-            args.insert("limit".to_string(), limit);
+    match tool_name {
+        "mempalace_search" => {
+            if let Some(value) = args.get("limit").cloned() {
+                let coerced = match value {
+                    Value::String(text) => text.parse::<u64>().ok().map(Value::from),
+                    Value::Number(_) => value.as_u64().map(Value::from),
+                    _ => None,
+                };
+                if let Some(limit) = coerced {
+                    args.insert("limit".to_string(), limit);
+                }
+            }
         }
+        "mempalace_check_duplicate" => {
+            if let Some(value) = args.get("threshold").cloned() {
+                let coerced = match value {
+                    Value::String(text) => text.parse::<f64>().ok().map(Value::from),
+                    Value::Number(_) => value.as_f64().map(Value::from),
+                    _ => None,
+                };
+                if let Some(threshold) = coerced {
+                    args.insert("threshold".to_string(), threshold);
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn truncate_duplicate_content(text: &str) -> String {
+    const PREVIEW_LIMIT: usize = 200;
+    if text.chars().count() <= PREVIEW_LIMIT {
+        text.to_string()
+    } else {
+        let preview = text.chars().take(PREVIEW_LIMIT).collect::<String>();
+        format!("{preview}...")
     }
 }
