@@ -179,6 +179,34 @@ fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{}}),
         ),
         tool(
+            "mempalace_kg_query",
+            "Query the knowledge graph for an entity's relationships with optional time and direction filters.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "entity": {"type":"string","description":"Entity to query"},
+                    "as_of": {"type":"string","description":"Only facts valid at this date (YYYY-MM-DD, optional)"},
+                    "direction": {"type":"string","description":"outgoing, incoming, or both (default: both)"}
+                },
+                "required": ["entity"]
+            }),
+        ),
+        tool(
+            "mempalace_kg_timeline",
+            "Chronological timeline of facts for one entity or the whole palace.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "entity": {"type":"string","description":"Entity to get timeline for (optional)"}
+                }
+            }),
+        ),
+        tool(
+            "mempalace_kg_stats",
+            "Knowledge graph overview: entities, triples, current vs expired facts, relationship types.",
+            json!({"type":"object","properties":{}}),
+        ),
+        tool(
             "mempalace_traverse",
             "Walk the palace graph from a room. Shows connected ideas across wings — the tunnels.",
             json!({
@@ -367,6 +395,60 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
         "mempalace_get_aaak_spec" => Ok(json!({
             "aaak_spec": AAAK_SPEC,
         })),
+        "mempalace_kg_query" => {
+            let entity = arguments
+                .get("entity")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    MempalaceError::Mcp("mempalace_kg_query requires entity".to_string())
+                });
+            let Ok(entity) = entity else {
+                return Ok(tool_error(
+                    "KG query error",
+                    &MempalaceError::Mcp("mempalace_kg_query requires entity".to_string()),
+                    "Provide an entity value, then rerun mempalace_kg_query.",
+                ));
+            };
+            let as_of = arguments.get("as_of").and_then(Value::as_str);
+            let direction = arguments
+                .get("direction")
+                .and_then(Value::as_str)
+                .unwrap_or("both");
+            if !matches!(direction, "outgoing" | "incoming" | "both") {
+                return Ok(tool_error(
+                    "KG query error",
+                    &MempalaceError::Mcp(format!("unsupported direction: {direction}")),
+                    "Use direction=outgoing, incoming, or both, then rerun mempalace_kg_query.",
+                ));
+            }
+            match app.kg_query(entity, as_of, direction).await {
+                Ok(result) => Ok(serde_json::to_value(result)?),
+                Err(err) => Ok(tool_error(
+                    "KG query error",
+                    &err,
+                    "Check the palace files and query inputs, then rerun mempalace_kg_query.",
+                )),
+            }
+        }
+        "mempalace_kg_timeline" => {
+            let entity = arguments.get("entity").and_then(Value::as_str);
+            match app.kg_timeline(entity).await {
+                Ok(result) => Ok(serde_json::to_value(result)?),
+                Err(err) => Ok(tool_error(
+                    "KG timeline error",
+                    &err,
+                    "Check the palace files, then rerun mempalace_kg_timeline.",
+                )),
+            }
+        }
+        "mempalace_kg_stats" => match app.kg_stats().await {
+            Ok(result) => Ok(serde_json::to_value(result)?),
+            Err(err) => Ok(tool_error(
+                "KG stats error",
+                &err,
+                "Check the palace files, then rerun mempalace_kg_stats.",
+            )),
+        },
         "mempalace_traverse" => {
             let start_room = arguments
                 .get("start_room")

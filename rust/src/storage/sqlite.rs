@@ -7,7 +7,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 
 use crate::embed::EmbeddingProfile;
 use crate::error::Result;
-use crate::model::{DrawerInput, KgTriple, Rooms, Taxonomy};
+use crate::model::{DrawerInput, KgFact, KgStats, KgTimelineResult, KgTriple, Rooms, Taxonomy};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GraphRoomRow {
@@ -535,5 +535,199 @@ impl SqliteStore {
             triples.push(row?);
         }
         Ok(triples)
+    }
+
+    pub fn query_kg_entity(
+        &self,
+        entity: &str,
+        as_of: Option<&str>,
+        direction: &str,
+    ) -> Result<Vec<KgFact>> {
+        let mut results = Vec::new();
+
+        if matches!(direction, "outgoing" | "both") {
+            if let Some(as_of) = as_of {
+                let mut stmt = self.conn.prepare(
+                    "SELECT subject, predicate, object, valid_from, valid_to
+                     FROM kg_triples
+                     WHERE subject = ?1
+                       AND (valid_from IS NULL OR valid_from <= ?2)
+                       AND (valid_to IS NULL OR valid_to >= ?3)
+                     ORDER BY id",
+                )?;
+                let rows = stmt.query_map([entity, as_of, as_of], |row| {
+                    let valid_to: Option<String> = row.get(4)?;
+                    Ok(KgFact {
+                        direction: "outgoing".to_string(),
+                        subject: row.get(0)?,
+                        predicate: row.get(1)?,
+                        object: row.get(2)?,
+                        valid_from: row.get(3)?,
+                        valid_to: valid_to.clone(),
+                        current: valid_to.is_none(),
+                    })
+                })?;
+                for row in rows {
+                    results.push(row?);
+                }
+            } else {
+                let mut stmt = self.conn.prepare(
+                    "SELECT subject, predicate, object, valid_from, valid_to
+                     FROM kg_triples WHERE subject = ?1 ORDER BY id",
+                )?;
+                let rows = stmt.query_map([entity], |row| {
+                    let valid_to: Option<String> = row.get(4)?;
+                    Ok(KgFact {
+                        direction: "outgoing".to_string(),
+                        subject: row.get(0)?,
+                        predicate: row.get(1)?,
+                        object: row.get(2)?,
+                        valid_from: row.get(3)?,
+                        valid_to: valid_to.clone(),
+                        current: valid_to.is_none(),
+                    })
+                })?;
+                for row in rows {
+                    results.push(row?);
+                }
+            }
+        }
+
+        if matches!(direction, "incoming" | "both") {
+            if let Some(as_of) = as_of {
+                let mut stmt = self.conn.prepare(
+                    "SELECT subject, predicate, object, valid_from, valid_to
+                     FROM kg_triples
+                     WHERE object = ?1
+                       AND (valid_from IS NULL OR valid_from <= ?2)
+                       AND (valid_to IS NULL OR valid_to >= ?3)
+                     ORDER BY id",
+                )?;
+                let rows = stmt.query_map([entity, as_of, as_of], |row| {
+                    let valid_to: Option<String> = row.get(4)?;
+                    Ok(KgFact {
+                        direction: "incoming".to_string(),
+                        subject: row.get(0)?,
+                        predicate: row.get(1)?,
+                        object: row.get(2)?,
+                        valid_from: row.get(3)?,
+                        valid_to: valid_to.clone(),
+                        current: valid_to.is_none(),
+                    })
+                })?;
+                for row in rows {
+                    results.push(row?);
+                }
+            } else {
+                let mut stmt = self.conn.prepare(
+                    "SELECT subject, predicate, object, valid_from, valid_to
+                     FROM kg_triples WHERE object = ?1 ORDER BY id",
+                )?;
+                let rows = stmt.query_map([entity], |row| {
+                    let valid_to: Option<String> = row.get(4)?;
+                    Ok(KgFact {
+                        direction: "incoming".to_string(),
+                        subject: row.get(0)?,
+                        predicate: row.get(1)?,
+                        object: row.get(2)?,
+                        valid_from: row.get(3)?,
+                        valid_to: valid_to.clone(),
+                        current: valid_to.is_none(),
+                    })
+                })?;
+                for row in rows {
+                    results.push(row?);
+                }
+            }
+        }
+
+        Ok(results)
+    }
+
+    pub fn kg_timeline(&self, entity: Option<&str>) -> Result<KgTimelineResult> {
+        let mut query = String::from(
+            "SELECT subject, predicate, object, valid_from, valid_to
+             FROM kg_triples",
+        );
+        let rows = if let Some(entity) = entity {
+            query.push_str(
+                " WHERE subject = ?1 OR object = ?2
+                  ORDER BY valid_from IS NULL, valid_from ASC, id ASC
+                  LIMIT 100",
+            );
+            let mut stmt = self.conn.prepare(&query)?;
+            stmt.query_map([entity, entity], |row| {
+                let valid_to: Option<String> = row.get(4)?;
+                Ok(KgFact {
+                    direction: "both".to_string(),
+                    subject: row.get(0)?,
+                    predicate: row.get(1)?,
+                    object: row.get(2)?,
+                    valid_from: row.get(3)?,
+                    valid_to: valid_to.clone(),
+                    current: valid_to.is_none(),
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?
+        } else {
+            query.push_str(" ORDER BY valid_from IS NULL, valid_from ASC, id ASC LIMIT 100");
+            let mut stmt = self.conn.prepare(&query)?;
+            stmt.query_map([], |row| {
+                let valid_to: Option<String> = row.get(4)?;
+                Ok(KgFact {
+                    direction: "both".to_string(),
+                    subject: row.get(0)?,
+                    predicate: row.get(1)?,
+                    object: row.get(2)?,
+                    valid_from: row.get(3)?,
+                    valid_to: valid_to.clone(),
+                    current: valid_to.is_none(),
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?
+        };
+
+        Ok(KgTimelineResult {
+            entity: entity.unwrap_or("all").to_string(),
+            count: rows.len(),
+            timeline: rows,
+        })
+    }
+
+    pub fn kg_stats(&self) -> Result<KgStats> {
+        let triples = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM kg_triples", [], |row| {
+                row.get::<_, i64>(0)
+            })? as usize;
+        let current_facts = self.conn.query_row(
+            "SELECT COUNT(*) FROM kg_triples WHERE valid_to IS NULL",
+            [],
+            |row| row.get::<_, i64>(0),
+        )? as usize;
+        let expired_facts = triples.saturating_sub(current_facts);
+        let entities = self.conn.query_row(
+            "SELECT COUNT(*) FROM (
+                    SELECT subject AS entity FROM kg_triples
+                    UNION
+                    SELECT object AS entity FROM kg_triples
+                )",
+            [],
+            |row| row.get::<_, i64>(0),
+        )? as usize;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT DISTINCT predicate FROM kg_triples ORDER BY predicate")?;
+        let relationship_types = stmt
+            .query_map([], |row| row.get::<_, String>(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(KgStats {
+            entities,
+            triples,
+            current_facts,
+            expired_facts,
+            relationship_types,
+        })
     }
 }

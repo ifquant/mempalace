@@ -13,9 +13,10 @@ use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
     DoctorSummary, DrawerInput, GraphStats, GraphStatsTunnel, GraphTraversalError,
-    GraphTraversalNode, GraphTraversalResult, InitSummary, KgTriple, MigrateSummary,
-    MineProgressEvent, MineRequest, MineSummary, PrepareEmbeddingSummary, RepairSummary, Rooms,
-    SearchFilters, SearchHit, SearchResults, Status, Taxonomy, TunnelRoom,
+    GraphTraversalNode, GraphTraversalResult, InitSummary, KgQueryResult, KgStats,
+    KgTimelineResult, KgTriple, MigrateSummary, MineProgressEvent, MineRequest, MineSummary,
+    PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters, SearchHit, SearchResults, Status,
+    Taxonomy, TunnelRoom,
 };
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, GraphRoomRow, SqliteStore};
 use crate::storage::vector::VectorStore;
@@ -713,6 +714,35 @@ impl App {
         self.init().await?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
         sqlite.query_kg(subject)
+    }
+
+    pub async fn kg_query(
+        &self,
+        entity: &str,
+        as_of: Option<&str>,
+        direction: &str,
+    ) -> Result<KgQueryResult> {
+        self.init().await?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        let facts = sqlite.query_kg_entity(entity, as_of, direction)?;
+        Ok(KgQueryResult {
+            entity: entity.to_string(),
+            as_of: as_of.map(ToOwned::to_owned),
+            count: facts.len(),
+            facts,
+        })
+    }
+
+    pub async fn kg_timeline(&self, entity: Option<&str>) -> Result<KgTimelineResult> {
+        self.init().await?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.kg_timeline(entity)
+    }
+
+    pub async fn kg_stats(&self) -> Result<KgStats> {
+        self.init().await?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.kg_stats()
     }
 }
 

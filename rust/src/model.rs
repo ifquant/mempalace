@@ -128,6 +128,41 @@ pub struct KgTriple {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct KgFact {
+    pub direction: String,
+    pub subject: String,
+    pub predicate: String,
+    pub object: String,
+    pub valid_from: Option<String>,
+    pub valid_to: Option<String>,
+    pub current: bool,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct KgQueryResult {
+    pub entity: String,
+    pub as_of: Option<String>,
+    pub facts: Vec<KgFact>,
+    pub count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct KgTimelineResult {
+    pub entity: String,
+    pub timeline: Vec<KgFact>,
+    pub count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct KgStats {
+    pub entities: usize,
+    pub triples: usize,
+    pub current_facts: usize,
+    pub expired_facts: usize,
+    pub relationship_types: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MineSummary {
     pub kind: String,
     pub mode: String,

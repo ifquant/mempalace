@@ -1,6 +1,6 @@
 use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::mcp::handle_request;
-use mempalace_rs::model::{DrawerInput, MineRequest};
+use mempalace_rs::model::{DrawerInput, KgTriple, MineRequest};
 use mempalace_rs::service::App;
 use mempalace_rs::storage::sqlite::SqliteStore;
 use rusqlite::Connection;
@@ -58,6 +58,9 @@ async fn mcp_read_tools_work() {
     assert!(tool_names.contains(&"mempalace_search"));
     assert!(tool_names.contains(&"mempalace_check_duplicate"));
     assert!(tool_names.contains(&"mempalace_get_aaak_spec"));
+    assert!(tool_names.contains(&"mempalace_kg_query"));
+    assert!(tool_names.contains(&"mempalace_kg_timeline"));
+    assert!(tool_names.contains(&"mempalace_kg_stats"));
     assert!(tool_names.contains(&"mempalace_traverse"));
     assert!(tool_names.contains(&"mempalace_find_tunnels"));
     assert!(tool_names.contains(&"mempalace_graph_stats"));
@@ -381,6 +384,82 @@ async fn mcp_traverse_returns_tool_level_error_when_start_room_is_missing() {
     );
 }
 
+#[tokio::test]
+async fn mcp_kg_read_tools_work() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    seed_kg_palace(&config).await;
+
+    let query = handle_request(
+        json!({"method":"tools/call","id":30,"params":{"name":"mempalace_kg_query","arguments":{"entity":"Max","direction":"both","as_of":"2026-01-15"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let query_text = query["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(query_text.contains("\"entity\": \"Max\""));
+    assert!(query_text.contains("\"count\": 3"));
+    assert!(query_text.contains("\"predicate\": \"loves\""));
+    assert!(query_text.contains("\"predicate\": \"child_of\""));
+    assert!(query_text.contains("\"predicate\": \"has_issue\""));
+
+    let timeline = handle_request(
+        json!({"method":"tools/call","id":31,"params":{"name":"mempalace_kg_timeline","arguments":{"entity":"Max"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let timeline_text = timeline["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(timeline_text.contains("\"entity\": \"Max\""));
+    assert!(timeline_text.contains("\"timeline\""));
+    assert!(timeline_text.contains("\"current\": true"));
+
+    let stats = handle_request(
+        json!({"method":"tools/call","id":32,"params":{"name":"mempalace_kg_stats","arguments":{}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let stats_text = stats["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(stats_text.contains("\"entities\": 4"));
+    assert!(stats_text.contains("\"triples\": 3"));
+    assert!(stats_text.contains("\"current_facts\": 2"));
+    assert!(stats_text.contains("\"expired_facts\": 1"));
+    assert!(stats_text.contains("\"relationship_types\""));
+}
+
+#[tokio::test]
+async fn mcp_kg_query_returns_tool_level_error_for_bad_direction() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let response = handle_request(
+        json!({"method":"tools/call","id":33,"params":{"name":"mempalace_kg_query","arguments":{"entity":"Max","direction":"sideways"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let text = response["result"]["content"][0]["text"].as_str().unwrap();
+    let payload: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(
+        payload["error"].as_str().unwrap(),
+        "KG query error: MCP error: unsupported direction: sideways"
+    );
+    assert_eq!(
+        payload["hint"].as_str().unwrap(),
+        "Use direction=outgoing, incoming, or both, then rerun mempalace_kg_query."
+    );
+}
+
 async fn seed_graph_palace(config: &AppConfig) {
     let app = App::new(config.clone()).unwrap();
     app.init().await.unwrap();
@@ -453,4 +532,36 @@ async fn seed_graph_palace(config: &AppConfig) {
             }],
         )
         .unwrap();
+}
+
+async fn seed_kg_palace(config: &AppConfig) {
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+    app.add_kg_triple(&KgTriple {
+        subject: "Max".to_string(),
+        predicate: "child_of".to_string(),
+        object: "Alice".to_string(),
+        valid_from: Some("2015-04-01".to_string()),
+        valid_to: None,
+    })
+    .await
+    .unwrap();
+    app.add_kg_triple(&KgTriple {
+        subject: "Max".to_string(),
+        predicate: "loves".to_string(),
+        object: "Chess".to_string(),
+        valid_from: Some("2025-10-01".to_string()),
+        valid_to: None,
+    })
+    .await
+    .unwrap();
+    app.add_kg_triple(&KgTriple {
+        subject: "Max".to_string(),
+        predicate: "has_issue".to_string(),
+        object: "Sports injury".to_string(),
+        valid_from: Some("2026-01-01".to_string()),
+        valid_to: Some("2026-02-15".to_string()),
+    })
+    .await
+    .unwrap();
 }
