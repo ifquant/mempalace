@@ -46,6 +46,7 @@ Current first-phase support:
 - `search --human` prints a Python-style readable result view while the default CLI output stays JSON
 - `search --human` now also uses Python-style text for the no-palace path instead of JSON
 - `search --human` also prints `Search error: ...` text when the search fails after palace startup checks
+- default JSON `search` now also returns a structured `{"error":"Search error: ..."}` payload on query-time failures
 - `status`, `migrate`, and `repair` now carry stable `kind`/path/version context fields
 - `init` and `mine` now also carry stable `kind`/path/version context fields
 - `doctor` and `prepare-embedding` now also carry stable `kind`/path/version context fields

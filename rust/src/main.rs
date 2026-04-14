@@ -210,7 +210,10 @@ async fn main() -> anyhow::Result<()> {
                     print_search_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_search_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             if human {
                 print_search_human(&summary);
@@ -328,6 +331,14 @@ fn print_search_no_palace_human(config: &AppConfig) {
 
 fn print_search_error_human(message: &str) {
     println!("\n  Search error: {message}");
+}
+
+fn print_search_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Search error: {message}"),
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
 }
 
 fn print_unsupported_mine_mode(mode: &str, extract: &str, dir: &Path) -> anyhow::Result<()> {
