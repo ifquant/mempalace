@@ -282,6 +282,31 @@ fn cli_init_human_reports_broken_sqlite_with_text_error() {
 }
 
 #[test]
+fn cli_init_reports_broken_sqlite_with_structured_error() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+    let palace = tmp.path().join("palace");
+    fs::create_dir_all(&palace).unwrap();
+    fs::write(palace.join("palace.sqlite3"), "not a sqlite database").unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("\"error\":"))
+        .stdout(contains("Init error:"))
+        .stdout(contains("file is not a database"));
+}
+
+#[test]
 fn cli_init_reports_invalid_provider_with_structured_error() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
@@ -1200,6 +1225,24 @@ fn cli_migrate_human_reports_broken_sqlite_with_text_error() {
 }
 
 #[test]
+fn cli_migrate_reports_broken_sqlite_with_structured_error() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("broken-palace");
+    fs::create_dir_all(&palace).unwrap();
+    fs::write(palace.join("palace.sqlite3"), "not a sqlite database").unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--palace", palace.to_str().unwrap(), "migrate"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("\"error\":"))
+        .stdout(contains("Migrate error:"))
+        .stdout(contains("file is not a database"));
+}
+
+#[test]
 fn cli_repair_reports_missing_palace_non_destructively() {
     let tmp = tempdir().unwrap();
     let palace = tmp.path().join("missing-palace");
@@ -1261,6 +1304,24 @@ fn cli_repair_human_reports_issue_summary_and_next_step() {
         .stdout(contains(
             "Check the palace files, then rerun `mempalace-rs repair`.",
         ));
+}
+
+#[test]
+fn cli_repair_reports_broken_sqlite_with_structured_error() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("broken-palace");
+    fs::create_dir_all(&palace).unwrap();
+    fs::write(palace.join("palace.sqlite3"), "not a sqlite database").unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--palace", palace.to_str().unwrap(), "repair"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("\"error\":"))
+        .stdout(contains("Repair error:"))
+        .stdout(contains("file is not a database"));
 }
 
 #[test]
@@ -1547,6 +1608,24 @@ fn cli_status_human_reports_broken_sqlite_with_text_error() {
         .stdout(contains(
             "Check the palace files, then rerun `mempalace-rs status`.",
         ));
+}
+
+#[test]
+fn cli_status_reports_broken_sqlite_with_structured_error() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("broken-palace");
+    fs::create_dir_all(&palace).unwrap();
+    fs::write(palace.join("palace.sqlite3"), "not a sqlite database").unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--palace", palace.to_str().unwrap(), "status"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("\"error\":"))
+        .stdout(contains("Status error:"))
+        .stdout(contains("file is not a database"));
 }
 
 #[test]
