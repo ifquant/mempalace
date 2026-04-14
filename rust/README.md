@@ -51,6 +51,7 @@ Current first-phase support:
 - `status`, `migrate`, and `repair` now carry stable `kind`/path/version context fields
 - `status --human` prints a Python-style readable palace summary while the default CLI output stays JSON
 - `status --human` now also explains when the palace exists but is still empty, with a direct `mempalace mine <dir>` next step
+- `status --human` now also formats execution-time failures, such as a broken SQLite file, into readable status-specific text before exiting non-zero
 - `repair --human` prints a Python-style readable diagnostics summary while the default CLI output stays JSON
 - `repair --human` now also formats execution-time failures, such as a broken SQLite file, into readable repair-specific text before exiting non-zero
 - `migrate --human` prints a Python-style readable migration summary while the default CLI output stays JSON

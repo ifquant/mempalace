@@ -310,9 +310,22 @@ async fn main() -> anyhow::Result<()> {
                 return Ok(());
             }
             let app = App::new(config)?;
-            let summary = app.status().await?;
+            let summary = match app.status().await {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_status_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
             if human {
-                let taxonomy = app.taxonomy().await?;
+                let taxonomy = match app.taxonomy().await {
+                    Ok(taxonomy) => taxonomy,
+                    Err(err) => {
+                        print_status_error_human(&err.to_string());
+                        std::process::exit(1);
+                    }
+                };
                 print_status_human(&summary, &taxonomy);
             } else {
                 println!("{}", serde_json::to_string_pretty(&summary)?);
@@ -460,6 +473,11 @@ fn print_status_human(
 fn print_status_no_palace_human(config: &AppConfig) {
     println!("\n  No palace found at {}", config.palace_path.display());
     println!("  Run: mempalace init <dir> then mempalace mine <dir>");
+}
+
+fn print_status_error_human(message: &str) {
+    println!("\n  Status error: {message}");
+    println!("  Check the palace files, then rerun `mempalace-rs status`.");
 }
 
 fn print_repair_human(summary: &mempalace_rs::model::RepairSummary) {

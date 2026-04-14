@@ -1310,6 +1310,26 @@ fn cli_status_human_empty_palace_reports_next_step() {
 }
 
 #[test]
+fn cli_status_human_reports_broken_sqlite_with_text_error() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("broken-palace");
+    fs::create_dir_all(&palace).unwrap();
+    fs::write(palace.join("palace.sqlite3"), "not a sqlite database").unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--palace", palace.to_str().unwrap(), "status", "--human"])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Status error:"))
+        .stdout(contains("file is not a database"))
+        .stdout(contains(
+            "Check the palace files, then rerun `mempalace-rs status`.",
+        ));
+}
+
+#[test]
 fn cli_search_human_prints_python_style_result_blocks() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
