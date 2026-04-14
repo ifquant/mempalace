@@ -93,7 +93,11 @@ enum Command {
     #[command(about = "Run non-destructive palace diagnostics")]
     Repair,
     #[command(about = "Show what has been filed in the palace")]
-    Status,
+    Status {
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable palace status instead of JSON")]
+        human: bool,
+    },
     #[command(about = "Inspect embedding runtime health and cache state")]
     Doctor {
         #[arg(long)]
@@ -235,16 +239,25 @@ async fn main() -> anyhow::Result<()> {
             let summary = app.repair().await?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
         }
-        Command::Status => {
+        Command::Status { human } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             if !palace_exists(&config) {
-                print_no_palace(&config)?;
+                if human {
+                    print_status_no_palace_human(&config);
+                } else {
+                    print_no_palace(&config)?;
+                }
                 return Ok(());
             }
             let app = App::new(config)?;
             let summary = app.status().await?;
-            println!("{}", serde_json::to_string_pretty(&summary)?);
+            if human {
+                let taxonomy = app.taxonomy().await?;
+                print_status_human(&summary, &taxonomy);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
         }
         Command::Doctor { warm_embedding } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
@@ -339,6 +352,35 @@ fn print_search_error_json(message: &str) -> anyhow::Result<()> {
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
+}
+
+fn print_status_human(
+    summary: &mempalace_rs::model::Status,
+    taxonomy: &mempalace_rs::model::Taxonomy,
+) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Status — {} drawers", summary.total_drawers);
+    println!("{}\n", "=".repeat(55));
+    for (wing, rooms) in &taxonomy.taxonomy {
+        println!("  WING: {wing}");
+        let mut room_entries = rooms.iter().collect::<Vec<_>>();
+        room_entries.sort_by(|(left_room, left_count), (right_room, right_count)| {
+            right_count
+                .cmp(left_count)
+                .then_with(|| left_room.cmp(right_room))
+        });
+        for (room, count) in room_entries {
+            println!("    ROOM: {room:20} {count:5} drawers");
+        }
+        println!();
+    }
+    println!("{}", "=".repeat(55));
+    println!();
+}
+
+fn print_status_no_palace_human(config: &AppConfig) {
+    println!("\n  No palace found at {}", config.palace_path.display());
+    println!("  Run: mempalace init <dir> then mempalace mine <dir>");
 }
 
 fn print_unsupported_mine_mode(mode: &str, extract: &str, dir: &Path) -> anyhow::Result<()> {

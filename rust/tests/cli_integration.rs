@@ -133,6 +133,17 @@ fn cli_root_help_mentions_core_commands_and_examples() {
 }
 
 #[test]
+fn cli_status_help_mentions_human_output() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["status", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Show what has been filed in the palace"))
+        .stdout(contains("human-readable palace status"));
+}
+
+#[test]
 fn cli_search_help_mentions_filters_and_results() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
@@ -173,6 +184,22 @@ fn cli_status_reports_no_palace_with_python_style_hint() {
             "Run: mempalace init <dir> && mempalace mine <dir>",
         ))
         .stdout(contains("\"palace_path\":"));
+}
+
+#[test]
+fn cli_status_human_reports_no_palace_with_python_style_text() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("missing-palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--palace", palace.to_str().unwrap(), "status", "--human"])
+        .assert()
+        .success()
+        .stdout(contains("No palace found at"))
+        .stdout(contains(
+            "Run: mempalace init <dir> then mempalace mine <dir>",
+        ));
 }
 
 #[test]
@@ -697,6 +724,72 @@ fn cli_search_json_matches_python_style_shape() {
     assert!(first["source_mtime"].as_f64().is_some());
     assert!(first["filed_at"].as_str().is_some());
     assert!(first.get("similarity").is_some());
+}
+
+#[test]
+fn cli_status_human_prints_python_style_status_blocks() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::create_dir_all(project.join("docs")).unwrap();
+    fs::write(
+        project.join("src").join("auth.txt"),
+        "JWT authentication tokens are stored locally.\n\nThe team switched to Clerk for auth.",
+    )
+    .unwrap();
+    fs::write(
+        project.join("docs").join("guide.md"),
+        "Architecture guide for the Rust rewrite.\n\nThis guide explains room taxonomy and project docs.",
+    )
+    .unwrap();
+    fs::write(
+        project.join("mempalace.yaml"),
+        r#"
+wing: my_app
+rooms:
+  - name: auth
+    keywords: [jwt, clerk, token]
+  - name: docs
+    keywords: [guide, architecture]
+"#,
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "status", "--human"])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Status — 2 drawers"))
+        .stdout(contains("WING: my_app"))
+        .stdout(contains("ROOM: auth"))
+        .stdout(contains("ROOM: docs"));
 }
 
 #[test]
