@@ -53,8 +53,8 @@ Current first-phase support:
 - `repair --human` prints a Python-style readable diagnostics summary while the default CLI output stays JSON
 - `migrate --human` prints a Python-style readable migration summary while the default CLI output stays JSON
 - `init --human` prints a Python-style readable init summary while the default CLI output stays JSON
-- `doctor --human` prints a Python-style readable embedding diagnostics summary while the default CLI output stays JSON
-- `prepare-embedding --human` prints a Python-style readable embedding preparation summary while the default CLI output stays JSON
+- `doctor --human` prints a Python-style readable embedding diagnostics summary while the default CLI output stays JSON, including cache-state conclusions and a suggested next step when warm-up fails
+- `prepare-embedding --human` prints a Python-style readable embedding preparation summary while the default CLI output stays JSON, including a suggested next step when model warm-up still fails
 - `mine --human` prints a Python-style readable mine summary while the default CLI output stays JSON and `--progress` keeps using stderr
 - `init` and `mine` now also carry stable `kind`/path/version context fields
 - `doctor` and `prepare-embedding` now also carry stable `kind`/path/version context fields

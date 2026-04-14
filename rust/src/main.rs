@@ -572,98 +572,141 @@ fn print_mine_human(summary: &mempalace_rs::model::MineSummary) {
 }
 
 fn print_doctor_human(summary: &mempalace_rs::model::DoctorSummary) {
-    println!("\n{}", "=".repeat(55));
-    println!("  MemPalace Doctor");
-    println!("{}\n", "=".repeat(55));
-    println!("  Palace:     {}", summary.palace_path);
-    println!("  SQLite:     {}", summary.sqlite_path);
-    println!("  LanceDB:    {}", summary.lance_path);
-    println!("  Provider:   {}", summary.provider);
-    println!("  Model:      {}", summary.model);
-    println!("  Dimension:  {}", summary.dimension);
+    print!("{}", render_doctor_human(summary));
+}
+
+fn render_doctor_human(summary: &mempalace_rs::model::DoctorSummary) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("\n{}\n", "=".repeat(55)));
+    out.push_str("  MemPalace Doctor\n");
+    out.push_str(&format!("{}\n\n", "=".repeat(55)));
+    out.push_str(&format!("  Palace:     {}\n", summary.palace_path));
+    out.push_str(&format!("  SQLite:     {}\n", summary.sqlite_path));
+    out.push_str(&format!("  LanceDB:    {}\n", summary.lance_path));
+    out.push_str(&format!("  Provider:   {}\n", summary.provider));
+    out.push_str(&format!("  Model:      {}\n", summary.model));
+    out.push_str(&format!("  Dimension:  {}\n", summary.dimension));
     if let Some(path) = &summary.cache_dir {
-        println!("  Cache dir:  {path}");
+        out.push_str(&format!("  Cache dir:  {path}\n"));
     }
     if let Some(path) = &summary.model_cache_dir {
-        println!("  Model dir:  {path}");
+        out.push_str(&format!("  Model dir:  {path}\n"));
     }
     if let Some(path) = &summary.expected_model_file {
-        println!("  Model file: {path}");
+        out.push_str(&format!("  Model file: {path}\n"));
     }
-    println!(
-        "  Cache hit:  {}",
+    out.push_str(&format!(
+        "  Cache hit:  {}\n",
         if summary.model_cache_present {
             "yes"
         } else {
             "no"
         }
-    );
-    println!(
-        "  Model file present: {}",
+    ));
+    out.push_str(&format!(
+        "  Model file present: {}\n",
         if summary.expected_model_file_present {
             "yes"
         } else {
             "no"
         }
-    );
+    ));
     if let Some(path) = &summary.ort_dylib_path {
-        println!("  ORT dylib:  {path}");
+        out.push_str(&format!("  ORT dylib:  {path}\n"));
     }
     if let Some(endpoint) = &summary.hf_endpoint {
-        println!("  HF endpoint: {endpoint}");
+        out.push_str(&format!("  HF endpoint: {endpoint}\n"));
+    }
+    if !summary.model_cache_present {
+        out.push_str("  Cache state: model cache directory not populated yet\n");
+    } else if !summary.expected_model_file_present {
+        out.push_str("  Cache state: model snapshot exists but onnx/model.onnx is missing\n");
+    } else {
+        out.push_str("  Cache state: model snapshot looks ready\n");
     }
     if summary.warmup_attempted {
-        println!(
-            "  Warmup:     {}",
+        out.push_str(&format!(
+            "  Warmup:     {}\n",
             if summary.warmup_ok { "ok" } else { "failed" }
-        );
+        ));
         if let Some(error) = &summary.warmup_error {
-            println!("  Warmup err: {error}");
+            out.push_str(&format!("  Warmup err: {error}\n"));
+        }
+        if !summary.warmup_ok {
+            out.push_str("\n  Suggested next step:\n");
+            if summary.hf_endpoint.is_none() {
+                out.push_str(
+                    "    Retry with --hf-endpoint https://hf-mirror.com if the default HuggingFace route is blocked.\n",
+                );
+            } else {
+                out.push_str(
+                    "    Retry prepare-embedding after verifying the configured HuggingFace mirror and local network access.\n",
+                );
+            }
         }
     }
-    println!("\n{}", "=".repeat(55));
-    println!();
+    out.push_str(&format!("\n{}\n\n", "=".repeat(55)));
+    out
 }
 
 fn print_prepare_embedding_human(summary: &mempalace_rs::model::PrepareEmbeddingSummary) {
-    println!("\n{}", "=".repeat(55));
-    println!("  MemPalace Prepare Embedding");
-    println!("{}\n", "=".repeat(55));
-    println!("  Palace:    {}", summary.palace_path);
-    println!("  Provider:  {}", summary.provider);
-    println!("  Model:     {}", summary.model);
-    println!("  Attempts:  {}", summary.attempts);
-    println!(
-        "  Result:    {}",
+    print!("{}", render_prepare_embedding_human(summary));
+}
+
+fn render_prepare_embedding_human(
+    summary: &mempalace_rs::model::PrepareEmbeddingSummary,
+) -> String {
+    let mut out = String::new();
+    out.push_str(&format!("\n{}\n", "=".repeat(55)));
+    out.push_str("  MemPalace Prepare Embedding\n");
+    out.push_str(&format!("{}\n\n", "=".repeat(55)));
+    out.push_str(&format!("  Palace:    {}\n", summary.palace_path));
+    out.push_str(&format!("  Provider:  {}\n", summary.provider));
+    out.push_str(&format!("  Model:     {}\n", summary.model));
+    out.push_str(&format!("  Attempts:  {}\n", summary.attempts));
+    out.push_str(&format!(
+        "  Result:    {}\n",
         if summary.success { "ok" } else { "failed" }
-    );
+    ));
     if let Some(error) = &summary.last_error {
-        println!("  Last err:  {error}");
+        out.push_str(&format!("  Last err:  {error}\n"));
     }
-    println!(
-        "  Warmup:    {}",
+    out.push_str(&format!(
+        "  Warmup:    {}\n",
         if summary.doctor.warmup_ok {
             "ok"
         } else {
             "failed"
         }
-    );
+    ));
     if let Some(path) = &summary.doctor.model_cache_dir {
-        println!("  Model dir: {path}");
+        out.push_str(&format!("  Model dir: {path}\n"));
     }
     if let Some(path) = &summary.doctor.expected_model_file {
-        println!("  Model file: {path}");
+        out.push_str(&format!("  Model file: {path}\n"));
     }
-    println!(
-        "  Model file present: {}",
+    out.push_str(&format!(
+        "  Model file present: {}\n",
         if summary.doctor.expected_model_file_present {
             "yes"
         } else {
             "no"
         }
-    );
-    println!("\n{}", "=".repeat(55));
-    println!();
+    ));
+    if !summary.success {
+        out.push_str("\n  Suggested next step:\n");
+        if summary.doctor.hf_endpoint.is_none() {
+            out.push_str(
+                "    Retry with --hf-endpoint https://hf-mirror.com if model download cannot reach HuggingFace.\n",
+            );
+        } else {
+            out.push_str(
+                "    Verify the configured HuggingFace mirror and rerun prepare-embedding once model download works.\n",
+            );
+        }
+    }
+    out.push_str(&format!("\n{}\n\n", "=".repeat(55)));
+    out
 }
 
 fn print_unsupported_mine_mode(mode: &str, extract: &str, dir: &Path) -> anyhow::Result<()> {
@@ -676,4 +719,66 @@ fn print_unsupported_mine_mode(mode: &str, extract: &str, dir: &Path) -> anyhow:
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{render_doctor_human, render_prepare_embedding_human};
+    use mempalace_rs::model::{DoctorSummary, PrepareEmbeddingSummary};
+
+    fn failed_doctor_summary(hf_endpoint: Option<&str>) -> DoctorSummary {
+        DoctorSummary {
+            kind: "doctor".to_string(),
+            palace_path: "/tmp/palace".to_string(),
+            sqlite_path: "/tmp/palace/palace.sqlite3".to_string(),
+            lance_path: "/tmp/palace/lance".to_string(),
+            version: "0.1.0".to_string(),
+            provider: "fastembed".to_string(),
+            model: "MultilingualE5Small".to_string(),
+            dimension: 384,
+            cache_dir: Some("/tmp/cache".to_string()),
+            model_cache_dir: Some("/tmp/cache/model".to_string()),
+            model_cache_present: false,
+            expected_model_file: Some("/tmp/cache/model/onnx/model.onnx".to_string()),
+            expected_model_file_present: false,
+            hf_endpoint: hf_endpoint.map(ToOwned::to_owned),
+            ort_dylib_path: Some(
+                "/opt/homebrew/opt/onnxruntime/lib/libonnxruntime.dylib".to_string(),
+            ),
+            warmup_attempted: true,
+            warmup_ok: false,
+            warmup_error: Some("Failed to retrieve onnx/model.onnx".to_string()),
+        }
+    }
+
+    #[test]
+    fn doctor_human_failure_suggests_mirror_when_default_endpoint_fails() {
+        let output = render_doctor_human(&failed_doctor_summary(None));
+        assert!(output.contains("Cache state: model cache directory not populated yet"));
+        assert!(output.contains("Warmup:     failed"));
+        assert!(output.contains("Suggested next step:"));
+        assert!(output.contains("--hf-endpoint https://hf-mirror.com"));
+    }
+
+    #[test]
+    fn prepare_embedding_human_failure_mentions_configured_mirror_when_present() {
+        let doctor = failed_doctor_summary(Some("https://hf-mirror.example"));
+        let output = render_prepare_embedding_human(&PrepareEmbeddingSummary {
+            kind: "prepare_embedding".to_string(),
+            palace_path: "/tmp/palace".to_string(),
+            sqlite_path: "/tmp/palace/palace.sqlite3".to_string(),
+            lance_path: "/tmp/palace/lance".to_string(),
+            version: "0.1.0".to_string(),
+            provider: "fastembed".to_string(),
+            model: "MultilingualE5Small".to_string(),
+            attempts: 1,
+            success: false,
+            last_error: Some("Failed to retrieve onnx/model.onnx".to_string()),
+            doctor,
+        });
+        assert!(output.contains("Result:    failed"));
+        assert!(output.contains("Last err:  Failed to retrieve onnx/model.onnx"));
+        assert!(output.contains("Suggested next step:"));
+        assert!(output.contains("Verify the configured HuggingFace mirror"));
+    }
 }
