@@ -168,6 +168,16 @@ fn cli_prepare_embedding_help_mentions_human_output() {
 }
 
 #[test]
+fn cli_mine_help_mentions_human_output() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["mine", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("human-readable mine summary"));
+}
+
+#[test]
 fn cli_status_help_mentions_human_output() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
@@ -329,7 +339,8 @@ fn cli_mine_help_mentions_mode_agent_and_extract() {
         .stdout(contains("Ingest mode: 'projects' for code/docs"))
         .stdout(contains("Your name"))
         .stdout(contains("Extraction strategy for convos mode"))
-        .stdout(contains("per-file mining progress"));
+        .stdout(contains("per-file mining progress"))
+        .stdout(contains("human-readable mine summary"));
 }
 
 #[test]
@@ -542,6 +553,40 @@ fn cli_mine_dry_run_reports_preview_without_writing_drawers() {
     let status: Value = serde_json::from_slice(&status_output).unwrap();
     assert_eq!(status["kind"], "status");
     assert_eq!(status["total_drawers"], 0);
+}
+
+#[test]
+fn cli_mine_human_prints_python_style_summary() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("src").join("auth.txt"),
+        "JWT authentication tokens are stored locally.\n\nThe team switched to Clerk for auth.",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+            "--human",
+            "--progress",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Mine"))
+        .stdout(contains("Wing:"))
+        .stdout(contains("Rooms:"))
+        .stdout(contains("Files processed: 1"))
+        .stdout(contains("Drawers filed:"))
+        .stdout(contains("mempalace search"))
+        .stderr(contains("auth.txt"));
 }
 
 #[test]

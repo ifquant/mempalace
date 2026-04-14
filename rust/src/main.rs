@@ -73,6 +73,9 @@ enum Command {
             help = "Print Python-style per-file mining progress to stderr while keeping JSON on stdout"
         )]
         progress: bool,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable mine summary instead of JSON")]
+        human: bool,
     },
     #[command(about = "Find anything, exact words")]
     Search {
@@ -166,6 +169,7 @@ async fn main() -> anyhow::Result<()> {
             agent,
             extract,
             progress,
+            human,
         } => {
             if mode != "projects" {
                 print_unsupported_mine_mode(&mode, &extract, &dir)?;
@@ -206,7 +210,11 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 app.mine_project(&dir, &request).await?
             };
-            println!("{}", serde_json::to_string_pretty(&summary)?);
+            if human {
+                print_mine_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
         }
         Command::Search {
             query,
@@ -532,6 +540,33 @@ fn print_init_human(summary: &mempalace_rs::model::InitSummary) {
     println!("  LanceDB: {}", summary.lance_path);
     println!("  Schema:  {}", summary.schema_version);
     println!("\n  Palace initialized.");
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_mine_human(summary: &mempalace_rs::model::MineSummary) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Mine");
+    println!("{}\n", "=".repeat(55));
+    println!("  Wing:     {}", summary.wing);
+    println!("  Rooms:    {}", summary.configured_rooms.join(", "));
+    println!("  Files:    {}", summary.files_planned);
+    println!("  Palace:   {}", summary.palace_path);
+    println!("  Project:  {}", summary.project_path);
+    println!();
+    println!("  Files processed: {}", summary.files_mined);
+    println!("  Files skipped:   {}", summary.files_skipped_unchanged);
+    println!("  Drawers filed:   {}", summary.drawers_added);
+    if summary.dry_run {
+        println!("  Mode:            DRY RUN");
+    }
+    if !summary.room_counts.is_empty() {
+        println!("\n  Rooms filed:");
+        for (room, count) in &summary.room_counts {
+            println!("    - {room}: {count} files");
+        }
+    }
+    println!("\n  {}", summary.next_hint);
     println!("\n{}", "=".repeat(55));
     println!();
 }

@@ -55,6 +55,7 @@ Current first-phase support:
 - `init --human` prints a Python-style readable init summary while the default CLI output stays JSON
 - `doctor --human` prints a Python-style readable embedding diagnostics summary while the default CLI output stays JSON
 - `prepare-embedding --human` prints a Python-style readable embedding preparation summary while the default CLI output stays JSON
+- `mine --human` prints a Python-style readable mine summary while the default CLI output stays JSON and `--progress` keeps using stderr
 - `init` and `mine` now also carry stable `kind`/path/version context fields
 - `doctor` and `prepare-embedding` now also carry stable `kind`/path/version context fields
 - CLI `status/search` now return Python-style `error + hint` when no palace exists
