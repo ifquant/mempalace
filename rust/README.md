@@ -36,6 +36,7 @@ Current first-phase support:
 - `prepare-embedding`
 - read-only MCP tools for `status`, `list_wings`, `list_rooms`, `get_taxonomy`, `search`
 - read-only MCP tools now also include `check_duplicate` and `get_aaak_spec`, matching more of the Python MCP surface
+- read-only MCP tools now also include the room-graph trio: `traverse`, `find_tunnels`, `graph_stats`
 - provider-based embedding layer with batch document embedding
 - SQLite schema version tracking and a minimal migration path
 - `migrate` exposes the current SQLite schema upgrade path as a CLI command
@@ -132,8 +133,9 @@ Current MCP compatibility notes:
 - `mempalace_search` returns Python-style `query`, `filters`, `source_file`, and `similarity`
 - `mempalace_check_duplicate` now returns Python-style `is_duplicate` and `matches[*].id/wing/room/similarity/content`
 - `mempalace_get_aaak_spec` now exposes the standalone AAAK dialect text like the Python server
+- `mempalace_traverse`, `mempalace_find_tunnels`, and `mempalace_graph_stats` now expose a Python-style room graph built from Rust drawer metadata
 - empty palaces return the Python-style `{"error":"No palace found","hint":"Run: ..."}` shape
-- execution failures in read-only MCP tools now also return tool-level `{"error":"...","hint":"..."}` payloads for `status`, `list_wings`, `list_rooms`, `get_taxonomy`, and `search`
+- execution failures in read-only MCP tools now also return tool-level `{"error":"...","hint":"..."}` payloads for `status`, `list_wings`, `list_rooms`, `get_taxonomy`, `search`, and the graph tools
 
 Local runtime note:
 

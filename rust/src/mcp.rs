@@ -178,6 +178,34 @@ fn tools() -> Vec<Value> {
             "Return the AAAK dialect specification.",
             json!({"type":"object","properties":{}}),
         ),
+        tool(
+            "mempalace_traverse",
+            "Walk the palace graph from a room. Shows connected ideas across wings — the tunnels.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "start_room": {"type":"string","description":"Room to start from (e.g. 'chromadb-setup')"},
+                    "max_hops": {"type":"integer","description":"How many connections to follow (default: 2)"}
+                },
+                "required": ["start_room"]
+            }),
+        ),
+        tool(
+            "mempalace_find_tunnels",
+            "Find rooms that bridge two wings — the hallways connecting different domains.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "wing_a": {"type":"string","description":"First wing (optional)"},
+                    "wing_b": {"type":"string","description":"Second wing (optional)"}
+                }
+            }),
+        ),
+        tool(
+            "mempalace_graph_stats",
+            "Palace graph overview: total rooms, tunnel connections, edges between wings.",
+            json!({"type":"object","properties":{}}),
+        ),
     ]
 }
 
@@ -339,6 +367,53 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
         "mempalace_get_aaak_spec" => Ok(json!({
             "aaak_spec": AAAK_SPEC,
         })),
+        "mempalace_traverse" => {
+            let start_room = arguments
+                .get("start_room")
+                .and_then(Value::as_str)
+                .ok_or_else(|| {
+                    MempalaceError::Mcp("mempalace_traverse requires start_room".to_string())
+                });
+            let Ok(start_room) = start_room else {
+                return Ok(tool_error(
+                    "Traverse error",
+                    &MempalaceError::Mcp("mempalace_traverse requires start_room".to_string()),
+                    "Provide a start_room value, then rerun mempalace_traverse.",
+                ));
+            };
+            let max_hops = arguments
+                .get("max_hops")
+                .and_then(Value::as_u64)
+                .unwrap_or(2) as usize;
+            match app.traverse_graph(start_room, max_hops).await {
+                Ok(result) => Ok(serde_json::to_value(result)?),
+                Err(err) => Ok(tool_error(
+                    "Traverse error",
+                    &err,
+                    "Check the palace files and room name, then rerun mempalace_traverse.",
+                )),
+            }
+        }
+        "mempalace_find_tunnels" => {
+            let wing_a = arguments.get("wing_a").and_then(Value::as_str);
+            let wing_b = arguments.get("wing_b").and_then(Value::as_str);
+            match app.find_tunnels(wing_a, wing_b).await {
+                Ok(tunnels) => Ok(serde_json::to_value(tunnels)?),
+                Err(err) => Ok(tool_error(
+                    "Find tunnels error",
+                    &err,
+                    "Check the palace files and wing filters, then rerun mempalace_find_tunnels.",
+                )),
+            }
+        }
+        "mempalace_graph_stats" => match app.graph_stats().await {
+            Ok(stats) => Ok(serde_json::to_value(stats)?),
+            Err(err) => Ok(tool_error(
+                "Graph stats error",
+                &err,
+                "Check the palace files, then rerun mempalace_graph_stats.",
+            )),
+        },
         _ => Ok(json!({
             "error": {
                 "code": -32601,
@@ -393,6 +468,18 @@ fn coerce_argument_types(tool_name: &str, arguments: &mut Value) {
                 };
                 if let Some(threshold) = coerced {
                     args.insert("threshold".to_string(), threshold);
+                }
+            }
+        }
+        "mempalace_traverse" => {
+            if let Some(value) = args.get("max_hops").cloned() {
+                let coerced = match value {
+                    Value::String(text) => text.parse::<u64>().ok().map(Value::from),
+                    Value::Number(_) => value.as_u64().map(Value::from),
+                    _ => None,
+                };
+                if let Some(max_hops) = coerced {
+                    args.insert("max_hops".to_string(), max_hops);
                 }
             }
         }

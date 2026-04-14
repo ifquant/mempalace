@@ -9,6 +9,13 @@ use crate::embed::EmbeddingProfile;
 use crate::error::Result;
 use crate::model::{DrawerInput, KgTriple, Rooms, Taxonomy};
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct GraphRoomRow {
+    pub room: String,
+    pub wing: String,
+    pub filed_at: Option<String>,
+}
+
 pub const CURRENT_SCHEMA_VERSION: i64 = 4;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -468,6 +475,28 @@ impl SqliteStore {
                 .insert(room, count);
         }
         Ok(Taxonomy { taxonomy })
+    }
+
+    pub fn graph_room_rows(&self) -> Result<Vec<GraphRoomRow>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT room, wing, filed_at
+             FROM drawers
+             WHERE room IS NOT NULL AND room != '' AND room != 'general' AND wing IS NOT NULL AND wing != ''
+             ORDER BY room, wing, filed_at",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(GraphRoomRow {
+                room: row.get(0)?,
+                wing: row.get(1)?,
+                filed_at: row.get(2)?,
+            })
+        })?;
+
+        let mut out = Vec::new();
+        for row in rows {
+            out.push(row?);
+        }
+        Ok(out)
     }
 
     pub fn add_kg_triple(&self, triple: &KgTriple) -> Result<()> {

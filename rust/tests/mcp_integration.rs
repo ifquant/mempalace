@@ -1,7 +1,8 @@
 use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::mcp::handle_request;
-use mempalace_rs::model::MineRequest;
+use mempalace_rs::model::{DrawerInput, MineRequest};
 use mempalace_rs::service::App;
+use mempalace_rs::storage::sqlite::SqliteStore;
 use rusqlite::Connection;
 use serde_json::json;
 use tempfile::tempdir;
@@ -57,6 +58,9 @@ async fn mcp_read_tools_work() {
     assert!(tool_names.contains(&"mempalace_search"));
     assert!(tool_names.contains(&"mempalace_check_duplicate"));
     assert!(tool_names.contains(&"mempalace_get_aaak_spec"));
+    assert!(tool_names.contains(&"mempalace_traverse"));
+    assert!(tool_names.contains(&"mempalace_find_tunnels"));
+    assert!(tool_names.contains(&"mempalace_graph_stats"));
     let search_tool = tools["result"]["tools"]
         .as_array()
         .unwrap()
@@ -281,4 +285,172 @@ async fn mcp_check_duplicate_returns_tool_level_error_when_content_is_missing() 
         payload["hint"].as_str().unwrap(),
         "Provide content text, then rerun mempalace_check_duplicate."
     );
+}
+
+#[tokio::test]
+async fn mcp_graph_read_tools_work() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    seed_graph_palace(&config).await;
+
+    let traverse = handle_request(
+        json!({"method":"tools/call","id":20,"params":{"name":"mempalace_traverse","arguments":{"start_room":"shared-room","max_hops":"2"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let traverse_text = traverse["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(traverse_text.contains("\"room\": \"shared-room\""));
+    assert!(traverse_text.contains("\"hop\": 0"));
+    assert!(traverse_text.contains("\"wing_code\""));
+    assert!(traverse_text.contains("\"wing_team\""));
+
+    let tunnels = handle_request(
+        json!({"method":"tools/call","id":21,"params":{"name":"mempalace_find_tunnels","arguments":{"wing_a":"wing_code","wing_b":"wing_team"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let tunnels_text = tunnels["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(tunnels_text.contains("\"room\": \"shared-room\""));
+    assert!(tunnels_text.contains("\"recent\""));
+
+    let stats = handle_request(
+        json!({"method":"tools/call","id":22,"params":{"name":"mempalace_graph_stats","arguments":{}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let stats_text = stats["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(stats_text.contains("\"total_rooms\": 2"));
+    assert!(stats_text.contains("\"tunnel_rooms\": 1"));
+    assert!(stats_text.contains("\"total_edges\": 1"));
+    assert!(stats_text.contains("\"top_tunnels\""));
+}
+
+#[tokio::test]
+async fn mcp_traverse_returns_python_style_not_found_payload() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    seed_graph_palace(&config).await;
+
+    let response = handle_request(
+        json!({"method":"tools/call","id":23,"params":{"name":"mempalace_traverse","arguments":{"start_room":"shared"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let text = response["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(text.contains("\"error\": \"Room 'shared' not found\""));
+    assert!(text.contains("\"suggestions\""));
+    assert!(text.contains("shared-room"));
+}
+
+#[tokio::test]
+async fn mcp_traverse_returns_tool_level_error_when_start_room_is_missing() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let response = handle_request(
+        json!({"method":"tools/call","id":24,"params":{"name":"mempalace_traverse","arguments":{}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+
+    let text = response["result"]["content"][0]["text"].as_str().unwrap();
+    let payload: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(
+        payload["error"].as_str().unwrap(),
+        "Traverse error: MCP error: mempalace_traverse requires start_room"
+    );
+    assert_eq!(
+        payload["hint"].as_str().unwrap(),
+        "Provide a start_room value, then rerun mempalace_traverse."
+    );
+}
+
+async fn seed_graph_palace(config: &AppConfig) {
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let mut sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    sqlite.init_schema().unwrap();
+    sqlite
+        .replace_source(
+            "graph://code/shared",
+            "wing_code",
+            "shared-room",
+            "hash-a",
+            Some(1.0),
+            &[DrawerInput {
+                id: "drawer-code-shared".to_string(),
+                wing: "wing_code".to_string(),
+                room: "shared-room".to_string(),
+                source_file: "shared-code.md".to_string(),
+                source_path: "graph://code/shared".to_string(),
+                source_hash: "hash-a".to_string(),
+                source_mtime: Some(1.0),
+                chunk_index: 0,
+                added_by: "test".to_string(),
+                filed_at: "2026-04-14T10:00:00Z".to_string(),
+                text: "shared room in code wing".to_string(),
+            }],
+        )
+        .unwrap();
+    sqlite
+        .replace_source(
+            "graph://team/shared",
+            "wing_team",
+            "shared-room",
+            "hash-b",
+            Some(2.0),
+            &[DrawerInput {
+                id: "drawer-team-shared".to_string(),
+                wing: "wing_team".to_string(),
+                room: "shared-room".to_string(),
+                source_file: "shared-team.md".to_string(),
+                source_path: "graph://team/shared".to_string(),
+                source_hash: "hash-b".to_string(),
+                source_mtime: Some(2.0),
+                chunk_index: 0,
+                added_by: "test".to_string(),
+                filed_at: "2026-04-14T11:00:00Z".to_string(),
+                text: "shared room in team wing".to_string(),
+            }],
+        )
+        .unwrap();
+    sqlite
+        .replace_source(
+            "graph://team/solo",
+            "wing_team",
+            "solo-room",
+            "hash-c",
+            Some(3.0),
+            &[DrawerInput {
+                id: "drawer-team-solo".to_string(),
+                wing: "wing_team".to_string(),
+                room: "solo-room".to_string(),
+                source_file: "solo-team.md".to_string(),
+                source_path: "graph://team/solo".to_string(),
+                source_hash: "hash-c".to_string(),
+                source_mtime: Some(3.0),
+                chunk_index: 0,
+                added_by: "test".to_string(),
+                filed_at: "2026-04-14T12:00:00Z".to_string(),
+                text: "solo room in team wing".to_string(),
+            }],
+        )
+        .unwrap();
 }

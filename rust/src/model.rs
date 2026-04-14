@@ -71,6 +71,54 @@ pub struct Taxonomy {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct GraphTraversalNode {
+    pub room: String,
+    pub wings: Vec<String>,
+    pub halls: Vec<String>,
+    pub count: usize,
+    pub hop: usize,
+    pub connected_via: Option<Vec<String>>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct GraphTraversalError {
+    pub error: String,
+    pub suggestions: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum GraphTraversalResult {
+    Results(Vec<GraphTraversalNode>),
+    Error(GraphTraversalError),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct TunnelRoom {
+    pub room: String,
+    pub wings: Vec<String>,
+    pub halls: Vec<String>,
+    pub count: usize,
+    pub recent: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct GraphStatsTunnel {
+    pub room: String,
+    pub wings: Vec<String>,
+    pub count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct GraphStats {
+    pub total_rooms: usize,
+    pub tunnel_rooms: usize,
+    pub total_edges: usize,
+    pub rooms_per_wing: BTreeMap<String, usize>,
+    pub top_tunnels: Vec<GraphStatsTunnel>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KgTriple {
     pub subject: String,
     pub predicate: String,

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -12,11 +12,12 @@ use crate::config::AppConfig;
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
-    DoctorSummary, DrawerInput, InitSummary, KgTriple, MigrateSummary, MineProgressEvent,
-    MineRequest, MineSummary, PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters,
-    SearchHit, SearchResults, Status, Taxonomy,
+    DoctorSummary, DrawerInput, GraphStats, GraphStatsTunnel, GraphTraversalError,
+    GraphTraversalNode, GraphTraversalResult, InitSummary, KgTriple, MigrateSummary,
+    MineProgressEvent, MineRequest, MineSummary, PrepareEmbeddingSummary, RepairSummary, Rooms,
+    SearchFilters, SearchHit, SearchResults, Status, Taxonomy, TunnelRoom,
 };
-use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
+use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, GraphRoomRow, SqliteStore};
 use crate::storage::vector::VectorStore;
 
 const READABLE_EXTENSIONS: &[&str] = &[
@@ -317,6 +318,179 @@ impl App {
         sqlite.init_schema()?;
         sqlite.ensure_embedding_profile(self.embedder.profile())?;
         sqlite.taxonomy()
+    }
+
+    pub async fn traverse_graph(
+        &self,
+        start_room: &str,
+        max_hops: usize,
+    ) -> Result<GraphTraversalResult> {
+        self.config.ensure_dirs()?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let graph = build_room_graph(&sqlite.graph_room_rows()?);
+
+        let Some(start) = graph.nodes.get(start_room) else {
+            return Ok(GraphTraversalResult::Error(GraphTraversalError {
+                error: format!("Room '{start_room}' not found"),
+                suggestions: fuzzy_match_room(start_room, &graph.nodes),
+            }));
+        };
+
+        let mut visited = BTreeSet::new();
+        visited.insert(start_room.to_string());
+        let mut results = vec![GraphTraversalNode {
+            room: start_room.to_string(),
+            wings: start.wings.iter().cloned().collect(),
+            halls: start.halls.iter().cloned().collect(),
+            count: start.count,
+            hop: 0,
+            connected_via: None,
+        }];
+
+        let mut frontier = vec![(start_room.to_string(), 0usize)];
+        while let Some((current_room, depth)) = frontier.first().cloned() {
+            frontier.remove(0);
+            if depth >= max_hops {
+                continue;
+            }
+            let current = match graph.nodes.get(&current_room) {
+                Some(current) => current,
+                None => continue,
+            };
+            for (room, data) in &graph.nodes {
+                if visited.contains(room) {
+                    continue;
+                }
+                let shared_wings = current
+                    .wings
+                    .intersection(&data.wings)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if shared_wings.is_empty() {
+                    continue;
+                }
+                visited.insert(room.clone());
+                results.push(GraphTraversalNode {
+                    room: room.clone(),
+                    wings: data.wings.iter().cloned().collect(),
+                    halls: data.halls.iter().cloned().collect(),
+                    count: data.count,
+                    hop: depth + 1,
+                    connected_via: Some(shared_wings),
+                });
+                if depth + 1 < max_hops {
+                    frontier.push((room.clone(), depth + 1));
+                }
+            }
+        }
+
+        results.sort_by(|left, right| {
+            left.hop
+                .cmp(&right.hop)
+                .then(right.count.cmp(&left.count))
+                .then(left.room.cmp(&right.room))
+        });
+        results.truncate(50);
+        Ok(GraphTraversalResult::Results(results))
+    }
+
+    pub async fn find_tunnels(
+        &self,
+        wing_a: Option<&str>,
+        wing_b: Option<&str>,
+    ) -> Result<Vec<TunnelRoom>> {
+        self.config.ensure_dirs()?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let graph = build_room_graph(&sqlite.graph_room_rows()?);
+
+        let mut tunnels = graph
+            .nodes
+            .into_iter()
+            .filter_map(|(room, data)| {
+                if data.wings.len() < 2 {
+                    return None;
+                }
+                if let Some(wing) = wing_a
+                    && !data.wings.contains(wing)
+                {
+                    return None;
+                }
+                if let Some(wing) = wing_b
+                    && !data.wings.contains(wing)
+                {
+                    return None;
+                }
+                Some(TunnelRoom {
+                    room,
+                    wings: data.wings.into_iter().collect(),
+                    halls: data.halls.into_iter().collect(),
+                    count: data.count,
+                    recent: data.recent.unwrap_or_default(),
+                })
+            })
+            .collect::<Vec<_>>();
+
+        tunnels.sort_by(|left, right| {
+            right
+                .count
+                .cmp(&left.count)
+                .then(left.room.cmp(&right.room))
+        });
+        tunnels.truncate(50);
+        Ok(tunnels)
+    }
+
+    pub async fn graph_stats(&self) -> Result<GraphStats> {
+        self.config.ensure_dirs()?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let graph = build_room_graph(&sqlite.graph_room_rows()?);
+
+        let tunnel_rooms = graph
+            .nodes
+            .values()
+            .filter(|node| node.wings.len() >= 2)
+            .count();
+
+        let mut rooms_per_wing = BTreeMap::new();
+        for node in graph.nodes.values() {
+            for wing in &node.wings {
+                *rooms_per_wing.entry(wing.clone()).or_insert(0) += 1;
+            }
+        }
+
+        let mut top_tunnels = graph
+            .nodes
+            .iter()
+            .filter(|(_, data)| data.wings.len() >= 2)
+            .map(|(room, data)| GraphStatsTunnel {
+                room: room.clone(),
+                wings: data.wings.iter().cloned().collect(),
+                count: data.count,
+            })
+            .collect::<Vec<_>>();
+        top_tunnels.sort_by(|left, right| {
+            right
+                .wings
+                .len()
+                .cmp(&left.wings.len())
+                .then(right.count.cmp(&left.count))
+                .then(left.room.cmp(&right.room))
+        });
+        top_tunnels.truncate(10);
+
+        Ok(GraphStats {
+            total_rooms: graph.nodes.len(),
+            tunnel_rooms,
+            total_edges: graph.total_edges,
+            rooms_per_wing,
+            top_tunnels,
+        })
     }
 
     pub async fn search(
@@ -843,6 +1017,75 @@ fn normalize_search_hits(mut hits: Vec<SearchHit>) -> Vec<SearchHit> {
 
     hits.sort_by(|left, right| compare_search_hits(left, right));
     hits
+}
+
+#[derive(Clone, Debug, Default)]
+struct GraphNodeData {
+    wings: BTreeSet<String>,
+    halls: BTreeSet<String>,
+    count: usize,
+    recent: Option<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+struct RoomGraph {
+    nodes: BTreeMap<String, GraphNodeData>,
+    total_edges: usize,
+}
+
+fn build_room_graph(rows: &[GraphRoomRow]) -> RoomGraph {
+    let mut nodes: BTreeMap<String, GraphNodeData> = BTreeMap::new();
+    for row in rows {
+        let node = nodes.entry(row.room.clone()).or_default();
+        node.wings.insert(row.wing.clone());
+        node.count += 1;
+        if let Some(filed_at) = &row.filed_at {
+            if node
+                .recent
+                .as_ref()
+                .is_none_or(|current| filed_at > current)
+            {
+                node.recent = Some(filed_at.clone());
+            }
+        }
+    }
+
+    let total_edges = nodes
+        .values()
+        .map(|data| {
+            let wing_count = data.wings.len();
+            if wing_count >= 2 {
+                wing_count * (wing_count - 1) / 2
+            } else {
+                0
+            }
+        })
+        .sum();
+
+    RoomGraph { nodes, total_edges }
+}
+
+fn fuzzy_match_room(query: &str, nodes: &BTreeMap<String, GraphNodeData>) -> Vec<String> {
+    let query_lower = query.to_lowercase();
+    let query_words = query_lower.split('-').collect::<Vec<_>>();
+    let mut matches = nodes
+        .keys()
+        .filter_map(|room| {
+            let room_lower = room.to_lowercase();
+            if room_lower.contains(&query_lower) {
+                return Some((room.clone(), 1u8));
+            }
+            if query_words
+                .iter()
+                .any(|word| !word.is_empty() && room_lower.contains(word))
+            {
+                return Some((room.clone(), 2u8));
+            }
+            None
+        })
+        .collect::<Vec<_>>();
+    matches.sort_by(|left, right| left.1.cmp(&right.1).then(left.0.cmp(&right.0)));
+    matches.into_iter().map(|(room, _)| room).take(5).collect()
 }
 
 fn normalize_source_file(source_file: &str, source_path: &str) -> String {
