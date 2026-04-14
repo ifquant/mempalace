@@ -1240,6 +1240,36 @@ rooms:
 }
 
 #[test]
+fn cli_status_human_empty_palace_reports_next_step() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "status", "--human"])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Status — 0 drawers"))
+        .stdout(contains("Palace is initialized but still empty."))
+        .stdout(contains("Run: mempalace mine <dir>"));
+}
+
+#[test]
 fn cli_search_human_prints_python_style_result_blocks() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");

@@ -421,6 +421,11 @@ fn print_status_human(
     println!("\n{}", "=".repeat(55));
     println!("  MemPalace Status — {} drawers", summary.total_drawers);
     println!("{}\n", "=".repeat(55));
+    if summary.total_drawers == 0 {
+        println!("  Palace is initialized but still empty.");
+        println!("  Run: mempalace mine <dir>");
+        println!();
+    }
     for (wing, rooms) in &taxonomy.taxonomy {
         println!("  WING: {wing}");
         let mut room_entries = rooms.iter().collect::<Vec<_>>();

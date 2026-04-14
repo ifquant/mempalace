@@ -50,6 +50,7 @@ Current first-phase support:
 - `mempalace_search` in the MCP server now also returns tool-level `{"error":"Search error: ..."}` content instead of a transport error on query-time failures
 - `status`, `migrate`, and `repair` now carry stable `kind`/path/version context fields
 - `status --human` prints a Python-style readable palace summary while the default CLI output stays JSON
+- `status --human` now also explains when the palace exists but is still empty, with a direct `mempalace mine <dir>` next step
 - `repair --human` prints a Python-style readable diagnostics summary while the default CLI output stays JSON
 - `migrate --human` prints a Python-style readable migration summary while the default CLI output stays JSON
 - `init --human` prints a Python-style readable init summary while the default CLI output stays JSON
