@@ -44,6 +44,7 @@ Current first-phase support:
 - `search` CLI JSON now also exposes vector-backed `source_mtime`, `added_by`, and `filed_at`
 - `search` now normalizes `source_file` to a basename, rounds `similarity` to 3 decimals, and keeps duplicate chunks as separate hits like Python
 - `search --human` prints a Python-style readable result view while the default CLI output stays JSON
+- `search --human` now also uses Python-style text for the no-palace path instead of JSON
 - `status`, `migrate`, and `repair` now carry stable `kind`/path/version context fields
 - `init` and `mine` now also carry stable `kind`/path/version context fields
 - `doctor` and `prepare-embedding` now also carry stable `kind`/path/version context fields

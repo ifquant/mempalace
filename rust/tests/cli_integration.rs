@@ -193,6 +193,28 @@ fn cli_search_reports_no_palace_with_python_style_hint() {
 }
 
 #[test]
+fn cli_search_human_reports_no_palace_with_python_style_text() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("missing-palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "search",
+            "GraphQL",
+            "--human",
+        ])
+        .assert()
+        .failure()
+        .stdout(contains("No palace found at"))
+        .stdout(contains(
+            "Run: mempalace init <dir> then mempalace mine <dir>",
+        ));
+}
+
+#[test]
 fn cli_mine_dry_run_reports_preview_without_writing_drawers() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");

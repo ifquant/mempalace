@@ -193,13 +193,25 @@ async fn main() -> anyhow::Result<()> {
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             if !palace_exists(&config) {
-                print_no_palace(&config)?;
+                if human {
+                    print_search_no_palace_human(&config);
+                } else {
+                    print_no_palace(&config)?;
+                }
                 std::process::exit(1);
             }
             let app = App::new(config)?;
-            let summary = app
+            let summary = match app
                 .search(&query, wing.as_deref(), room.as_deref(), results)
-                .await?;
+                .await
+            {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_search_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => return Err(err.into()),
+            };
             if human {
                 print_search_human(&summary);
             } else {
@@ -307,6 +319,15 @@ fn print_search_human(summary: &mempalace_rs::model::SearchResults) {
         println!("  {}", "─".repeat(56));
     }
     println!();
+}
+
+fn print_search_no_palace_human(config: &AppConfig) {
+    println!("\n  No palace found at {}", config.palace_path.display());
+    println!("  Run: mempalace init <dir> then mempalace mine <dir>");
+}
+
+fn print_search_error_human(message: &str) {
+    println!("\n  Search error: {message}");
 }
 
 fn print_unsupported_mine_mode(mode: &str, extract: &str, dir: &Path) -> anyhow::Result<()> {
