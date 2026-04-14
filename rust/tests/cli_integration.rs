@@ -144,6 +144,17 @@ fn cli_init_help_mentions_human_output() {
 }
 
 #[test]
+fn cli_doctor_help_mentions_human_output() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["doctor", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Inspect embedding runtime health and cache state"))
+        .stdout(contains("human-readable doctor output"));
+}
+
+#[test]
 fn cli_status_help_mentions_human_output() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
@@ -216,6 +227,40 @@ fn cli_init_human_prints_python_style_summary() {
         .stdout(contains("LanceDB:"))
         .stdout(contains("Schema:  4"))
         .stdout(contains("Palace initialized."));
+}
+
+#[test]
+fn cli_doctor_human_prints_embedding_diagnostics() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "doctor", "--human"])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Doctor"))
+        .stdout(contains("Palace:"))
+        .stdout(contains("SQLite:"))
+        .stdout(contains("LanceDB:"))
+        .stdout(contains("Provider:   hash"))
+        .stdout(contains("Model:      hash-v1"))
+        .stdout(contains("Dimension:  64"));
 }
 
 #[test]

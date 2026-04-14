@@ -114,6 +114,9 @@ enum Command {
         #[arg(long)]
         #[arg(help = "Warm the embedding model during the doctor run")]
         warm_embedding: bool,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable doctor output instead of JSON")]
+        human: bool,
     },
     #[command(about = "Prepare the local embedding runtime and model cache")]
     PrepareEmbedding {
@@ -290,12 +293,19 @@ async fn main() -> anyhow::Result<()> {
                 println!("{}", serde_json::to_string_pretty(&summary)?);
             }
         }
-        Command::Doctor { warm_embedding } => {
+        Command::Doctor {
+            warm_embedding,
+            human,
+        } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = App::new(config)?;
             let summary = app.doctor(warm_embedding).await?;
-            println!("{}", serde_json::to_string_pretty(&summary)?);
+            if human {
+                print_doctor_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
         }
         Command::PrepareEmbedding { attempts, wait_ms } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
@@ -511,6 +521,60 @@ fn print_init_human(summary: &mempalace_rs::model::InitSummary) {
     println!("  LanceDB: {}", summary.lance_path);
     println!("  Schema:  {}", summary.schema_version);
     println!("\n  Palace initialized.");
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_doctor_human(summary: &mempalace_rs::model::DoctorSummary) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Doctor");
+    println!("{}\n", "=".repeat(55));
+    println!("  Palace:     {}", summary.palace_path);
+    println!("  SQLite:     {}", summary.sqlite_path);
+    println!("  LanceDB:    {}", summary.lance_path);
+    println!("  Provider:   {}", summary.provider);
+    println!("  Model:      {}", summary.model);
+    println!("  Dimension:  {}", summary.dimension);
+    if let Some(path) = &summary.cache_dir {
+        println!("  Cache dir:  {path}");
+    }
+    if let Some(path) = &summary.model_cache_dir {
+        println!("  Model dir:  {path}");
+    }
+    if let Some(path) = &summary.expected_model_file {
+        println!("  Model file: {path}");
+    }
+    println!(
+        "  Cache hit:  {}",
+        if summary.model_cache_present {
+            "yes"
+        } else {
+            "no"
+        }
+    );
+    println!(
+        "  Model file present: {}",
+        if summary.expected_model_file_present {
+            "yes"
+        } else {
+            "no"
+        }
+    );
+    if let Some(path) = &summary.ort_dylib_path {
+        println!("  ORT dylib:  {path}");
+    }
+    if let Some(endpoint) = &summary.hf_endpoint {
+        println!("  HF endpoint: {endpoint}");
+    }
+    if summary.warmup_attempted {
+        println!(
+            "  Warmup:     {}",
+            if summary.warmup_ok { "ok" } else { "failed" }
+        );
+        if let Some(error) = &summary.warmup_error {
+            println!("  Warmup err: {error}");
+        }
+    }
     println!("\n{}", "=".repeat(55));
     println!();
 }
