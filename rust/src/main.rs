@@ -636,6 +636,7 @@ fn print_search_error_human(message: &str) {
 fn print_search_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Search error: {message}"),
+        "hint": "Check the embedding provider, palace files, or query inputs, then rerun `mempalace-rs search <query>`.",
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
@@ -644,6 +645,7 @@ fn print_search_error_json(message: &str) -> anyhow::Result<()> {
 fn print_mine_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Mine error: {message}"),
+        "hint": "Check the embedding provider, project path, and palace files, then rerun `mempalace-rs mine <dir>`.",
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
@@ -652,6 +654,7 @@ fn print_mine_error_json(message: &str) -> anyhow::Result<()> {
 fn print_doctor_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Doctor error: {message}"),
+        "hint": "Check the embedding provider and local runtime, then rerun `mempalace-rs doctor`.",
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
@@ -706,6 +709,7 @@ fn print_status_error_human(message: &str) {
 fn print_status_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Status error: {message}"),
+        "hint": "Check the palace files, then rerun `mempalace-rs status`.",
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
@@ -785,6 +789,7 @@ fn print_repair_error_human(message: &str) {
 fn print_repair_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Repair error: {message}"),
+        "hint": "Check the palace files, then rerun `mempalace-rs repair`.",
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
@@ -825,6 +830,7 @@ fn print_migrate_error_human(message: &str) {
 fn print_migrate_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Migrate error: {message}"),
+        "hint": "Check the palace SQLite file, then rerun `mempalace-rs migrate`.",
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
@@ -851,6 +857,7 @@ fn print_init_error_human(message: &str) {
 fn print_init_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Init error: {message}"),
+        "hint": "Check the palace path and SQLite file, then rerun `mempalace-rs init <dir>`.",
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
@@ -1043,6 +1050,7 @@ fn print_prepare_embedding_error_human(message: &str) {
 fn print_prepare_embedding_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Prepare embedding error: {message}"),
+        "hint": "Check the palace files and embedding runtime, then rerun `mempalace-rs prepare-embedding`.",
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())

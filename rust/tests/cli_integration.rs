@@ -321,7 +321,9 @@ fn cli_init_reports_invalid_provider_with_structured_error() {
         .code(1)
         .stdout(contains("\"error\":"))
         .stdout(contains("Init error:"))
-        .stdout(contains("Unsupported embedding provider: broken"));
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains("\"hint\":"))
+        .stdout(contains("rerun `mempalace-rs init <dir>`"));
 }
 
 #[test]
@@ -405,7 +407,9 @@ fn cli_doctor_reports_invalid_provider_with_structured_error() {
         .code(1)
         .stdout(contains("\"error\":"))
         .stdout(contains("Doctor error:"))
-        .stdout(contains("Unsupported embedding provider: broken"));
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains("\"hint\":"))
+        .stdout(contains("rerun `mempalace-rs doctor`"));
 }
 
 #[test]
@@ -485,7 +489,9 @@ fn cli_prepare_embedding_reports_invalid_provider_with_structured_error() {
         .code(1)
         .stdout(contains("\"error\":"))
         .stdout(contains("Prepare embedding error:"))
-        .stdout(contains("Unsupported embedding provider: broken"));
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains("\"hint\":"))
+        .stdout(contains("rerun `mempalace-rs prepare-embedding`"));
 }
 
 #[test]
@@ -546,7 +552,9 @@ fn cli_status_reports_invalid_provider_with_structured_error() {
         .code(1)
         .stdout(contains("\"error\":"))
         .stdout(contains("Status error:"))
-        .stdout(contains("Unsupported embedding provider: broken"));
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains("\"hint\":"))
+        .stdout(contains("rerun `mempalace-rs status`"));
 }
 
 #[test]
@@ -671,7 +679,9 @@ fn cli_search_reports_invalid_provider_with_structured_error() {
         .code(1)
         .stdout(contains("\"error\":"))
         .stdout(contains("Search error:"))
-        .stdout(contains("Unsupported embedding provider: broken"));
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains("\"hint\":"))
+        .stdout(contains("rerun `mempalace-rs search <query>`"));
 }
 
 #[test]
@@ -934,7 +944,9 @@ fn cli_mine_reports_invalid_provider_with_structured_error() {
         .code(1)
         .stdout(contains("\"error\":"))
         .stdout(contains("Mine error:"))
-        .stdout(contains("Unsupported embedding provider: broken"));
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains("\"hint\":"))
+        .stdout(contains("rerun `mempalace-rs mine <dir>`"));
 }
 
 #[test]
@@ -1269,7 +1281,9 @@ fn cli_migrate_reports_invalid_provider_with_structured_error() {
         .code(1)
         .stdout(contains("\"error\":"))
         .stdout(contains("Migrate error:"))
-        .stdout(contains("Unsupported embedding provider: broken"));
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains("\"hint\":"))
+        .stdout(contains("rerun `mempalace-rs migrate`"));
 }
 
 #[test]
@@ -1429,7 +1443,9 @@ fn cli_repair_reports_invalid_provider_with_structured_error() {
         .code(1)
         .stdout(contains("\"error\":"))
         .stdout(contains("Repair error:"))
-        .stdout(contains("Unsupported embedding provider: broken"));
+        .stdout(contains("Unsupported embedding provider: broken"))
+        .stdout(contains("\"hint\":"))
+        .stdout(contains("rerun `mempalace-rs repair`"));
 }
 
 #[test]
