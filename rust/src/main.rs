@@ -89,7 +89,11 @@ enum Command {
         human: bool,
     },
     #[command(about = "Upgrade palace SQLite metadata to the current schema version")]
-    Migrate,
+    Migrate {
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable migration summary instead of JSON")]
+        human: bool,
+    },
     #[command(about = "Run non-destructive palace diagnostics")]
     Repair {
         #[arg(long)]
@@ -229,12 +233,20 @@ async fn main() -> anyhow::Result<()> {
                 println!("{}", serde_json::to_string_pretty(&summary)?);
             }
         }
-        Command::Migrate => {
+        Command::Migrate { human } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+            if human && !palace_exists(&config) {
+                print_migrate_no_palace_human(&config);
+                return Ok(());
+            }
             let app = App::new(config)?;
             let summary = app.migrate().await?;
-            println!("{}", serde_json::to_string_pretty(&summary)?);
+            if human {
+                print_migrate_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
         }
         Command::Repair { human } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
@@ -453,6 +465,33 @@ fn print_repair_human(summary: &mempalace_rs::model::RepairSummary) {
 }
 
 fn print_repair_no_palace_human(config: &AppConfig) {
+    println!("\n  No palace found at {}", config.palace_path.display());
+}
+
+fn print_migrate_human(summary: &mempalace_rs::model::MigrateSummary) {
+    println!("\n{}", "=".repeat(60));
+    println!("  MemPalace Migrate");
+    println!("{}\n", "=".repeat(60));
+    println!("  Palace:  {}", summary.palace_path);
+    println!("  SQLite:  {}", summary.sqlite_path);
+    println!(
+        "  Before:  {}",
+        summary
+            .schema_version_before
+            .map(|value| value.to_string())
+            .unwrap_or_else(|| "unknown".to_string())
+    );
+    println!("  After:   {}", summary.schema_version_after);
+    if summary.changed {
+        println!("\n  Migration complete.");
+    } else {
+        println!("\n  Nothing to migrate.");
+    }
+    println!("\n{}", "=".repeat(60));
+    println!();
+}
+
+fn print_migrate_no_palace_human(config: &AppConfig) {
     println!("\n  No palace found at {}", config.palace_path.display());
 }
 

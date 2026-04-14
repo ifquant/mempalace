@@ -51,6 +51,7 @@ Current first-phase support:
 - `status`, `migrate`, and `repair` now carry stable `kind`/path/version context fields
 - `status --human` prints a Python-style readable palace summary while the default CLI output stays JSON
 - `repair --human` prints a Python-style readable diagnostics summary while the default CLI output stays JSON
+- `migrate --human` prints a Python-style readable migration summary while the default CLI output stays JSON
 - `init` and `mine` now also carry stable `kind`/path/version context fields
 - `doctor` and `prepare-embedding` now also carry stable `kind`/path/version context fields
 - CLI `status/search` now return Python-style `error + hint` when no palace exists

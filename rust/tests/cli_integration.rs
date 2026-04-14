@@ -155,6 +155,19 @@ fn cli_repair_help_mentions_human_output() {
 }
 
 #[test]
+fn cli_migrate_help_mentions_human_output() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["migrate", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "Upgrade palace SQLite metadata to the current schema version",
+        ))
+        .stdout(contains("human-readable migration summary"));
+}
+
+#[test]
 fn cli_search_help_mentions_filters_and_results() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
@@ -599,6 +612,81 @@ fn cli_migrate_upgrades_legacy_sqlite_schema() {
         .stdout(contains("\"schema_version_before\": 1"))
         .stdout(contains("\"schema_version_after\": 4"))
         .stdout(contains("\"changed\": true"));
+}
+
+#[test]
+fn cli_migrate_human_reports_no_palace_with_python_style_text() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("missing-palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--palace", palace.to_str().unwrap(), "migrate", "--human"])
+        .assert()
+        .success()
+        .stdout(contains("No palace found at"));
+}
+
+#[test]
+fn cli_migrate_human_prints_python_style_summary() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("palace");
+    fs::create_dir_all(&palace).unwrap();
+    let sqlite_path = palace.join("palace.sqlite3");
+    let conn = Connection::open(&sqlite_path).unwrap();
+    conn.execute_batch(
+        r#"
+        CREATE TABLE meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        INSERT INTO meta(key, value) VALUES('schema_version', '1');
+
+        CREATE TABLE drawers (
+            id TEXT PRIMARY KEY,
+            wing TEXT NOT NULL,
+            room TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            source_hash TEXT NOT NULL,
+            chunk_index INTEGER NOT NULL,
+            text TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE ingested_files (
+            source_path TEXT PRIMARY KEY,
+            content_hash TEXT NOT NULL,
+            wing TEXT NOT NULL,
+            room TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE kg_triples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subject TEXT NOT NULL,
+            predicate TEXT NOT NULL,
+            object TEXT NOT NULL,
+            valid_from TEXT,
+            valid_to TEXT,
+            created_at TEXT NOT NULL
+        );
+        "#,
+    )
+    .unwrap();
+    drop(conn);
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "migrate", "--human"])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Migrate"))
+        .stdout(contains("Palace:"))
+        .stdout(contains("SQLite:"))
+        .stdout(contains("Before:  1"))
+        .stdout(contains("After:   4"))
+        .stdout(contains("Migration complete."));
 }
 
 #[test]
