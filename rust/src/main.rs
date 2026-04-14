@@ -387,7 +387,10 @@ async fn main() -> anyhow::Result<()> {
                     print_doctor_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_doctor_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = match App::new(config) {
@@ -396,7 +399,10 @@ async fn main() -> anyhow::Result<()> {
                     print_doctor_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_doctor_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             let summary = match app.doctor(warm_embedding).await {
                 Ok(summary) => summary,
@@ -404,7 +410,10 @@ async fn main() -> anyhow::Result<()> {
                     print_doctor_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_doctor_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             if human {
                 print_doctor_human(&summary);
@@ -423,7 +432,10 @@ async fn main() -> anyhow::Result<()> {
                     print_prepare_embedding_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_prepare_embedding_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = match App::new(config) {
@@ -432,7 +444,10 @@ async fn main() -> anyhow::Result<()> {
                     print_prepare_embedding_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_prepare_embedding_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             let summary = match app.prepare_embedding(attempts, wait_ms).await {
                 Ok(summary) => summary,
@@ -440,7 +455,10 @@ async fn main() -> anyhow::Result<()> {
                     print_prepare_embedding_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_prepare_embedding_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             if human {
                 print_prepare_embedding_human(&summary);
@@ -524,6 +542,14 @@ fn print_search_error_human(message: &str) {
 fn print_search_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Search error: {message}"),
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
+fn print_doctor_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Doctor error: {message}"),
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
@@ -878,6 +904,14 @@ fn print_prepare_embedding_error_human(message: &str) {
     println!(
         "  Check the palace files and embedding runtime, then rerun `mempalace-rs prepare-embedding`."
     );
+}
+
+fn print_prepare_embedding_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Prepare embedding error: {message}"),
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
 }
 
 fn print_unsupported_mine_mode(
