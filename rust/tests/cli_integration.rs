@@ -731,6 +731,29 @@ fn cli_search_reports_broken_sqlite_with_structured_error() {
 }
 
 #[test]
+fn cli_search_human_reports_broken_sqlite_with_text_error() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("broken-palace");
+    fs::create_dir_all(&palace).unwrap();
+    fs::write(palace.join("palace.sqlite3"), "not a sqlite database").unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "search",
+            "GraphQL",
+            "--human",
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Search error:"))
+        .stdout(contains("file is not a database"));
+}
+
+#[test]
 fn cli_mine_dry_run_reports_preview_without_writing_drawers() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
@@ -846,6 +869,34 @@ fn cli_mine_reports_broken_sqlite_with_structured_error() {
         .stdout(contains("\"error\":"))
         .stdout(contains("Mine error:"))
         .stdout(contains("file is not a database"));
+}
+
+#[test]
+fn cli_mine_human_reports_broken_sqlite_with_text_error() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+    let palace = tmp.path().join("broken-palace");
+    fs::create_dir_all(&palace).unwrap();
+    fs::write(palace.join("palace.sqlite3"), "not a sqlite database").unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+            "--human",
+        ])
+        .assert()
+        .failure()
+        .code(1)
+        .stdout(contains("Mine error:"))
+        .stdout(contains("file is not a database"))
+        .stdout(contains(
+            "Check the embedding provider and project path, then rerun `mempalace-rs mine <dir>`.",
+        ));
 }
 
 #[test]

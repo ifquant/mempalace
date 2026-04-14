@@ -49,6 +49,7 @@ Current first-phase support:
 - `search --human` and `mine --human` now also format invalid embedding-provider failures into readable command-specific text before exiting non-zero
 - `search` and `mine` now also emit structured JSON errors for invalid embedding-provider failures by default, while their `--human` variants keep command-specific readable text
 - `search` and `mine` also have regression coverage for broken SQLite execution failures on their default JSON surface
+- `search --human` and `mine --human` also have regression coverage for broken SQLite execution failures on their readable text surface
 - default JSON `search` now also returns a structured `{"error":"Search error: ..."}` payload on query-time failures
 - `mempalace_search` in the MCP server now also returns tool-level `{"error":"Search error: ..."}` content instead of a transport error on query-time failures
 - `status`, `migrate`, and `repair` now carry stable `kind`/path/version context fields
