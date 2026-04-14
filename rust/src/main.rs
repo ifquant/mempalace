@@ -32,6 +32,9 @@ enum Command {
     Init {
         #[arg(help = "Project directory to set up")]
         dir: PathBuf,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable init summary instead of JSON")]
+        human: bool,
     },
     #[command(about = "Mine project files into the palace")]
     Mine {
@@ -134,13 +137,17 @@ async fn main() -> anyhow::Result<()> {
     } = Cli::parse();
 
     match command {
-        Command::Init { dir } => {
+        Command::Init { dir, human } => {
             let palace_path = palace.as_ref().unwrap_or(&dir);
             let mut config = AppConfig::resolve(Some(palace_path))?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             let app = App::new(config)?;
             let summary = app.init().await?;
-            println!("{}", serde_json::to_string_pretty(&summary)?);
+            if human {
+                print_init_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
         }
         Command::Mine {
             dir,
@@ -493,6 +500,19 @@ fn print_migrate_human(summary: &mempalace_rs::model::MigrateSummary) {
 
 fn print_migrate_no_palace_human(config: &AppConfig) {
     println!("\n  No palace found at {}", config.palace_path.display());
+}
+
+fn print_init_human(summary: &mempalace_rs::model::InitSummary) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Init");
+    println!("{}\n", "=".repeat(55));
+    println!("  Palace:  {}", summary.palace_path);
+    println!("  SQLite:  {}", summary.sqlite_path);
+    println!("  LanceDB: {}", summary.lance_path);
+    println!("  Schema:  {}", summary.schema_version);
+    println!("\n  Palace initialized.");
+    println!("\n{}", "=".repeat(55));
+    println!();
 }
 
 fn print_unsupported_mine_mode(mode: &str, extract: &str, dir: &Path) -> anyhow::Result<()> {

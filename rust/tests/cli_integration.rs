@@ -133,6 +133,17 @@ fn cli_root_help_mentions_core_commands_and_examples() {
 }
 
 #[test]
+fn cli_init_help_mentions_human_output() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["init", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Set up a palace directory for a project"))
+        .stdout(contains("human-readable init summary"));
+}
+
+#[test]
 fn cli_status_help_mentions_human_output() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
@@ -178,6 +189,33 @@ fn cli_search_help_mentions_filters_and_results() {
         .stdout(contains("Limit to one project/wing"))
         .stdout(contains("Number of results"))
         .stdout(contains("human-readable search output"));
+}
+
+#[test]
+fn cli_init_human_prints_python_style_summary() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+            "--human",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Init"))
+        .stdout(contains("Palace:"))
+        .stdout(contains("SQLite:"))
+        .stdout(contains("LanceDB:"))
+        .stdout(contains("Schema:  4"))
+        .stdout(contains("Palace initialized."));
 }
 
 #[test]
