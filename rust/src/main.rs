@@ -148,16 +148,39 @@ async fn main() -> anyhow::Result<()> {
     match command {
         Command::Init { dir, human } => {
             let palace_path = palace.as_ref().unwrap_or(&dir);
-            let mut config = AppConfig::resolve(Some(palace_path))?;
+            let mut config = match AppConfig::resolve(Some(palace_path)) {
+                Ok(config) => config,
+                Err(err) if human => {
+                    print_init_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_init_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
-            let app = App::new(config)?;
+            let app = match App::new(config) {
+                Ok(app) => app,
+                Err(err) if human => {
+                    print_init_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_init_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
             let summary = match app.init().await {
                 Ok(summary) => summary,
                 Err(err) if human => {
                     print_init_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_init_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             if human {
                 print_init_human(&summary);
@@ -313,20 +336,43 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Command::Migrate { human } => {
-            let mut config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = match AppConfig::resolve(palace.as_ref()) {
+                Ok(config) => config,
+                Err(err) if human => {
+                    print_migrate_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_migrate_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             if human && !palace_exists(&config) {
                 print_migrate_no_palace_human(&config);
                 return Ok(());
             }
-            let app = App::new(config)?;
+            let app = match App::new(config) {
+                Ok(app) => app,
+                Err(err) if human => {
+                    print_migrate_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_migrate_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
             let summary = match app.migrate().await {
                 Ok(summary) => summary,
                 Err(err) if human => {
                     print_migrate_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_migrate_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             if human {
                 print_migrate_human(&summary);
@@ -335,20 +381,43 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Command::Repair { human } => {
-            let mut config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = match AppConfig::resolve(palace.as_ref()) {
+                Ok(config) => config,
+                Err(err) if human => {
+                    print_repair_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_repair_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             if human && !palace_exists(&config) {
                 print_repair_no_palace_human(&config);
                 return Ok(());
             }
-            let app = App::new(config)?;
+            let app = match App::new(config) {
+                Ok(app) => app,
+                Err(err) if human => {
+                    print_repair_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_repair_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
             let summary = match app.repair().await {
                 Ok(summary) => summary,
                 Err(err) if human => {
                     print_repair_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_repair_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             if human {
                 print_repair_human(&summary);
@@ -357,7 +426,17 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Command::Status { human } => {
-            let mut config = AppConfig::resolve(palace.as_ref())?;
+            let mut config = match AppConfig::resolve(palace.as_ref()) {
+                Ok(config) => config,
+                Err(err) if human => {
+                    print_status_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_status_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
             if !palace_exists(&config) {
                 if human {
@@ -374,7 +453,10 @@ async fn main() -> anyhow::Result<()> {
                     print_status_error_human(&err.to_string());
                     std::process::exit(1);
                 }
-                Err(err) => return Err(err.into()),
+                Err(err) => {
+                    print_status_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
             };
             if human {
                 let taxonomy = match app.taxonomy().await {
@@ -621,6 +703,14 @@ fn print_status_error_human(message: &str) {
     println!("  Check the palace files, then rerun `mempalace-rs status`.");
 }
 
+fn print_status_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Status error: {message}"),
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
 fn print_repair_human(summary: &mempalace_rs::model::RepairSummary) {
     println!("\n{}", "=".repeat(55));
     println!("  MemPalace Repair");
@@ -692,6 +782,14 @@ fn print_repair_error_human(message: &str) {
     println!("  Check the palace files, then rerun `mempalace-rs repair`.");
 }
 
+fn print_repair_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Repair error: {message}"),
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
 fn print_migrate_human(summary: &mempalace_rs::model::MigrateSummary) {
     println!("\n{}", "=".repeat(60));
     println!("  MemPalace Migrate");
@@ -724,6 +822,14 @@ fn print_migrate_error_human(message: &str) {
     println!("  Check the palace SQLite file, then rerun `mempalace-rs migrate`.");
 }
 
+fn print_migrate_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Migrate error: {message}"),
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
 fn print_init_human(summary: &mempalace_rs::model::InitSummary) {
     println!("\n{}", "=".repeat(55));
     println!("  MemPalace Init");
@@ -740,6 +846,14 @@ fn print_init_human(summary: &mempalace_rs::model::InitSummary) {
 fn print_init_error_human(message: &str) {
     println!("\n  Init error: {message}");
     println!("  Check the palace path and SQLite file, then rerun `mempalace-rs init <dir>`.");
+}
+
+fn print_init_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Init error: {message}"),
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
 }
 
 fn print_mine_human(summary: &mempalace_rs::model::MineSummary) {
