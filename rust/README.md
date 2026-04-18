@@ -60,6 +60,13 @@ Rust library structure now also includes a `palace_graph` module mirroring Pytho
 - `traverse_graph()` for BFS traversal from one room
 - `find_tunnels()` and `graph_stats()` for cross-wing bridge discovery and summary stats
 
+Rust library structure now also includes a `knowledge_graph` module mirroring Python
+`knowledge_graph.py`:
+
+- `KnowledgeGraph::add_triple()` / `invalidate()` for temporal fact writes
+- `KnowledgeGraph::query_entity()` / `timeline()` for read-side traversal
+- `KnowledgeGraph::stats()` for summary counts and relationship-type inspection
+
 Current first-phase support:
 
 - `init`
@@ -186,6 +193,7 @@ Current project-mining behavior:
 - room bootstrap and project-mining room routing now share one `room_detector` helper instead of duplicating room vocabulary and fallback rules
 - transcript normalization now lives in a standalone `normalize` helper instead of staying embedded inside `convo`
 - room-graph traversal and tunnel/stats calculation now live in a standalone `palace_graph` helper instead of staying embedded inside `service`
+- KG read/write access now also goes through a standalone `knowledge_graph` facade instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring

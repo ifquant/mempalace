@@ -14,6 +14,7 @@ use crate::dialect::{CompressMetadata, Dialect, count_tokens};
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::entity_detector::detect_entities_for_registry;
 use crate::error::{MempalaceError, Result};
+use crate::knowledge_graph::KnowledgeGraph;
 use crate::model::{
     CompressSummary, DedupSourceResult, DedupSummary, DiaryReadResult, DiaryWriteResult,
     DoctorSummary, DrawerDeleteResult, DrawerInput, DrawerWriteResult, GraphStats,
@@ -1442,13 +1443,13 @@ impl App {
     pub async fn add_kg_triple(&self, triple: &KgTriple) -> Result<()> {
         self.init().await?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.add_kg_triple(triple).map(|_| ())
+        KnowledgeGraph::new(&sqlite).add_triple(triple).map(|_| ())
     }
 
     pub async fn query_kg(&self, subject: &str) -> Result<Vec<KgTriple>> {
         self.init().await?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.query_kg(subject)
+        KnowledgeGraph::new(&sqlite).query_raw(subject)
     }
 
     pub async fn kg_query(
@@ -1459,25 +1460,19 @@ impl App {
     ) -> Result<KgQueryResult> {
         self.init().await?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        let facts = sqlite.query_kg_entity(entity, as_of, direction)?;
-        Ok(KgQueryResult {
-            entity: entity.to_string(),
-            as_of: as_of.map(ToOwned::to_owned),
-            count: facts.len(),
-            facts,
-        })
+        KnowledgeGraph::new(&sqlite).query_entity(entity, as_of, direction)
     }
 
     pub async fn kg_timeline(&self, entity: Option<&str>) -> Result<KgTimelineResult> {
         self.init().await?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.kg_timeline(entity)
+        KnowledgeGraph::new(&sqlite).timeline(entity)
     }
 
     pub async fn kg_stats(&self) -> Result<KgStats> {
         self.init().await?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.kg_stats()
+        KnowledgeGraph::new(&sqlite).stats()
     }
 
     pub async fn kg_add(
@@ -1489,7 +1484,7 @@ impl App {
     ) -> Result<KgWriteResult> {
         self.init().await?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.add_kg_triple(&KgTriple {
+        KnowledgeGraph::new(&sqlite).add_triple(&KgTriple {
             subject: sanitize_name(subject, "subject")?,
             predicate: sanitize_name(predicate, "predicate")?,
             object: sanitize_name(object, "object")?,
@@ -1507,7 +1502,7 @@ impl App {
     ) -> Result<KgInvalidateResult> {
         self.init().await?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.invalidate_kg_triple(
+        KnowledgeGraph::new(&sqlite).invalidate(
             &sanitize_name(subject, "subject")?,
             &sanitize_name(predicate, "predicate")?,
             &sanitize_name(object, "object")?,

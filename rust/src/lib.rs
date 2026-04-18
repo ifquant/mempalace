@@ -8,6 +8,7 @@ pub mod entity_detector;
 pub mod error;
 pub mod hook;
 pub mod instructions;
+pub mod knowledge_graph;
 pub mod layers;
 pub mod mcp;
 pub mod model;
