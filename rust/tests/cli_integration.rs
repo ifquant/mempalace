@@ -1,6 +1,10 @@
 use std::fs;
 
 use assert_cmd::Command;
+use mempalace_rs::config::{AppConfig, EmbeddingBackend};
+use mempalace_rs::model::DrawerInput;
+use mempalace_rs::service::App;
+use mempalace_rs::storage::vector::VectorStore;
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
 use rusqlite::Connection;
@@ -567,8 +571,23 @@ fn cli_repair_help_mentions_human_output() {
         .args(["repair", "--help"])
         .assert()
         .success()
-        .stdout(contains("Run non-destructive palace diagnostics"))
-        .stdout(contains("human-readable repair diagnostics"));
+        .stdout(contains("Run repair diagnostics or repair subcommands"))
+        .stdout(contains("human-readable repair diagnostics"))
+        .stdout(contains("scan"))
+        .stdout(contains("prune"))
+        .stdout(contains("rebuild"));
+}
+
+#[test]
+fn cli_dedup_help_mentions_threshold_and_stats() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["dedup", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Deduplicate near-identical drawers"))
+        .stdout(contains("Cosine distance threshold"))
+        .stdout(contains("Show stats only"));
 }
 
 #[test]
@@ -2060,6 +2079,150 @@ fn cli_repair_human_prints_python_style_diagnostics() {
         .stdout(contains("Embedding: hash/hash-v1/64"))
         .stdout(contains("Vector access: ok"))
         .stdout(contains("Repair diagnostics look healthy."));
+}
+
+#[test]
+fn cli_repair_scan_and_rebuild_cover_vector_drift() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("palace");
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    let drawer_id = runtime.block_on(async {
+        let mut config = AppConfig::resolve(Some(&palace)).unwrap();
+        config.embedding.backend = EmbeddingBackend::Hash;
+        let app = App::new(config.clone()).unwrap();
+        app.init().await.unwrap();
+        let result = app
+            .add_drawer(
+                "project",
+                "general",
+                "This is a stable project note for repair testing.",
+                Some("repair.txt"),
+                Some("codex"),
+            )
+            .await
+            .unwrap();
+        let vector = VectorStore::connect(&config.lance_path()).await.unwrap();
+        vector.delete_drawer(64, &result.drawer_id).await.unwrap();
+        vector
+            .add_drawers(
+                &[DrawerInput {
+                    id: "orphan_drawer".to_string(),
+                    wing: "project".to_string(),
+                    room: "general".to_string(),
+                    source_file: "orphan.txt".to_string(),
+                    source_path: "orphan.txt".to_string(),
+                    source_hash: "orphan".to_string(),
+                    source_mtime: None,
+                    chunk_index: 0,
+                    added_by: "codex".to_string(),
+                    filed_at: "2026-04-18T00:00:00Z".to_string(),
+                    ingest_mode: "mcp".to_string(),
+                    extract_mode: "manual".to_string(),
+                    text: "orphan drawer".to_string(),
+                }],
+                &[vec![1.0; 64]],
+            )
+            .await
+            .unwrap();
+        result.drawer_id
+    });
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "repair", "scan"])
+        .assert()
+        .success()
+        .stdout(contains("\"kind\": \"repair_scan\""))
+        .stdout(contains("orphan_drawer"))
+        .stdout(contains(&drawer_id));
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "repair",
+            "prune",
+            "--confirm",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"kind\": \"repair_prune\""))
+        .stdout(contains("\"deleted_from_vector\": 1"));
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "repair", "rebuild"])
+        .assert()
+        .success()
+        .stdout(contains("\"kind\": \"repair_rebuild\""))
+        .stdout(contains("\"rebuilt\": 1"));
+}
+
+#[test]
+fn cli_dedup_human_prints_summary() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("palace");
+    let runtime = tokio::runtime::Runtime::new().unwrap();
+    runtime.block_on(async {
+        let mut config = AppConfig::resolve(Some(&palace)).unwrap();
+        config.embedding.backend = EmbeddingBackend::Hash;
+        let app = App::new(config.clone()).unwrap();
+        app.init().await.unwrap();
+        let sqlite =
+            mempalace_rs::storage::sqlite::SqliteStore::open(&config.sqlite_path()).unwrap();
+        let drawer_a = DrawerInput {
+            id: "dup_a".to_string(),
+            wing: "project".to_string(),
+            room: "general".to_string(),
+            source_file: "dup.txt".to_string(),
+            source_path: "dup.txt".to_string(),
+            source_hash: "a".to_string(),
+            source_mtime: None,
+            chunk_index: 0,
+            added_by: "codex".to_string(),
+            filed_at: "2026-04-18T00:00:00Z".to_string(),
+            ingest_mode: "projects".to_string(),
+            extract_mode: "exchange".to_string(),
+            text: "The deployment fix was to update the server config and rerun tests.".to_string(),
+        };
+        let drawer_b = DrawerInput {
+            id: "dup_b".to_string(),
+            chunk_index: 1,
+            source_hash: "b".to_string(),
+            text: "The deployment fix was to update the server config and rerun all tests."
+                .to_string(),
+            ..drawer_a.clone()
+        };
+        sqlite.insert_drawer(&drawer_a).unwrap();
+        sqlite.insert_drawer(&drawer_b).unwrap();
+        let vector = VectorStore::connect(&config.lance_path()).await.unwrap();
+        vector
+            .add_drawers(&[drawer_a, drawer_b], &[vec![1.0; 64], vec![1.0; 64]])
+            .await
+            .unwrap();
+    });
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "dedup",
+            "--source",
+            "dup.txt",
+            "--dry-run",
+            "--human",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Deduplicator"))
+        .stdout(contains("Source filter: dup.txt"))
+        .stdout(contains("[DRY RUN] No changes written"));
 }
 
 #[test]

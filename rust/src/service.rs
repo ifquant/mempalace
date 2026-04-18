@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -19,12 +19,13 @@ use crate::dialect::{CompressMetadata, Dialect, count_tokens};
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
-    CompressSummary, DiaryReadResult, DiaryWriteResult, DoctorSummary, DrawerDeleteResult,
-    DrawerInput, DrawerWriteResult, GraphStats, GraphStatsTunnel, GraphTraversalError,
-    GraphTraversalNode, GraphTraversalResult, InitSummary, KgInvalidateResult, KgQueryResult,
-    KgStats, KgTimelineResult, KgTriple, KgWriteResult, MigrateSummary, MineProgressEvent,
-    MineRequest, MineSummary, PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters,
-    SearchHit, SearchResults, Status, Taxonomy, TunnelRoom, WakeUpSummary,
+    CompressSummary, DedupSourceResult, DedupSummary, DiaryReadResult, DiaryWriteResult,
+    DoctorSummary, DrawerDeleteResult, DrawerInput, DrawerWriteResult, GraphStats,
+    GraphStatsTunnel, GraphTraversalError, GraphTraversalNode, GraphTraversalResult, InitSummary,
+    KgInvalidateResult, KgQueryResult, KgStats, KgTimelineResult, KgTriple, KgWriteResult,
+    MigrateSummary, MineProgressEvent, MineRequest, MineSummary, PrepareEmbeddingSummary,
+    RepairPruneSummary, RepairRebuildSummary, RepairScanSummary, RepairSummary, Rooms,
+    SearchFilters, SearchHit, SearchResults, Status, Taxonomy, TunnelRoom, WakeUpSummary,
 };
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, DrawerRecord, GraphRoomRow, SqliteStore};
 use crate::storage::vector::VectorStore;
@@ -289,6 +290,278 @@ impl App {
             vector_accessible,
             ok: issues.is_empty(),
             issues,
+        })
+    }
+
+    pub async fn repair_scan(&self, wing: Option<&str>) -> Result<RepairScanSummary> {
+        self.config.ensure_dirs()?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let vector = VectorStore::connect(&self.config.lance_path()).await?;
+        let sqlite_drawers = sqlite.list_drawers(wing)?;
+        let vector_drawers = vector
+            .list_drawers(self.embedder.profile().dimension, wing, None)
+            .await?;
+
+        let sqlite_ids = sqlite_drawers
+            .iter()
+            .map(|drawer| drawer.id.clone())
+            .collect::<BTreeSet<_>>();
+        let vector_ids = vector_drawers
+            .iter()
+            .map(|drawer| drawer.id.clone())
+            .collect::<BTreeSet<_>>();
+
+        let missing_from_vector = sqlite_ids
+            .difference(&vector_ids)
+            .cloned()
+            .collect::<Vec<_>>();
+        let orphaned_in_vector = vector_ids
+            .difference(&sqlite_ids)
+            .cloned()
+            .collect::<Vec<_>>();
+        let prune_candidates = orphaned_in_vector.len();
+
+        let corrupt_ids_path = self.config.palace_path.join("corrupt_ids.txt");
+        let mut payload = String::new();
+        for drawer_id in &orphaned_in_vector {
+            payload.push_str(drawer_id);
+            payload.push('\n');
+        }
+        fs::write(&corrupt_ids_path, payload)?;
+
+        Ok(RepairScanSummary {
+            kind: "repair_scan".to_string(),
+            palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            lance_path: self.config.lance_path().display().to_string(),
+            version: VERSION.to_string(),
+            wing: wing.map(ToOwned::to_owned),
+            sqlite_drawers: sqlite_drawers.len(),
+            vector_drawers: vector_drawers.len(),
+            missing_from_vector,
+            orphaned_in_vector,
+            corrupt_ids_path: corrupt_ids_path.display().to_string(),
+            prune_candidates,
+        })
+    }
+
+    pub async fn repair_prune(&self, confirm: bool) -> Result<RepairPruneSummary> {
+        self.config.ensure_dirs()?;
+        let corrupt_ids_path = self.config.palace_path.join("corrupt_ids.txt");
+        let queued_ids = if corrupt_ids_path.exists() {
+            fs::read_to_string(&corrupt_ids_path)?
+                .lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>()
+        } else {
+            Vec::new()
+        };
+
+        if !confirm {
+            return Ok(RepairPruneSummary {
+                kind: "repair_prune".to_string(),
+                palace_path: self.config.palace_path.display().to_string(),
+                sqlite_path: self.config.sqlite_path().display().to_string(),
+                lance_path: self.config.lance_path().display().to_string(),
+                version: VERSION.to_string(),
+                corrupt_ids_path: corrupt_ids_path.display().to_string(),
+                queued: queued_ids.len(),
+                confirm,
+                deleted_from_vector: 0,
+                deleted_from_sqlite: 0,
+                failed: 0,
+            });
+        }
+
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let vector = VectorStore::connect(&self.config.lance_path()).await?;
+
+        let deleted_from_sqlite = sqlite.delete_drawers(&queued_ids)?;
+        let deleted_from_vector = vector
+            .delete_drawers(self.embedder.profile().dimension, &queued_ids)
+            .await?;
+
+        Ok(RepairPruneSummary {
+            kind: "repair_prune".to_string(),
+            palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            lance_path: self.config.lance_path().display().to_string(),
+            version: VERSION.to_string(),
+            corrupt_ids_path: corrupt_ids_path.display().to_string(),
+            queued: queued_ids.len(),
+            confirm,
+            deleted_from_vector,
+            deleted_from_sqlite,
+            failed: 0,
+        })
+    }
+
+    pub async fn repair_rebuild(&self) -> Result<RepairRebuildSummary> {
+        self.config.ensure_dirs()?;
+        let sqlite_path = self.config.sqlite_path();
+        let sqlite = SqliteStore::open(&sqlite_path)?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let drawers = sqlite.list_drawers(None)?;
+
+        let backup_path = if sqlite_path.exists() {
+            let backup_path = sqlite_path.with_extension("sqlite3.backup");
+            fs::copy(&sqlite_path, &backup_path)?;
+            Some(backup_path.display().to_string())
+        } else {
+            None
+        };
+
+        let vector = VectorStore::connect(&self.config.lance_path()).await?;
+        vector
+            .clear_table(self.embedder.profile().dimension)
+            .await?;
+
+        let mut rebuilt = 0usize;
+        for batch in drawers.chunks(128) {
+            let texts = batch
+                .iter()
+                .map(|drawer| drawer.text.clone())
+                .collect::<Vec<_>>();
+            let embeddings = self.embedder.embed_documents(&texts)?;
+            let inputs = batch
+                .iter()
+                .map(drawer_input_from_record)
+                .collect::<Vec<_>>();
+            vector.add_drawers(&inputs, &embeddings).await?;
+            rebuilt += inputs.len();
+        }
+
+        Ok(RepairRebuildSummary {
+            kind: "repair_rebuild".to_string(),
+            palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            lance_path: self.config.lance_path().display().to_string(),
+            version: VERSION.to_string(),
+            drawers_found: drawers.len(),
+            rebuilt,
+            backup_path,
+        })
+    }
+
+    pub async fn dedup(
+        &self,
+        threshold: f64,
+        dry_run: bool,
+        wing: Option<&str>,
+        source_pattern: Option<&str>,
+        min_count: usize,
+        stats_only: bool,
+    ) -> Result<DedupSummary> {
+        self.config.ensure_dirs()?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let vector = VectorStore::connect(&self.config.lance_path()).await?;
+
+        let sqlite_drawers = sqlite.list_drawers(wing)?;
+        let vector_drawers = vector
+            .list_drawers(self.embedder.profile().dimension, wing, source_pattern)
+            .await?;
+        let vectors_by_id = vector_drawers
+            .into_iter()
+            .map(|drawer| (drawer.id.clone(), drawer))
+            .collect::<HashMap<_, _>>();
+
+        let mut grouped = BTreeMap::<String, Vec<DrawerRecord>>::new();
+        for drawer in sqlite_drawers {
+            if let Some(pattern) = source_pattern
+                && !drawer
+                    .source_file
+                    .to_ascii_lowercase()
+                    .contains(&pattern.to_ascii_lowercase())
+            {
+                continue;
+            }
+            grouped
+                .entry(drawer.source_file.clone())
+                .or_default()
+                .push(drawer);
+        }
+
+        let mut groups = Vec::new();
+        let mut delete_ids = Vec::new();
+        let mut kept = 0usize;
+        let mut total_drawers = 0usize;
+
+        for (source_file, mut records) in grouped {
+            if records.len() < min_count {
+                continue;
+            }
+            total_drawers += records.len();
+            records.sort_by(|left, right| right.text.len().cmp(&left.text.len()));
+
+            let mut kept_vectors = Vec::<(&str, &Vec<f32>)>::new();
+            let mut local_deleted = 0usize;
+            let mut local_kept = 0usize;
+
+            for record in &records {
+                let Some(vector_record) = vectors_by_id.get(&record.id) else {
+                    continue;
+                };
+                let is_dup = kept_vectors.iter().any(|(_, kept_vector)| {
+                    cosine_distance(&vector_record.vector, kept_vector) < threshold
+                });
+                if is_dup {
+                    delete_ids.push(record.id.clone());
+                    local_deleted += 1;
+                } else {
+                    kept_vectors.push((record.id.as_str(), &vector_record.vector));
+                    local_kept += 1;
+                }
+            }
+
+            kept += local_kept;
+            groups.push(DedupSourceResult {
+                source_file,
+                before: records.len(),
+                kept: local_kept,
+                deleted: local_deleted,
+            });
+        }
+
+        groups.sort_by(|left, right| {
+            right
+                .before
+                .cmp(&left.before)
+                .then(left.source_file.cmp(&right.source_file))
+        });
+
+        if !dry_run && !stats_only && !delete_ids.is_empty() {
+            sqlite.delete_drawers(&delete_ids)?;
+            vector
+                .delete_drawers(self.embedder.profile().dimension, &delete_ids)
+                .await?;
+        }
+
+        Ok(DedupSummary {
+            kind: "dedup".to_string(),
+            palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            lance_path: self.config.lance_path().display().to_string(),
+            version: VERSION.to_string(),
+            threshold,
+            dry_run,
+            wing: wing.map(ToOwned::to_owned),
+            source: source_pattern.map(ToOwned::to_owned),
+            min_count,
+            sources_checked: groups.len(),
+            total_drawers,
+            kept,
+            deleted: delete_ids.len(),
+            stats_only,
+            groups,
         })
     }
 
@@ -1843,6 +2116,42 @@ fn identifier_fragment(value: &str) -> String {
     } else {
         fragment
     }
+}
+
+fn drawer_input_from_record(record: &DrawerRecord) -> DrawerInput {
+    DrawerInput {
+        id: record.id.clone(),
+        wing: record.wing.clone(),
+        room: record.room.clone(),
+        source_file: record.source_file.clone(),
+        source_path: record.source_path.clone(),
+        source_hash: record.source_hash.clone(),
+        source_mtime: record.source_mtime,
+        chunk_index: record.chunk_index,
+        added_by: record.added_by.clone(),
+        filed_at: record.filed_at.clone(),
+        ingest_mode: record.ingest_mode.clone(),
+        extract_mode: record.extract_mode.clone(),
+        text: record.text.clone(),
+    }
+}
+
+fn cosine_distance(left: &[f32], right: &[f32]) -> f64 {
+    let mut dot = 0.0f64;
+    let mut left_norm = 0.0f64;
+    let mut right_norm = 0.0f64;
+    for (lhs, rhs) in left.iter().zip(right.iter()) {
+        let lhs = *lhs as f64;
+        let rhs = *rhs as f64;
+        dot += lhs * rhs;
+        left_norm += lhs * lhs;
+        right_norm += rhs * rhs;
+    }
+    if left_norm == 0.0 || right_norm == 0.0 {
+        return 1.0;
+    }
+    let similarity = dot / (left_norm.sqrt() * right_norm.sqrt());
+    1.0 - similarity.clamp(-1.0, 1.0)
 }
 
 #[cfg(test)]

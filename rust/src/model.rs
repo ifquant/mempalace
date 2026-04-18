@@ -349,6 +349,77 @@ pub struct RepairSummary {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RepairScanSummary {
+    pub kind: String,
+    pub palace_path: String,
+    pub sqlite_path: String,
+    pub lance_path: String,
+    pub version: String,
+    pub wing: Option<String>,
+    pub sqlite_drawers: usize,
+    pub vector_drawers: usize,
+    pub missing_from_vector: Vec<String>,
+    pub orphaned_in_vector: Vec<String>,
+    pub corrupt_ids_path: String,
+    pub prune_candidates: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RepairPruneSummary {
+    pub kind: String,
+    pub palace_path: String,
+    pub sqlite_path: String,
+    pub lance_path: String,
+    pub version: String,
+    pub corrupt_ids_path: String,
+    pub queued: usize,
+    pub confirm: bool,
+    pub deleted_from_vector: usize,
+    pub deleted_from_sqlite: usize,
+    pub failed: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RepairRebuildSummary {
+    pub kind: String,
+    pub palace_path: String,
+    pub sqlite_path: String,
+    pub lance_path: String,
+    pub version: String,
+    pub drawers_found: usize,
+    pub rebuilt: usize,
+    pub backup_path: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DedupSourceResult {
+    pub source_file: String,
+    pub before: usize,
+    pub kept: usize,
+    pub deleted: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct DedupSummary {
+    pub kind: String,
+    pub palace_path: String,
+    pub sqlite_path: String,
+    pub lance_path: String,
+    pub version: String,
+    pub threshold: f64,
+    pub dry_run: bool,
+    pub wing: Option<String>,
+    pub source: Option<String>,
+    pub min_count: usize,
+    pub sources_checked: usize,
+    pub total_drawers: usize,
+    pub kept: usize,
+    pub deleted: usize,
+    pub stats_only: bool,
+    pub groups: Vec<DedupSourceResult>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct DoctorSummary {
     pub kind: String,
     pub palace_path: String,

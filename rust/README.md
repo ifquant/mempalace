@@ -47,6 +47,8 @@ Current first-phase support:
 - `mcp --setup` to print Python-style quick setup instructions for wiring the Rust MCP server into MCP-capable hosts
 - `migrate`
 - `repair`
+- `repair scan|prune|rebuild` to inspect vector drift, prune queued orphan IDs, and rebuild LanceDB from SQLite
+- `dedup` to detect and remove near-identical drawers from the same `source_file`
 - `status`
 - `doctor`
 - `prepare-embedding`
@@ -60,7 +62,11 @@ Current first-phase support:
 - provider-based embedding layer with batch document embedding
 - SQLite schema version tracking and a minimal migration path
 - `migrate` exposes the current SQLite schema upgrade path as a CLI command
-- `repair` provides non-destructive palace diagnostics
+- `repair` still provides the old non-destructive diagnostics view by default
+- `repair scan` now writes palace-local `corrupt_ids.txt` from SQLite/LanceDB drift and separates `missing_from_vector` from pruneable `orphaned_in_vector`
+- `repair prune --confirm` now deletes queued IDs from LanceDB/SQLite using `corrupt_ids.txt`
+- `repair rebuild` now re-embeds SQLite drawers and repopulates LanceDB, with a local SQLite backup
+- `dedup` now follows Python's source-group workflow: group by `source_file`, keep the richest drawer, and remove near-identical siblings using vector cosine distance
 - CLI help and command descriptions are now closer to the Python entrypoint
 - `search` CLI JSON now carries Python-style `query`, `filters`, `source_file`, and `similarity`
 - `search` CLI JSON now also exposes vector-backed `source_mtime`, `added_by`, and `filed_at`
@@ -134,6 +140,10 @@ Useful verification command:
 - `cargo run -- --palace /tmp/mempalace prepare-embedding`
 - `cargo run -- --palace /tmp/mempalace migrate`
 - `cargo run -- --palace /tmp/mempalace repair`
+- `cargo run -- --palace /tmp/mempalace repair scan`
+- `cargo run -- --palace /tmp/mempalace repair prune --confirm`
+- `cargo run -- --palace /tmp/mempalace repair rebuild`
+- `cargo run -- --palace /tmp/mempalace dedup --dry-run`
 - `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding`
 - `MEMPALACE_RS_TEST_HF_ENDPOINT=https://hf-mirror.com cargo test cli_fastembed_prepare_mine_search_smoke -- --ignored --nocapture`
 
@@ -187,7 +197,9 @@ Intentionally not in this first Rust phase:
 
 Current repair scope:
 
-- checks whether SQLite and LanceDB paths exist
-- reports `schema_version`, embedding profile, and SQLite drawer count
-- checks whether the current LanceDB table is accessible
-- does not rebuild or delete any data
+- `repair` checks whether SQLite and LanceDB paths exist
+- `repair` reports `schema_version`, embedding profile, and SQLite drawer count
+- `repair` checks whether the current LanceDB table is accessible
+- `repair scan` compares SQLite drawer IDs with LanceDB drawer IDs and writes palace-local `corrupt_ids.txt`
+- `repair prune --confirm` removes queued vector-orphan IDs from both stores
+- `repair rebuild` clears and repopulates LanceDB from SQLite using the current embedder profile

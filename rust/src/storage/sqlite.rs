@@ -580,6 +580,15 @@ impl SqliteStore {
         })
     }
 
+    pub fn delete_drawers(&self, drawer_ids: &[String]) -> Result<usize> {
+        let mut deleted = 0usize;
+        let mut stmt = self.conn.prepare("DELETE FROM drawers WHERE id = ?1")?;
+        for drawer_id in drawer_ids {
+            deleted += stmt.execute([drawer_id])?;
+        }
+        Ok(deleted)
+    }
+
     pub fn source_mtime(path: &Path) -> Option<f64> {
         let modified = path.metadata().ok()?.modified().ok()?;
         let duration = modified.duration_since(UNIX_EPOCH).ok()?;

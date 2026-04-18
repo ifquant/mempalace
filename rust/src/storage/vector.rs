@@ -16,6 +16,17 @@ use crate::model::{DrawerInput, SearchHit};
 
 const TABLE_NAME: &str = "drawers";
 
+#[derive(Clone, Debug)]
+pub struct VectorDrawer {
+    pub id: String,
+    pub wing: String,
+    pub room: String,
+    pub source_file: String,
+    pub source_path: String,
+    pub text: String,
+    pub vector: Vec<f32>,
+}
+
 pub struct VectorStore {
     conn: Connection,
 }
@@ -131,6 +142,45 @@ impl VectorStore {
         let escaped = drawer_id.replace('\'', "''");
         table.delete(&format!("id = '{escaped}'")).await?;
         Ok(())
+    }
+
+    pub async fn delete_drawers(&self, dimension: usize, drawer_ids: &[String]) -> Result<usize> {
+        if drawer_ids.is_empty() {
+            return Ok(0);
+        }
+        let table = self.ensure_table(dimension).await?;
+        let mut deleted = 0usize;
+        for drawer_id in drawer_ids {
+            let escaped = drawer_id.replace('\'', "''");
+            table.delete(&format!("id = '{escaped}'")).await?;
+            deleted += 1;
+        }
+        Ok(deleted)
+    }
+
+    pub async fn clear_table(&self, dimension: usize) -> Result<()> {
+        let table = self.ensure_table(dimension).await?;
+        table.delete("id IS NOT NULL").await?;
+        Ok(())
+    }
+
+    pub async fn list_drawers(
+        &self,
+        dimension: usize,
+        wing: Option<&str>,
+        source_pattern: Option<&str>,
+    ) -> Result<Vec<VectorDrawer>> {
+        let table = self.ensure_table(dimension).await?;
+        let mut query = table.query();
+        if let Some(filter) = filter_source_sql(wing, source_pattern) {
+            query = query.only_if(filter);
+        }
+        let batches = query.execute().await?.try_collect::<Vec<_>>().await?;
+        let mut drawers = Vec::new();
+        for batch in batches {
+            drawers.extend(vector_drawers_from_batch(&batch));
+        }
+        Ok(drawers)
     }
 }
 
@@ -319,6 +369,74 @@ fn search_hits_from_batch(batch: &RecordBatch) -> Vec<SearchHit> {
     hits
 }
 
+fn vector_drawers_from_batch(batch: &RecordBatch) -> Vec<VectorDrawer> {
+    let ids = batch
+        .column_by_name("id")
+        .expect("id")
+        .as_any()
+        .downcast_ref::<StringArray>()
+        .expect("id string");
+    let wings = batch
+        .column_by_name("wing")
+        .expect("wing")
+        .as_any()
+        .downcast_ref::<StringArray>()
+        .expect("wing string");
+    let rooms = batch
+        .column_by_name("room")
+        .expect("room")
+        .as_any()
+        .downcast_ref::<StringArray>()
+        .expect("room string");
+    let source_files = batch
+        .column_by_name("source_file")
+        .expect("source_file")
+        .as_any()
+        .downcast_ref::<StringArray>()
+        .expect("source_file string");
+    let source_paths = batch
+        .column_by_name("source_path")
+        .expect("source_path")
+        .as_any()
+        .downcast_ref::<StringArray>()
+        .expect("source_path string");
+    let texts = batch
+        .column_by_name("text")
+        .expect("text")
+        .as_any()
+        .downcast_ref::<StringArray>()
+        .expect("text string");
+    let vectors = batch
+        .column_by_name("vector")
+        .expect("vector")
+        .as_any()
+        .downcast_ref::<FixedSizeListArray>()
+        .expect("vector list");
+
+    let mut rows = Vec::with_capacity(batch.num_rows());
+    for row in 0..batch.num_rows() {
+        rows.push(VectorDrawer {
+            id: ids.value(row).to_string(),
+            wing: wings.value(row).to_string(),
+            room: rooms.value(row).to_string(),
+            source_file: source_files.value(row).to_string(),
+            source_path: source_paths.value(row).to_string(),
+            text: texts.value(row).to_string(),
+            vector: vector_from_row(vectors, row),
+        });
+    }
+    rows
+}
+
+fn vector_from_row(vectors: &FixedSizeListArray, row: usize) -> Vec<f32> {
+    let values = vectors.value(row);
+    let values = values
+        .as_any()
+        .downcast_ref::<Float32Array>()
+        .expect("vector float values");
+    (0..values.len()).map(|index| values.value(index)).collect()
+}
+
 fn derive_source_file(source_path: &str) -> String {
     std::path::Path::new(source_path)
         .file_name()
@@ -353,6 +471,24 @@ fn filter_sql(wing: Option<&str>, room: Option<&str>) -> Option<String> {
     }
     if let Some(room) = room {
         parts.push(format!("room = '{}'", room.replace('\'', "''")));
+    }
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(" AND "))
+    }
+}
+
+fn filter_source_sql(wing: Option<&str>, source_pattern: Option<&str>) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(wing) = wing {
+        parts.push(format!("wing = '{}'", wing.replace('\'', "''")));
+    }
+    if let Some(pattern) = source_pattern {
+        parts.push(format!(
+            "source_file LIKE '%{}%'",
+            pattern.replace('\'', "''")
+        ));
     }
     if parts.is_empty() {
         None

@@ -6,9 +6,10 @@ use lancedb::connect;
 use lancedb::query::{ExecutableQuery, QueryBase, Select};
 use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::convo::{detect_convo_room, extract_general_memories};
-use mempalace_rs::model::{KgTriple, MineRequest};
+use mempalace_rs::model::{DrawerInput, KgTriple, MineRequest};
 use mempalace_rs::service::App;
 use mempalace_rs::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
+use mempalace_rs::storage::vector::VectorStore;
 use rusqlite::Connection;
 use tempfile::tempdir;
 
@@ -1069,6 +1070,143 @@ async fn compress_stores_aaak_summaries_and_wake_up_uses_identity() {
     assert!(wake.layer1.contains("ESSENTIAL STORY"));
     assert!(wake.layer1.contains("auth.txt"));
     assert!(wake.token_estimate > 0);
+}
+
+#[tokio::test]
+async fn repair_scan_prune_and_rebuild_handle_vector_drift() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let result = app
+        .add_drawer(
+            "project",
+            "general",
+            "This is a stable project note for repair testing.",
+            Some("repair.txt"),
+            Some("codex"),
+        )
+        .await
+        .unwrap();
+
+    let vector = VectorStore::connect(&config.lance_path()).await.unwrap();
+    vector.delete_drawer(64, &result.drawer_id).await.unwrap();
+
+    let orphan = DrawerInput {
+        id: "orphan_drawer".to_string(),
+        wing: "project".to_string(),
+        room: "general".to_string(),
+        source_file: "orphan.txt".to_string(),
+        source_path: "orphan.txt".to_string(),
+        source_hash: "orphan".to_string(),
+        source_mtime: None,
+        chunk_index: 0,
+        added_by: "codex".to_string(),
+        filed_at: "2026-04-18T00:00:00Z".to_string(),
+        ingest_mode: "mcp".to_string(),
+        extract_mode: "manual".to_string(),
+        text: "orphan drawer".to_string(),
+    };
+    vector
+        .add_drawers(std::slice::from_ref(&orphan), &[vec![1.0; 64]])
+        .await
+        .unwrap();
+
+    let scan = app.repair_scan(None).await.unwrap();
+    assert_eq!(scan.missing_from_vector, vec![result.drawer_id.clone()]);
+    assert_eq!(scan.orphaned_in_vector, vec!["orphan_drawer".to_string()]);
+    assert!(std::path::Path::new(&scan.corrupt_ids_path).exists());
+
+    let prune_preview = app.repair_prune(false).await.unwrap();
+    assert_eq!(prune_preview.queued, 1);
+    assert_eq!(prune_preview.deleted_from_vector, 0);
+
+    let prune_live = app.repair_prune(true).await.unwrap();
+    assert_eq!(prune_live.deleted_from_vector, 1);
+
+    let rebuild = app.repair_rebuild().await.unwrap();
+    assert_eq!(rebuild.drawers_found, 1);
+    assert_eq!(rebuild.rebuilt, 1);
+    assert!(rebuild.backup_path.is_some());
+
+    let status = app.status().await.unwrap();
+    assert_eq!(status.total_drawers, 1);
+    let search = app
+        .search("stable project note", None, None, 5)
+        .await
+        .unwrap();
+    assert_eq!(search.results.len(), 1);
+    assert_eq!(search.results[0].id, result.drawer_id);
+}
+
+#[tokio::test]
+async fn dedup_removes_near_identical_drawers_from_same_source() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    let drawer_a = DrawerInput {
+        id: "dup_a".to_string(),
+        wing: "project".to_string(),
+        room: "general".to_string(),
+        source_file: "dup.txt".to_string(),
+        source_path: "dup.txt".to_string(),
+        source_hash: "a".to_string(),
+        source_mtime: None,
+        chunk_index: 0,
+        added_by: "codex".to_string(),
+        filed_at: "2026-04-18T00:00:00Z".to_string(),
+        ingest_mode: "projects".to_string(),
+        extract_mode: "exchange".to_string(),
+        text: "The deployment fix was to update the server config and rerun tests.".to_string(),
+    };
+    let drawer_b = DrawerInput {
+        id: "dup_b".to_string(),
+        chunk_index: 1,
+        source_hash: "b".to_string(),
+        text: "The deployment fix was to update the server config and rerun all tests.".to_string(),
+        ..drawer_a.clone()
+    };
+    let drawer_c = DrawerInput {
+        id: "dup_c".to_string(),
+        chunk_index: 2,
+        source_hash: "c".to_string(),
+        text: "The migration note is unrelated and should stay.".to_string(),
+        ..drawer_a.clone()
+    };
+    sqlite.insert_drawer(&drawer_a).unwrap();
+    sqlite.insert_drawer(&drawer_b).unwrap();
+    sqlite.insert_drawer(&drawer_c).unwrap();
+
+    let vector = VectorStore::connect(&config.lance_path()).await.unwrap();
+    vector
+        .add_drawers(
+            &[drawer_a.clone(), drawer_b.clone(), drawer_c.clone()],
+            &[vec![1.0; 64], vec![1.0; 64], vec![0.0; 64]],
+        )
+        .await
+        .unwrap();
+
+    let preview = app
+        .dedup(0.01, true, None, Some("dup.txt"), 2, false)
+        .await
+        .unwrap();
+    assert_eq!(preview.deleted, 1);
+    assert_eq!(preview.sources_checked, 1);
+
+    let live = app
+        .dedup(0.01, false, None, Some("dup.txt"), 2, false)
+        .await
+        .unwrap();
+    assert_eq!(live.deleted, 1);
+
+    let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    assert_eq!(sqlite.total_drawers().unwrap(), 2);
 }
 
 #[tokio::test]
