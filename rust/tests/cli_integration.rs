@@ -690,6 +690,30 @@ fn cli_instructions_help_outputs_markdown() {
 }
 
 #[test]
+fn cli_recall_help_mentions_wing_room_and_results() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["recall", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("--wing"))
+        .stdout(contains("--room"))
+        .stdout(contains("--results"))
+        .stdout(contains("Recall stored drawers by wing/room"));
+}
+
+#[test]
+fn cli_layers_status_help_mentions_layer_stack() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["layers-status", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Show Layer 0-3 stack status"))
+        .stdout(contains("--human"));
+}
+
+#[test]
 fn cli_mcp_help_mentions_setup_and_serve_flags() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
@@ -702,6 +726,121 @@ fn cli_mcp_help_mentions_setup_and_serve_flags() {
         .stdout(contains("--setup"))
         .stdout(contains("--serve"))
         .stdout(contains("Print Python-style MCP setup instructions"));
+}
+
+#[test]
+fn cli_recall_human_prints_layer2_style_output() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("notes")).unwrap();
+    fs::write(
+        project.join("notes").join("billing.md"),
+        "Billing migration note.\n\nWe moved invoices into Stripe.",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "recall",
+            "--human",
+            "--results",
+            "5",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("## L2"))
+        .stdout(contains("Billing migration note"))
+        .stdout(contains("billing.md"));
+}
+
+#[test]
+fn cli_layers_status_human_prints_stack_summary() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("palace");
+    fs::create_dir_all(&palace).unwrap();
+    fs::write(
+        palace.join("identity.txt"),
+        "I am Atlas, a personal AI assistant for Alice.",
+    )
+    .unwrap();
+
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("notes")).unwrap();
+    fs::write(
+        project.join("notes").join("arch.md"),
+        "Architecture discussion.\n\nWe chose Rust for local-first memory.",
+    )
+    .unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "layers-status",
+            "--human",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Layer Status"))
+        .stdout(contains("L0 tokens:"))
+        .stdout(contains("L1:"))
+        .stdout(contains("L2:"))
+        .stdout(contains("L3:"));
 }
 
 #[test]

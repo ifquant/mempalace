@@ -43,6 +43,8 @@ Current first-phase support:
 - `search`
 - `compress` to generate and persist AAAK summaries for existing drawers
 - `wake-up` to render palace-local `identity.txt` plus an L1 essential-story summary
+- `recall` to expose Python-style Layer 2 on-demand retrieval by wing/room without semantic search
+- `layers-status` to expose Python-style Layer 0-3 stack status in one command
 - `hook run --hook session-start|stop|precompact --harness claude-code|codex` for harness-side auto-save integration
 - `instructions <help|init|mine|search|status>` to print built-in skill guidance markdown
 - `registry summary|lookup|learn` to inspect and update the project-local `entity_registry.json`

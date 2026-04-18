@@ -512,6 +512,36 @@ pub struct WakeUpSummary {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RecallSummary {
+    pub kind: String,
+    pub palace_path: String,
+    pub sqlite_path: String,
+    pub version: String,
+    pub wing: Option<String>,
+    pub room: Option<String>,
+    pub n_results: usize,
+    pub total_matches: usize,
+    pub text: String,
+    pub results: Vec<SearchHit>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct LayerStatusSummary {
+    pub kind: String,
+    pub palace_path: String,
+    pub sqlite_path: String,
+    pub version: String,
+    pub identity_path: String,
+    pub identity_exists: bool,
+    pub identity_tokens: usize,
+    pub total_drawers: usize,
+    pub layer0_description: String,
+    pub layer1_description: String,
+    pub layer2_description: String,
+    pub layer3_description: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct RegistryLookupResult {
     pub kind: String,
     pub registry_path: String,

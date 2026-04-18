@@ -179,6 +179,27 @@ enum Command {
         #[arg(help = "Print human-readable wake-up context instead of JSON")]
         human: bool,
     },
+    #[command(about = "Recall stored drawers by wing/room without semantic search")]
+    Recall {
+        #[arg(long)]
+        #[arg(help = "Limit recall to one project/wing")]
+        wing: Option<String>,
+        #[arg(long)]
+        #[arg(help = "Limit recall to one room")]
+        room: Option<String>,
+        #[arg(long, default_value_t = 10)]
+        #[arg(help = "Maximum number of drawers to return")]
+        results: usize,
+        #[arg(long)]
+        #[arg(help = "Print human-readable recall output instead of JSON")]
+        human: bool,
+    },
+    #[command(about = "Show Layer 0-3 stack status")]
+    LayersStatus {
+        #[arg(long)]
+        #[arg(help = "Print human-readable layer status instead of JSON")]
+        human: bool,
+    },
     #[command(about = "Upgrade palace SQLite metadata to the current schema version")]
     Migrate {
         #[arg(long)]
@@ -822,6 +843,109 @@ async fn main() -> anyhow::Result<()> {
             };
             if human {
                 print_wake_up_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
+        }
+        Command::Recall {
+            wing,
+            room,
+            results,
+            human,
+        } => {
+            let mut config = match AppConfig::resolve(palace.as_ref()) {
+                Ok(config) => config,
+                Err(err) if human => {
+                    print_recall_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_recall_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+            if !palace_exists(&config) {
+                if human {
+                    print_recall_no_palace_human(&config);
+                } else {
+                    print_no_palace(&config)?;
+                }
+                std::process::exit(1);
+            }
+            let app = match App::new(config) {
+                Ok(app) => app,
+                Err(err) if human => {
+                    print_recall_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_recall_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            let summary = match app.recall(wing.as_deref(), room.as_deref(), results).await {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_recall_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_recall_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            if human {
+                print_recall_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
+        }
+        Command::LayersStatus { human } => {
+            let mut config = match AppConfig::resolve(palace.as_ref()) {
+                Ok(config) => config,
+                Err(err) if human => {
+                    print_layers_status_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_layers_status_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+            if !palace_exists(&config) {
+                if human {
+                    print_layers_status_no_palace_human(&config);
+                } else {
+                    print_no_palace(&config)?;
+                }
+                return Ok(());
+            }
+            let app = match App::new(config) {
+                Ok(app) => app,
+                Err(err) if human => {
+                    print_layers_status_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_layers_status_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            let summary = match app.layer_status().await {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_layers_status_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_layers_status_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            if human {
+                print_layers_status_human(&summary);
             } else {
                 println!("{}", serde_json::to_string_pretty(&summary)?);
             }
@@ -1549,6 +1673,71 @@ fn print_wake_up_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Wake-up error: {message}"),
         "hint": "Check the palace files, then rerun `mempalace-rs wake-up`.",
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
+fn print_recall_human(summary: &mempalace_rs::model::RecallSummary) {
+    println!("{}", summary.text);
+}
+
+fn print_recall_no_palace_human(config: &AppConfig) {
+    println!("\n  No palace found at {}", config.palace_path.display());
+    println!("  Run: mempalace-rs init <dir> && mempalace-rs mine <dir>");
+}
+
+fn print_recall_error_human(message: &str) {
+    println!("\n  Recall error: {message}");
+    println!("  Check the palace files, then rerun `mempalace-rs recall`.");
+}
+
+fn print_recall_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Recall error: {message}"),
+        "hint": "Check the palace files, then rerun `mempalace-rs recall`.",
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
+fn print_layers_status_human(summary: &mempalace_rs::model::LayerStatusSummary) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Layer Status");
+    println!("{}\n", "=".repeat(55));
+    println!("  Palace:  {}", summary.palace_path);
+    println!("  SQLite:  {}", summary.sqlite_path);
+    println!("  Drawers: {}", summary.total_drawers);
+    println!(
+        "  L0:      {}{}",
+        summary.identity_path,
+        if summary.identity_exists {
+            " (present)"
+        } else {
+            " (missing)"
+        }
+    );
+    println!("  L0 tokens: {}", summary.identity_tokens);
+    println!("  L1: {}", summary.layer1_description);
+    println!("  L2: {}", summary.layer2_description);
+    println!("  L3: {}", summary.layer3_description);
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_layers_status_no_palace_human(config: &AppConfig) {
+    println!("\n  No palace found at {}", config.palace_path.display());
+}
+
+fn print_layers_status_error_human(message: &str) {
+    println!("\n  Layers status error: {message}");
+    println!("  Check the palace files, then rerun `mempalace-rs layers-status`.");
+}
+
+fn print_layers_status_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Layers status error: {message}"),
+        "hint": "Check the palace files, then rerun `mempalace-rs layers-status`.",
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())

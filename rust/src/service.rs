@@ -23,11 +23,12 @@ use crate::model::{
     DoctorSummary, DrawerDeleteResult, DrawerInput, DrawerWriteResult, GraphStats,
     GraphStatsTunnel, GraphTraversalError, GraphTraversalNode, GraphTraversalResult, InitSummary,
     KgInvalidateResult, KgQueryResult, KgStats, KgTimelineResult, KgTriple, KgWriteResult,
-    MigrateSummary, MineProgressEvent, MineRequest, MineSummary, PrepareEmbeddingSummary,
-    RegistryConfirmResult, RegistryLearnResult, RegistryLookupResult, RegistryQueryResult,
-    RegistryResearchResult, RegistrySummaryResult, RegistryWriteResult, RepairPruneSummary,
-    RepairRebuildSummary, RepairScanSummary, RepairSummary, Rooms, SearchFilters, SearchHit,
-    SearchResults, Status, Taxonomy, TunnelRoom, WakeUpSummary,
+    LayerStatusSummary, MigrateSummary, MineProgressEvent, MineRequest, MineSummary,
+    PrepareEmbeddingSummary, RecallSummary, RegistryConfirmResult, RegistryLearnResult,
+    RegistryLookupResult, RegistryQueryResult, RegistryResearchResult, RegistrySummaryResult,
+    RegistryWriteResult, RepairPruneSummary, RepairRebuildSummary, RepairScanSummary,
+    RepairSummary, Rooms, SearchFilters, SearchHit, SearchResults, Status, Taxonomy, TunnelRoom,
+    WakeUpSummary,
 };
 use crate::registry::EntityRegistry;
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, DrawerRecord, GraphRoomRow, SqliteStore};
@@ -947,6 +948,94 @@ impl App {
             identity,
             layer1,
             token_estimate,
+        })
+    }
+
+    pub async fn recall(
+        &self,
+        wing: Option<&str>,
+        room: Option<&str>,
+        n_results: usize,
+    ) -> Result<RecallSummary> {
+        self.config.ensure_dirs()?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let matches = sqlite.list_drawers(wing)?;
+        let mut hits = matches
+            .into_iter()
+            .filter(|record| room.map(|value| value == record.room).unwrap_or(true))
+            .map(|record| SearchHit {
+                id: record.id,
+                text: record.text,
+                wing: record.wing,
+                room: record.room,
+                source_file: normalize_source_file(&record.source_file, &record.source_path),
+                source_path: record.source_path,
+                source_mtime: record.source_mtime,
+                chunk_index: record.chunk_index,
+                added_by: Some(record.added_by),
+                filed_at: Some(record.filed_at),
+                similarity: None,
+                score: None,
+            })
+            .collect::<Vec<_>>();
+
+        hits.sort_by(|left, right| {
+            left.wing
+                .cmp(&right.wing)
+                .then_with(|| left.room.cmp(&right.room))
+                .then_with(|| left.source_file.cmp(&right.source_file))
+                .then_with(|| left.chunk_index.cmp(&right.chunk_index))
+        });
+
+        let total_matches = hits.len();
+        let n_results = n_results.max(1);
+        hits.truncate(n_results);
+        let text = render_layer2(&hits, wing, room);
+
+        Ok(RecallSummary {
+            kind: "recall".to_string(),
+            palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            version: VERSION.to_string(),
+            wing: wing.map(ToOwned::to_owned),
+            room: room.map(ToOwned::to_owned),
+            n_results,
+            total_matches,
+            text,
+            results: hits,
+        })
+    }
+
+    pub async fn layer_status(&self) -> Result<LayerStatusSummary> {
+        self.config.ensure_dirs()?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let identity_path = self.config.identity_path();
+        let identity_exists = identity_path.exists();
+        let identity_text = if identity_exists {
+            fs::read_to_string(&identity_path)
+                .map(|text| text.trim().to_string())
+                .unwrap_or_default()
+        } else {
+            String::new()
+        };
+
+        Ok(LayerStatusSummary {
+            kind: "layers_status".to_string(),
+            palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            version: VERSION.to_string(),
+            identity_path: identity_path.display().to_string(),
+            identity_exists,
+            identity_tokens: count_tokens(&identity_text),
+            total_drawers: sqlite.total_drawers()?,
+            layer0_description: "Identity text loaded from palace-local identity.txt".to_string(),
+            layer1_description: "Essential story auto-generated from recent drawers".to_string(),
+            layer2_description: "On-demand wing/room recall from stored drawers".to_string(),
+            layer3_description: "Deep semantic search across the whole palace".to_string(),
         })
     }
 
@@ -2115,6 +2204,41 @@ fn render_layer1(drawers: &[DrawerRecord], wing: Option<&str>) -> String {
     }
 
     lines.join("\n")
+}
+
+fn render_layer2(drawers: &[SearchHit], wing: Option<&str>, room: Option<&str>) -> String {
+    if drawers.is_empty() {
+        let mut label = String::new();
+        if let Some(wing_name) = wing {
+            label.push_str(&format!("wing={wing_name}"));
+        }
+        if let Some(room_name) = room {
+            if !label.is_empty() {
+                label.push(' ');
+            }
+            label.push_str(&format!("room={room_name}"));
+        }
+        if label.is_empty() {
+            "No drawers found.".to_string()
+        } else {
+            format!("No drawers found for {label}.")
+        }
+    } else {
+        let mut lines = vec![format!("## L2 — ON-DEMAND ({} drawers)", drawers.len())];
+        for hit in drawers {
+            let mut snippet = hit.text.trim().replace('\n', " ");
+            if snippet.len() > 300 {
+                snippet.truncate(297);
+                snippet.push_str("...");
+            }
+            let mut entry = format!("  [{}] {}", hit.room, snippet);
+            if !hit.source_file.is_empty() {
+                entry.push_str(&format!("  ({})", hit.source_file));
+            }
+            lines.push(entry);
+        }
+        lines.join("\n")
+    }
 }
 
 #[derive(Clone, Debug, Default)]
