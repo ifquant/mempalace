@@ -19,6 +19,13 @@ Rust library structure now also includes a shared `palace` module for reusable s
 - vector-store bootstrap for library/script callers
 - `file_already_mined` / source-state helpers mirroring Python `palace.py`
 
+Rust library structure now also includes a `layers` module with a programmatic `LayerStack`
+facade mirroring Python `layers.py`:
+
+- `layer0()` for identity text
+- `layer1()` for the essential story view
+- `wake_up()` / `recall()` / `search()` / `status()` for the higher-level stack surfaces
+
 Current first-phase support:
 
 - `init`

@@ -7,6 +7,7 @@ pub mod embed;
 pub mod error;
 pub mod hook;
 pub mod instructions;
+pub mod layers;
 pub mod mcp;
 pub mod model;
 pub mod onboarding;
