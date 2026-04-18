@@ -9,6 +9,7 @@ pub mod hook;
 pub mod instructions;
 pub mod mcp;
 pub mod model;
+pub mod registry;
 pub mod service;
 pub mod split;
 pub mod storage;

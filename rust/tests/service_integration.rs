@@ -99,6 +99,49 @@ async fn init_project_bootstraps_rooms_and_entities() {
 }
 
 #[tokio::test]
+async fn registry_summary_lookup_and_learn_work() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    std::fs::write(
+        project.join("notes.md"),
+        "Ever said Atlas should launch next week.\nEver wrote the Atlas architecture guide.\n",
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
+
+    let init = app.init_project(&project).await.unwrap();
+    assert!(init.entity_registry_written);
+
+    let summary = app.registry_summary(&project).unwrap();
+    assert_eq!(summary.kind, "registry_summary");
+    assert!(summary.people.iter().any(|name| name == "Ever"));
+    assert!(summary.projects.iter().any(|name| name == "Atlas"));
+
+    let lookup_person = app
+        .registry_lookup(&project, "Ever", "Ever said the project was ready.")
+        .unwrap();
+    assert_eq!(lookup_person.r#type, "person");
+
+    let lookup_concept = app
+        .registry_lookup(&project, "Ever", "Have you ever seen this before?")
+        .unwrap();
+    assert_eq!(lookup_concept.r#type, "concept");
+
+    std::fs::write(
+        project.join("more_notes.md"),
+        "Riley said Lantern shipped.\nRiley wrote the Lantern deploy notes.\n",
+    )
+    .unwrap();
+    let learned = app.registry_learn(&project).unwrap();
+    assert!(learned.added_people.iter().any(|name| name == "Riley"));
+    assert!(learned.added_projects.iter().any(|name| name == "Lantern"));
+}
+
+#[tokio::test]
 async fn kg_round_trip_and_taxonomy_work() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");

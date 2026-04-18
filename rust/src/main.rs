@@ -210,6 +210,11 @@ enum Command {
         #[arg(help = "Instruction set name")]
         name: String,
     },
+    #[command(about = "Inspect and update the project-local entity registry")]
+    Registry {
+        #[command(subcommand)]
+        action: RegistryCommand,
+    },
     #[command(about = "Run the read-only MCP server on stdio")]
     Mcp {
         #[arg(long)]
@@ -245,6 +250,39 @@ enum RepairCommand {
     },
     #[command(about = "Rebuild the vector store from SQLite drawers")]
     Rebuild,
+}
+
+#[derive(Subcommand)]
+enum RegistryCommand {
+    #[command(about = "Show a summary of entity_registry.json")]
+    Summary {
+        #[arg(help = "Project directory containing entity_registry.json")]
+        dir: PathBuf,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable registry summary instead of JSON")]
+        human: bool,
+    },
+    #[command(about = "Look up one word in entity_registry.json")]
+    Lookup {
+        #[arg(help = "Project directory containing entity_registry.json")]
+        dir: PathBuf,
+        #[arg(help = "Word to look up")]
+        word: String,
+        #[arg(long, default_value = "")]
+        #[arg(help = "Context sentence used for ambiguous-name disambiguation")]
+        context: String,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable lookup output instead of JSON")]
+        human: bool,
+    },
+    #[command(about = "Learn new people/projects from local files into entity_registry.json")]
+    Learn {
+        #[arg(help = "Project directory to scan and update")]
+        dir: PathBuf,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable learn summary instead of JSON")]
+        human: bool,
+    },
 }
 
 #[tokio::main]
@@ -930,6 +968,46 @@ async fn main() -> anyhow::Result<()> {
             let text = instructions::render(&name)?;
             print!("{text}");
         }
+        Command::Registry { action } => match action {
+            RegistryCommand::Summary { dir, human } => {
+                let mut config = AppConfig::resolve(palace.as_ref())?;
+                apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+                let app = App::new(config)?;
+                let summary = app.registry_summary(&dir)?;
+                if human {
+                    print_registry_summary_human(&summary);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                }
+            }
+            RegistryCommand::Lookup {
+                dir,
+                word,
+                context,
+                human,
+            } => {
+                let mut config = AppConfig::resolve(palace.as_ref())?;
+                apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+                let app = App::new(config)?;
+                let summary = app.registry_lookup(&dir, &word, &context)?;
+                if human {
+                    print_registry_lookup_human(&summary);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                }
+            }
+            RegistryCommand::Learn { dir, human } => {
+                let mut config = AppConfig::resolve(palace.as_ref())?;
+                apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+                let app = App::new(config)?;
+                let summary = app.registry_learn(&dir)?;
+                if human {
+                    print_registry_learn_human(&summary);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                }
+            }
+        },
         Command::Mcp { setup } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
@@ -1404,6 +1482,81 @@ fn print_dedup_error_json(message: &str) -> anyhow::Result<()> {
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
+}
+
+fn print_registry_summary_human(summary: &mempalace_rs::model::RegistrySummaryResult) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Registry");
+    println!("{}\n", "=".repeat(55));
+    println!("  Registry: {}", summary.registry_path);
+    println!("  Mode: {}", summary.mode);
+    println!("  People: {}", summary.people_count);
+    println!("  Projects: {}", summary.project_count);
+    if !summary.ambiguous_flags.is_empty() {
+        println!("  Ambiguous flags: {}", summary.ambiguous_flags.join(", "));
+    }
+    if !summary.people.is_empty() {
+        println!("\n  People:");
+        for person in &summary.people {
+            println!("    - {person}");
+        }
+    }
+    if !summary.projects.is_empty() {
+        println!("\n  Projects:");
+        for project in &summary.projects {
+            println!("    - {project}");
+        }
+    }
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_registry_lookup_human(summary: &mempalace_rs::model::RegistryLookupResult) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Registry Lookup");
+    println!("{}\n", "=".repeat(55));
+    println!("  Registry: {}", summary.registry_path);
+    println!("  Word: {}", summary.word);
+    println!("  Type: {}", summary.r#type);
+    println!("  Name: {}", summary.name);
+    println!("  Confidence: {:.2}", summary.confidence);
+    println!("  Source: {}", summary.source);
+    if !summary.context.is_empty() {
+        println!("  Contexts: {}", summary.context.join(", "));
+    }
+    if let Some(disambiguated_by) = &summary.disambiguated_by {
+        println!("  Disambiguated by: {disambiguated_by}");
+    }
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_registry_learn_human(summary: &mempalace_rs::model::RegistryLearnResult) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Registry Learn");
+    println!("{}\n", "=".repeat(55));
+    println!("  Project: {}", summary.project_path);
+    println!("  Registry: {}", summary.registry_path);
+    println!("  Added people: {}", summary.added_people.len());
+    println!("  Added projects: {}", summary.added_projects.len());
+    if !summary.added_people.is_empty() {
+        println!("\n  New people:");
+        for person in &summary.added_people {
+            println!("    - {person}");
+        }
+    }
+    if !summary.added_projects.is_empty() {
+        println!("\n  New projects:");
+        for project in &summary.added_projects {
+            println!("    - {project}");
+        }
+    }
+    println!(
+        "\n  Totals: {} people, {} projects",
+        summary.total_people, summary.total_projects
+    );
+    println!("\n{}", "=".repeat(55));
+    println!();
 }
 
 fn print_migrate_human(summary: &mempalace_rs::model::MigrateSummary) {

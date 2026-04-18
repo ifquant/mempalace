@@ -174,6 +174,70 @@ fn cli_init_writes_entities_json_when_detection_finds_names() {
 }
 
 #[test]
+fn cli_registry_summary_lookup_and_learn_work() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(&project).unwrap();
+    fs::write(
+        project.join("notes.md"),
+        "Ever said Atlas should launch soon.\nEver wrote the Atlas architecture notes.",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "summary", project.to_str().unwrap()])
+        .assert()
+        .success()
+        .stdout(contains("\"kind\": \"registry_summary\""))
+        .stdout(contains("\"people_count\":"))
+        .stdout(contains("\"projects\":"));
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "registry",
+            "lookup",
+            project.to_str().unwrap(),
+            "Ever",
+            "--context",
+            "Have you ever seen this before?",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"kind\": \"registry_lookup\""))
+        .stdout(contains("\"type\": \"concept\""));
+
+    fs::write(
+        project.join("more.md"),
+        "Riley said Lantern shipped.\nRiley wrote the Lantern deploy notes.",
+    )
+    .unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "learn", project.to_str().unwrap(), "--human"])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Registry Learn"))
+        .stdout(contains("Riley"))
+        .stdout(contains("Lantern"));
+}
+
+#[test]
 fn cli_compress_json_stores_aaak_summaries() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
@@ -484,6 +548,21 @@ fn cli_mcp_setup_prints_python_style_quick_setup() {
         .stdout(contains("Run the server directly:"))
         .stdout(contains("Optional custom palace:"))
         .stdout(contains("mempalace-rs mcp --palace"));
+}
+
+#[test]
+fn cli_registry_help_mentions_summary_lookup_and_learn() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "Inspect and update the project-local entity registry",
+        ))
+        .stdout(contains("summary"))
+        .stdout(contains("lookup"))
+        .stdout(contains("learn"));
 }
 
 #[test]

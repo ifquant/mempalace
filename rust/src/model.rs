@@ -484,3 +484,40 @@ pub struct WakeUpSummary {
     pub layer1: String,
     pub token_estimate: usize,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RegistryLookupResult {
+    pub kind: String,
+    pub registry_path: String,
+    pub word: String,
+    pub r#type: String,
+    pub confidence: f64,
+    pub source: String,
+    pub name: String,
+    pub context: Vec<String>,
+    pub needs_disambiguation: bool,
+    pub disambiguated_by: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RegistrySummaryResult {
+    pub kind: String,
+    pub registry_path: String,
+    pub mode: String,
+    pub people_count: usize,
+    pub project_count: usize,
+    pub ambiguous_flags: Vec<String>,
+    pub people: Vec<String>,
+    pub projects: Vec<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RegistryLearnResult {
+    pub kind: String,
+    pub project_path: String,
+    pub registry_path: String,
+    pub added_people: Vec<String>,
+    pub added_projects: Vec<String>,
+    pub total_people: usize,
+    pub total_projects: usize,
+}

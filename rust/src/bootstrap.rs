@@ -7,6 +7,7 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::error::{MempalaceError, Result};
+use crate::registry::EntityRegistry;
 
 const SKIP_DIRS: &[&str] = &[
     ".git",
@@ -44,13 +45,6 @@ const STOPWORDS: &[&str] = &[
     "has", "had", "when", "where", "which", "your", "about", "into", "could", "should", "would",
     "return", "import", "class", "usage", "step", "check", "build", "deploy", "project", "system",
     "service", "feature", "issue", "design", "notes", "graph", "search",
-];
-
-const COMMON_ENGLISH_WORDS: &[&str] = &[
-    "ever", "grace", "will", "bill", "mark", "april", "may", "june", "joy", "hope", "faith",
-    "chance", "chase", "hunter", "dash", "flash", "star", "sky", "river", "brook", "lane", "art",
-    "clay", "gil", "nat", "max", "rex", "ray", "jay", "rose", "violet", "lily", "ivy", "ash",
-    "reed", "sage",
 ];
 
 const PERSON_VERBS: &[&str] = &[
@@ -207,25 +201,6 @@ struct GeneratedEntities {
     projects: Vec<String>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct EntityRegistry {
-    version: u8,
-    mode: String,
-    people: BTreeMap<String, RegistryPerson>,
-    projects: Vec<String>,
-    ambiguous_flags: Vec<String>,
-    wiki_cache: BTreeMap<String, serde_json::Value>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct RegistryPerson {
-    source: String,
-    contexts: Vec<String>,
-    aliases: Vec<String>,
-    relationship: String,
-    confidence: f64,
-}
-
 pub fn bootstrap_project(project_dir: &Path) -> Result<InitBootstrap> {
     let project_dir = project_dir
         .canonicalize()
@@ -342,6 +317,11 @@ struct DetectedEntities {
     projects: Vec<String>,
 }
 
+pub fn detect_entities_for_registry(project_dir: &Path) -> Result<(Vec<String>, Vec<String>)> {
+    let detected = detect_entities(project_dir)?;
+    Ok((detected.people, detected.projects))
+}
+
 fn default_wing(project_dir: &Path) -> String {
     project_dir
         .file_name()
@@ -424,40 +404,8 @@ fn write_entity_registry(
     projects: &[String],
     mode: &str,
 ) -> Result<()> {
-    let mut registry_people = BTreeMap::new();
-    let mut ambiguous_flags = Vec::new();
-
-    for person in people {
-        registry_people.insert(
-            person.clone(),
-            RegistryPerson {
-                source: "bootstrap".to_string(),
-                contexts: vec!["work".to_string()],
-                aliases: vec![],
-                relationship: String::new(),
-                confidence: 1.0,
-            },
-        );
-        if COMMON_ENGLISH_WORDS
-            .iter()
-            .any(|word| word.eq_ignore_ascii_case(person))
-        {
-            ambiguous_flags.push(person.to_ascii_lowercase());
-        }
-    }
-
-    let registry = EntityRegistry {
-        version: 1,
-        mode: mode.to_string(),
-        people: registry_people,
-        projects: projects.to_vec(),
-        ambiguous_flags,
-        wiki_cache: BTreeMap::new(),
-    };
-
-    let content = serde_json::to_string_pretty(&registry)?;
-    fs::write(entity_registry_path, content)?;
-    Ok(())
+    let registry = EntityRegistry::bootstrap(mode, people, projects);
+    registry.save(entity_registry_path)
 }
 
 fn write_aaak_entities(

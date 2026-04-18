@@ -8,7 +8,7 @@ use ignore::WalkBuilder;
 use serde::Deserialize;
 
 use crate::VERSION;
-use crate::bootstrap::bootstrap_project;
+use crate::bootstrap::{bootstrap_project, detect_entities_for_registry};
 use crate::config::AppConfig;
 use crate::convo::{
     ConversationChunk, MIN_CONVO_CHUNK_SIZE, detect_convo_room, exchange_rooms,
@@ -24,9 +24,11 @@ use crate::model::{
     GraphStatsTunnel, GraphTraversalError, GraphTraversalNode, GraphTraversalResult, InitSummary,
     KgInvalidateResult, KgQueryResult, KgStats, KgTimelineResult, KgTriple, KgWriteResult,
     MigrateSummary, MineProgressEvent, MineRequest, MineSummary, PrepareEmbeddingSummary,
-    RepairPruneSummary, RepairRebuildSummary, RepairScanSummary, RepairSummary, Rooms,
-    SearchFilters, SearchHit, SearchResults, Status, Taxonomy, TunnelRoom, WakeUpSummary,
+    RegistryLearnResult, RegistryLookupResult, RegistrySummaryResult, RepairPruneSummary,
+    RepairRebuildSummary, RepairScanSummary, RepairSummary, Rooms, SearchFilters, SearchHit,
+    SearchResults, Status, Taxonomy, TunnelRoom, WakeUpSummary,
 };
+use crate::registry::EntityRegistry;
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, DrawerRecord, GraphRoomRow, SqliteStore};
 use crate::storage::vector::VectorStore;
 
@@ -944,6 +946,60 @@ impl App {
             identity,
             layer1,
             token_estimate,
+        })
+    }
+
+    pub fn registry_summary(&self, project_dir: &Path) -> Result<RegistrySummaryResult> {
+        let registry_path = project_dir.join("entity_registry.json");
+        let summary = EntityRegistry::load(&registry_path)?.summary(&registry_path);
+        Ok(RegistrySummaryResult {
+            kind: summary.kind,
+            registry_path: summary.registry_path,
+            mode: summary.mode,
+            people_count: summary.people_count,
+            project_count: summary.project_count,
+            ambiguous_flags: summary.ambiguous_flags,
+            people: summary.people,
+            projects: summary.projects,
+        })
+    }
+
+    pub fn registry_lookup(
+        &self,
+        project_dir: &Path,
+        word: &str,
+        context: &str,
+    ) -> Result<RegistryLookupResult> {
+        let registry_path = project_dir.join("entity_registry.json");
+        let lookup = EntityRegistry::load(&registry_path)?.lookup(word, context);
+        Ok(RegistryLookupResult {
+            kind: "registry_lookup".to_string(),
+            registry_path: registry_path.display().to_string(),
+            word: lookup.word,
+            r#type: lookup.r#type,
+            confidence: lookup.confidence,
+            source: lookup.source,
+            name: lookup.name,
+            context: lookup.context,
+            needs_disambiguation: lookup.needs_disambiguation,
+            disambiguated_by: lookup.disambiguated_by,
+        })
+    }
+
+    pub fn registry_learn(&self, project_dir: &Path) -> Result<RegistryLearnResult> {
+        let registry_path = project_dir.join("entity_registry.json");
+        let mut registry = EntityRegistry::load(&registry_path)?;
+        let (people, projects) = detect_entities_for_registry(project_dir)?;
+        let learned = registry.learn(&people, &projects);
+        registry.save(&registry_path)?;
+        Ok(RegistryLearnResult {
+            kind: "registry_learn".to_string(),
+            project_path: project_dir.display().to_string(),
+            registry_path: registry_path.display().to_string(),
+            added_people: learned.added_people,
+            added_projects: learned.added_projects,
+            total_people: learned.total_people,
+            total_projects: learned.total_projects,
         })
     }
 
