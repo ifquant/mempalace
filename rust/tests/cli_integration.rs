@@ -690,19 +690,39 @@ fn cli_instructions_help_outputs_markdown() {
 }
 
 #[test]
-fn cli_mcp_help_mentions_setup_flag() {
+fn cli_mcp_help_mentions_setup_and_serve_flags() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
         .args(["mcp", "--help"])
         .assert()
         .success()
-        .stdout(contains("Run the read-only MCP server on stdio"))
+        .stdout(contains(
+            "Show MCP setup help or run the read-only MCP server",
+        ))
         .stdout(contains("--setup"))
+        .stdout(contains("--serve"))
         .stdout(contains("Print Python-style MCP setup instructions"));
 }
 
 #[test]
-fn cli_mcp_setup_prints_python_style_quick_setup() {
+fn cli_mcp_default_prints_python_style_quick_setup() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("palace path");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["--palace", palace.to_str().unwrap(), "mcp"])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace MCP quick setup:"))
+        .stdout(contains("claude mcp add mempalace --"))
+        .stdout(contains("Run the server directly:"))
+        .stdout(contains("Optional custom palace:"))
+        .stdout(contains("mempalace-rs mcp --serve --palace"));
+}
+
+#[test]
+fn cli_mcp_setup_flag_still_prints_python_style_quick_setup() {
     let tmp = tempdir().unwrap();
     let palace = tmp.path().join("palace path");
 
@@ -712,10 +732,8 @@ fn cli_mcp_setup_prints_python_style_quick_setup() {
         .assert()
         .success()
         .stdout(contains("MemPalace MCP quick setup:"))
-        .stdout(contains("claude mcp add mempalace --"))
         .stdout(contains("Run the server directly:"))
-        .stdout(contains("Optional custom palace:"))
-        .stdout(contains("mempalace-rs mcp --palace"));
+        .stdout(contains("mempalace-rs mcp --serve --palace"));
 }
 
 #[test]

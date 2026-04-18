@@ -51,6 +51,7 @@ Current first-phase support:
 - `split <dir>` to detect transcript mega-files, preview session boundaries, and split them into per-session `.txt` files with `.mega_backup` rollover
 - `normalize <file>` to inspect how one chat export/transcript is normalized before mining
 - `mcp --setup` to print Python-style quick setup instructions for wiring the Rust MCP server into MCP-capable hosts
+- `mcp` now defaults to the Python-style quick setup output, while `mcp --serve` explicitly starts the stdio server
 - Rust now has a standalone `registry` surface instead of treating `entity_registry.json` as a bootstrap-only artifact
 - `registry lookup` now mirrors Python's ambiguous-name disambiguation for common English words such as `Ever`
 - `registry learn` now reuses the local entity detector to append newly discovered people/projects into `entity_registry.json`

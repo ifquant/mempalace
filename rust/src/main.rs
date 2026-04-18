@@ -256,11 +256,14 @@ enum Command {
         #[command(subcommand)]
         action: RegistryCommand,
     },
-    #[command(about = "Run the read-only MCP server on stdio")]
+    #[command(about = "Show MCP setup help or run the read-only MCP server")]
     Mcp {
         #[arg(long)]
-        #[arg(help = "Print Python-style MCP setup instructions instead of starting the server")]
+        #[arg(help = "Print Python-style MCP setup instructions")]
         setup: bool,
+        #[arg(long)]
+        #[arg(help = "Run the MCP server on stdio instead of printing setup help")]
+        serve: bool,
     },
 }
 
@@ -1328,10 +1331,10 @@ async fn main() -> anyhow::Result<()> {
                 }
             }
         },
-        Command::Mcp { setup } => {
+        Command::Mcp { setup, serve } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
-            if setup {
+            if setup || !serve {
                 print_mcp_setup(&config);
             } else {
                 mcp::run_stdio(config).await?;
@@ -1349,7 +1352,7 @@ fn apply_cli_overrides(config: &mut AppConfig, hf_endpoint: Option<&str>) {
 }
 
 fn print_mcp_setup(config: &AppConfig) {
-    let base_server_cmd = "mempalace-rs mcp";
+    let base_server_cmd = "mempalace-rs mcp --serve";
     let current_server_cmd = format!(
         "{base_server_cmd} --palace {}",
         shell_quote(&config.palace_path.display().to_string())
