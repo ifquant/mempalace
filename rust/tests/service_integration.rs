@@ -33,6 +33,7 @@ async fn init_is_idempotent_and_status_starts_empty() {
     assert!(first.detected_projects.is_empty());
     assert!(first.config_path.is_none());
     assert!(first.entities_path.is_none());
+    assert!(first.entity_registry_path.is_none());
     assert!(first.aaak_entities_path.is_none());
     assert!(first.critical_facts_path.is_none());
     assert_eq!(first.version, env!("CARGO_PKG_VERSION"));
@@ -86,10 +87,12 @@ async fn init_project_bootstraps_rooms_and_entities() {
     assert!(summary.detected_projects.iter().any(|name| name == "Atlas"));
     assert!(summary.config_written);
     assert!(summary.entities_written);
+    assert!(summary.entity_registry_written);
     assert!(summary.aaak_entities_written);
     assert!(summary.critical_facts_written);
     assert!(project.join("mempalace.yaml").exists());
     assert!(project.join("entities.json").exists());
+    assert!(project.join("entity_registry.json").exists());
     assert!(project.join("aaak_entities.md").exists());
     assert!(project.join("critical_facts.md").exists());
 }

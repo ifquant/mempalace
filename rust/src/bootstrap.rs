@@ -46,6 +46,13 @@ const STOPWORDS: &[&str] = &[
     "service", "feature", "issue", "design", "notes", "graph", "search",
 ];
 
+const COMMON_ENGLISH_WORDS: &[&str] = &[
+    "ever", "grace", "will", "bill", "mark", "april", "may", "june", "joy", "hope", "faith",
+    "chance", "chase", "hunter", "dash", "flash", "star", "sky", "river", "brook", "lane", "art",
+    "clay", "gil", "nat", "max", "rex", "ray", "jay", "rose", "violet", "lily", "ivy", "ash",
+    "reed", "sage",
+];
+
 const PERSON_VERBS: &[&str] = &[
     "said", "asked", "told", "replied", "laughed", "smiled", "cried", "felt", "thinks", "think",
     "wants", "want", "loves", "love", "hates", "hate", "knows", "know", "decided", "pushed",
@@ -154,6 +161,8 @@ pub struct InitBootstrap {
     pub config_written: bool,
     pub entities_path: Option<String>,
     pub entities_written: bool,
+    pub entity_registry_path: Option<String>,
+    pub entity_registry_written: bool,
     pub aaak_entities_path: Option<String>,
     pub aaak_entities_written: bool,
     pub critical_facts_path: Option<String>,
@@ -198,6 +207,25 @@ struct GeneratedEntities {
     projects: Vec<String>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct EntityRegistry {
+    version: u8,
+    mode: String,
+    people: BTreeMap<String, RegistryPerson>,
+    projects: Vec<String>,
+    ambiguous_flags: Vec<String>,
+    wiki_cache: BTreeMap<String, serde_json::Value>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct RegistryPerson {
+    source: String,
+    contexts: Vec<String>,
+    aliases: Vec<String>,
+    relationship: String,
+    confidence: f64,
+}
+
 pub fn bootstrap_project(project_dir: &Path) -> Result<InitBootstrap> {
     let project_dir = project_dir
         .canonicalize()
@@ -237,6 +265,19 @@ pub fn bootstrap_project(project_dir: &Path) -> Result<InitBootstrap> {
             write_entities(&entities_path, &detected.people, &detected.projects)?;
             (detected.people, detected.projects, true)
         }
+    };
+
+    let entity_registry_path = project_dir.join("entity_registry.json");
+    let entity_registry_written = if entity_registry_path.exists() {
+        false
+    } else {
+        write_entity_registry(
+            &entity_registry_path,
+            &detected_people,
+            &detected_projects,
+            "work",
+        )?;
+        true
     };
 
     let aaak_entities_path = project_dir.join("aaak_entities.md");
@@ -279,6 +320,8 @@ pub fn bootstrap_project(project_dir: &Path) -> Result<InitBootstrap> {
             None
         },
         entities_written,
+        entity_registry_path: Some(entity_registry_path.display().to_string()),
+        entity_registry_written,
         aaak_entities_path: Some(aaak_entities_path.display().to_string()),
         aaak_entities_written,
         critical_facts_path: Some(critical_facts_path.display().to_string()),
@@ -372,6 +415,48 @@ fn write_entities(entities_path: &Path, people: &[String], projects: &[String]) 
     };
     let content = serde_json::to_string_pretty(&payload)?;
     fs::write(entities_path, content)?;
+    Ok(())
+}
+
+fn write_entity_registry(
+    entity_registry_path: &Path,
+    people: &[String],
+    projects: &[String],
+    mode: &str,
+) -> Result<()> {
+    let mut registry_people = BTreeMap::new();
+    let mut ambiguous_flags = Vec::new();
+
+    for person in people {
+        registry_people.insert(
+            person.clone(),
+            RegistryPerson {
+                source: "bootstrap".to_string(),
+                contexts: vec!["work".to_string()],
+                aliases: vec![],
+                relationship: String::new(),
+                confidence: 1.0,
+            },
+        );
+        if COMMON_ENGLISH_WORDS
+            .iter()
+            .any(|word| word.eq_ignore_ascii_case(person))
+        {
+            ambiguous_flags.push(person.to_ascii_lowercase());
+        }
+    }
+
+    let registry = EntityRegistry {
+        version: 1,
+        mode: mode.to_string(),
+        people: registry_people,
+        projects: projects.to_vec(),
+        ambiguous_flags,
+        wiki_cache: BTreeMap::new(),
+    };
+
+    let content = serde_json::to_string_pretty(&registry)?;
+    fs::write(entity_registry_path, content)?;
     Ok(())
 }
 

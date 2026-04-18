@@ -18,6 +18,7 @@ Current first-phase support:
 - `init`
 - `init` now bootstraps project-local `mempalace.yaml` room config and writes `entities.json` when it can confidently detect people/projects from local prose files
 - `init` now also writes palace-ready `aaak_entities.md` and `critical_facts.md` bootstrap docs next to the project when those files do not already exist
+- `init` now also writes a project-local `entity_registry.json` bootstrap file seeded from detected people/projects, matching more of Python onboarding's registry surface
 - `mine` for project files
 - `mine --dry-run` to preview file discovery and chunk counts without persisting drawers
 - `mine --mode projects --agent <name>` matches more of the Python CLI surface
@@ -103,9 +104,10 @@ Current project-mining behavior:
 - `init` bootstraps `mempalace.yaml` from folder structure / filename patterns when the file does not already exist
 - `init` preserves existing `mempalace.yaml` and `entities.json` instead of overwriting them
 - `init` also preserves existing `aaak_entities.md` and `critical_facts.md` instead of overwriting them
+- `init` also preserves an existing `entity_registry.json` instead of overwriting it
 - reads `mempalace.yaml` or legacy `mempal.yaml` when present
 - uses config-defined `wing` and `rooms`
-- skips init-generated bootstrap artifacts such as `entities.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
+- skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring
 - skips known generated/cache directories and non-readable extensions by default
 - supports explicit `--include-ignored` paths for `.gitignore`d files

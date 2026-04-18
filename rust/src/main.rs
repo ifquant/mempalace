@@ -1149,6 +1149,17 @@ fn print_init_human(summary: &mempalace_rs::model::InitSummary) {
             }
         );
     }
+    if let Some(entity_registry_path) = &summary.entity_registry_path {
+        println!(
+            "  Registry: {}{}",
+            entity_registry_path,
+            if summary.entity_registry_written {
+                " (written)"
+            } else {
+                " (kept)"
+            }
+        );
+    }
     if let Some(aaak_entities_path) = &summary.aaak_entities_path {
         println!(
             "  AAAK:    {}{}",

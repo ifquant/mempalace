@@ -305,6 +305,8 @@ pub struct InitSummary {
     pub config_written: bool,
     pub entities_path: Option<String>,
     pub entities_written: bool,
+    pub entity_registry_path: Option<String>,
+    pub entity_registry_written: bool,
     pub aaak_entities_path: Option<String>,
     pub aaak_entities_written: bool,
     pub critical_facts_path: Option<String>,
