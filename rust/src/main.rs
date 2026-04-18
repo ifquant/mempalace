@@ -331,6 +331,38 @@ enum RegistryCommand {
         #[arg(help = "Print Python-style human-readable query summary instead of JSON")]
         human: bool,
     },
+    #[command(about = "Research one unknown word into the registry wiki cache")]
+    Research {
+        #[arg(help = "Project directory containing entity_registry.json")]
+        dir: PathBuf,
+        #[arg(help = "Word to research via Wikipedia")]
+        word: String,
+        #[arg(long)]
+        #[arg(help = "Mark the researched result as confirmed immediately")]
+        auto_confirm: bool,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable research summary instead of JSON")]
+        human: bool,
+    },
+    #[command(about = "Confirm one researched word and promote it into the registry")]
+    Confirm {
+        #[arg(help = "Project directory containing entity_registry.json")]
+        dir: PathBuf,
+        #[arg(help = "Word already present in the wiki cache")]
+        word: String,
+        #[arg(long = "type", default_value = "person")]
+        #[arg(help = "Confirmed entity type, usually person")]
+        entity_type: String,
+        #[arg(long, default_value = "")]
+        #[arg(help = "Relationship or role if confirming a person")]
+        relationship: String,
+        #[arg(long, default_value = "personal")]
+        #[arg(help = "Context bucket: work or personal")]
+        context: String,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable confirm summary instead of JSON")]
+        human: bool,
+    },
 }
 
 #[tokio::main]
@@ -1110,6 +1142,46 @@ async fn main() -> anyhow::Result<()> {
                     println!("{}", serde_json::to_string_pretty(&summary)?);
                 }
             }
+            RegistryCommand::Research {
+                dir,
+                word,
+                auto_confirm,
+                human,
+            } => {
+                let mut config = AppConfig::resolve(palace.as_ref())?;
+                apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+                let app = App::new(config)?;
+                let summary = app.registry_research(&dir, &word, auto_confirm)?;
+                if human {
+                    print_registry_research_human(&summary);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                }
+            }
+            RegistryCommand::Confirm {
+                dir,
+                word,
+                entity_type,
+                relationship,
+                context,
+                human,
+            } => {
+                let mut config = AppConfig::resolve(palace.as_ref())?;
+                apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+                let app = App::new(config)?;
+                let summary = app.registry_confirm_research(
+                    &dir,
+                    &word,
+                    &entity_type,
+                    &relationship,
+                    &context,
+                )?;
+                if human {
+                    print_registry_confirm_human(&summary);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                }
+            }
         },
         Command::Mcp { setup } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
@@ -1691,6 +1763,48 @@ fn print_registry_query_human(summary: &mempalace_rs::model::RegistryQueryResult
     println!(
         "  Unknown candidates: {}",
         summary.unknown_candidates.join(", ")
+    );
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_registry_research_human(summary: &mempalace_rs::model::RegistryResearchResult) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Registry Research");
+    println!("{}\n", "=".repeat(55));
+    println!("  Registry: {}", summary.registry_path);
+    println!("  Word: {}", summary.word);
+    println!("  Inferred type: {}", summary.inferred_type);
+    println!("  Confidence: {:.0}%", summary.confidence * 100.0);
+    if let Some(title) = &summary.wiki_title {
+        println!("  Wiki title: {title}");
+    }
+    if let Some(note) = &summary.note {
+        println!("  Note: {note}");
+    }
+    println!("  Confirmed: {}", summary.confirmed);
+    if let Some(confirmed_type) = &summary.confirmed_type {
+        println!("  Confirmed type: {confirmed_type}");
+    }
+    if let Some(wiki_summary) = &summary.wiki_summary {
+        println!("  Summary: {wiki_summary}");
+    }
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_registry_confirm_human(summary: &mempalace_rs::model::RegistryConfirmResult) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Registry Confirm");
+    println!("{}\n", "=".repeat(55));
+    println!("  Registry: {}", summary.registry_path);
+    println!("  Word: {}", summary.word);
+    println!("  Type: {}", summary.entity_type);
+    println!("  Relationship: {}", summary.relationship);
+    println!("  Context: {}", summary.context);
+    println!(
+        "  Totals: {} people, {} projects, {} wiki cache entries",
+        summary.total_people, summary.total_projects, summary.wiki_cache_entries
     );
     println!("\n{}", "=".repeat(55));
     println!();

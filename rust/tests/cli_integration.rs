@@ -174,7 +174,7 @@ fn cli_init_writes_entities_json_when_detection_finds_names() {
 }
 
 #[test]
-fn cli_registry_summary_lookup_and_learn_work() {
+fn cli_registry_summary_lookup_learn_and_research_work() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");
     fs::create_dir_all(&project).unwrap();
@@ -235,6 +235,67 @@ fn cli_registry_summary_lookup_and_learn_work() {
         .stdout(contains("MemPalace Registry Learn"))
         .stdout(contains("Riley"))
         .stdout(contains("Lantern"));
+
+    let registry_path = project.join("entity_registry.json");
+    let mut registry = mempalace_rs::registry::EntityRegistry::load(&registry_path).unwrap();
+    registry.wiki_cache.insert(
+        "Max".to_string(),
+        mempalace_rs::registry::RegistryResearchEntry {
+            word: "Max".to_string(),
+            inferred_type: "person".to_string(),
+            confidence: 0.9,
+            wiki_summary: Some("max is a given name".to_string()),
+            wiki_title: Some("Max".to_string()),
+            note: None,
+            confirmed: false,
+            confirmed_type: None,
+        },
+    );
+    registry.save(&registry_path).unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "research", project.to_str().unwrap(), "Max"])
+        .assert()
+        .success()
+        .stdout(contains("\"kind\": \"registry_research\""))
+        .stdout(contains("\"word\": \"Max\""));
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "registry",
+            "confirm",
+            project.to_str().unwrap(),
+            "Max",
+            "--type",
+            "person",
+            "--relationship",
+            "coworker",
+            "--context",
+            "work",
+            "--human",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Registry Confirm"))
+        .stdout(contains("Max"))
+        .stdout(contains("coworker"));
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "registry",
+            "query",
+            project.to_str().unwrap(),
+            "Max said Lantern should ship with Riley",
+            "--human",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Registry Query"))
+        .stdout(contains("Max"))
+        .stdout(contains("Riley"));
 }
 
 #[test]
@@ -551,7 +612,7 @@ fn cli_mcp_setup_prints_python_style_quick_setup() {
 }
 
 #[test]
-fn cli_registry_help_mentions_summary_lookup_and_learn() {
+fn cli_registry_help_mentions_summary_lookup_learn_and_research() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
         .args(["registry", "--help"])
@@ -562,7 +623,9 @@ fn cli_registry_help_mentions_summary_lookup_and_learn() {
         ))
         .stdout(contains("summary"))
         .stdout(contains("lookup"))
-        .stdout(contains("learn"));
+        .stdout(contains("learn"))
+        .stdout(contains("research"))
+        .stdout(contains("confirm"));
 }
 
 #[test]

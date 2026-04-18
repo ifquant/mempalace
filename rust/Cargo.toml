@@ -31,6 +31,7 @@ thiserror = "2.0.18"
 tokio = { version = "1.51.1", features = ["macros", "rt-multi-thread"] }
 tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter", "fmt"] }
+ureq = { version = "2.12.1", features = ["json"] }
 walkdir = "2.5.0"
 
 [dev-dependencies]

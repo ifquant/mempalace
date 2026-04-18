@@ -543,3 +543,30 @@ pub struct RegistryQueryResult {
     pub people: Vec<String>,
     pub unknown_candidates: Vec<String>,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RegistryResearchResult {
+    pub kind: String,
+    pub registry_path: String,
+    pub word: String,
+    pub inferred_type: String,
+    pub confidence: f64,
+    pub wiki_title: Option<String>,
+    pub wiki_summary: Option<String>,
+    pub note: Option<String>,
+    pub confirmed: bool,
+    pub confirmed_type: Option<String>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RegistryConfirmResult {
+    pub kind: String,
+    pub registry_path: String,
+    pub word: String,
+    pub entity_type: String,
+    pub relationship: String,
+    pub context: String,
+    pub total_people: usize,
+    pub total_projects: usize,
+    pub wiki_cache_entries: usize,
+}

@@ -139,6 +139,39 @@ async fn registry_summary_lookup_and_learn_work() {
     let learned = app.registry_learn(&project).unwrap();
     assert!(learned.added_people.iter().any(|name| name == "Riley"));
     assert!(learned.added_projects.iter().any(|name| name == "Lantern"));
+
+    let registry_path = project.join("entity_registry.json");
+    let mut registry = mempalace_rs::registry::EntityRegistry::load(&registry_path).unwrap();
+    registry.wiki_cache.insert(
+        "Max".to_string(),
+        mempalace_rs::registry::RegistryResearchEntry {
+            word: "Max".to_string(),
+            inferred_type: "person".to_string(),
+            confidence: 0.9,
+            wiki_summary: Some("max is a given name".to_string()),
+            wiki_title: Some("Max".to_string()),
+            note: None,
+            confirmed: false,
+            confirmed_type: None,
+        },
+    );
+    registry.save(&registry_path).unwrap();
+
+    let research = app.registry_research(&project, "Max", false).unwrap();
+    assert_eq!(research.kind, "registry_research");
+    assert_eq!(research.word, "Max");
+    assert!(research.registry_path.ends_with("entity_registry.json"));
+
+    let confirm = app
+        .registry_confirm_research(&project, "Max", "person", "coworker", "work")
+        .unwrap();
+    assert_eq!(confirm.kind, "registry_confirm");
+    assert_eq!(confirm.entity_type, "person");
+
+    let query = app
+        .registry_query(&project, "Max said Lantern should ship with Riley")
+        .unwrap();
+    assert!(query.people.iter().any(|name| name == "Max"));
 }
 
 #[tokio::test]

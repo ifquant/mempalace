@@ -24,10 +24,10 @@ use crate::model::{
     GraphStatsTunnel, GraphTraversalError, GraphTraversalNode, GraphTraversalResult, InitSummary,
     KgInvalidateResult, KgQueryResult, KgStats, KgTimelineResult, KgTriple, KgWriteResult,
     MigrateSummary, MineProgressEvent, MineRequest, MineSummary, PrepareEmbeddingSummary,
-    RegistryLearnResult, RegistryLookupResult, RegistryQueryResult, RegistrySummaryResult,
-    RegistryWriteResult, RepairPruneSummary, RepairRebuildSummary, RepairScanSummary,
-    RepairSummary, Rooms, SearchFilters, SearchHit, SearchResults, Status, Taxonomy, TunnelRoom,
-    WakeUpSummary,
+    RegistryConfirmResult, RegistryLearnResult, RegistryLookupResult, RegistryQueryResult,
+    RegistryResearchResult, RegistrySummaryResult, RegistryWriteResult, RepairPruneSummary,
+    RepairRebuildSummary, RepairScanSummary, RepairSummary, Rooms, SearchFilters, SearchHit,
+    SearchResults, Status, Taxonomy, TunnelRoom, WakeUpSummary,
 };
 use crate::registry::EntityRegistry;
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, DrawerRecord, GraphRoomRow, SqliteStore};
@@ -1082,6 +1082,55 @@ impl App {
             query: query.to_string(),
             people: registry.extract_people_from_query(query),
             unknown_candidates: registry.extract_unknown_candidates(query),
+        })
+    }
+
+    pub fn registry_research(
+        &self,
+        project_dir: &Path,
+        word: &str,
+        auto_confirm: bool,
+    ) -> Result<RegistryResearchResult> {
+        let registry_path = project_dir.join("entity_registry.json");
+        let mut registry = EntityRegistry::load(&registry_path)?;
+        let research = registry.research(word, auto_confirm)?;
+        registry.save(&registry_path)?;
+        Ok(RegistryResearchResult {
+            kind: "registry_research".to_string(),
+            registry_path: registry_path.display().to_string(),
+            word: research.word,
+            inferred_type: research.inferred_type,
+            confidence: research.confidence,
+            wiki_title: research.wiki_title,
+            wiki_summary: research.wiki_summary,
+            note: research.note,
+            confirmed: research.confirmed,
+            confirmed_type: research.confirmed_type,
+        })
+    }
+
+    pub fn registry_confirm_research(
+        &self,
+        project_dir: &Path,
+        word: &str,
+        entity_type: &str,
+        relationship: &str,
+        context: &str,
+    ) -> Result<RegistryConfirmResult> {
+        let registry_path = project_dir.join("entity_registry.json");
+        let mut registry = EntityRegistry::load(&registry_path)?;
+        registry.confirm_research(word, entity_type, relationship, context);
+        registry.save(&registry_path)?;
+        Ok(RegistryConfirmResult {
+            kind: "registry_confirm".to_string(),
+            registry_path: registry_path.display().to_string(),
+            word: word.to_string(),
+            entity_type: entity_type.to_string(),
+            relationship: relationship.to_string(),
+            context: context.to_string(),
+            total_people: registry.people.len(),
+            total_projects: registry.projects.len(),
+            wiki_cache_entries: registry.wiki_cache.len(),
         })
     }
 
