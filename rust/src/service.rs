@@ -3,10 +3,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use chrono::Utc;
-use ignore::WalkBuilder;
-use serde::Deserialize;
-
 use crate::VERSION;
 use crate::bootstrap::bootstrap_project;
 use crate::config::AppConfig;
@@ -33,8 +29,11 @@ use crate::model::{
 };
 use crate::palace::{SKIP_DIRS, ensure_vector_store, source_state_matches};
 use crate::registry::EntityRegistry;
+use crate::room_detector::{detect_room, load_project_config, load_project_rooms};
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, DrawerRecord, GraphRoomRow, SqliteStore};
 use crate::storage::vector::VectorStore;
+use chrono::Utc;
+use ignore::WalkBuilder;
 
 const READABLE_EXTENSIONS: &[&str] = &[
     ".txt", ".md", ".py", ".js", ".ts", ".jsx", ".tsx", ".json", ".yaml", ".yml", ".html", ".css",
@@ -58,19 +57,6 @@ const CHUNK_SIZE: usize = 800;
 const CHUNK_OVERLAP: usize = 100;
 const MIN_CHUNK_SIZE: usize = 50;
 const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
-
-#[derive(Clone, Debug, Deserialize)]
-struct ProjectConfig {
-    wing: Option<String>,
-    rooms: Option<Vec<ProjectRoom>>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct ProjectRoom {
-    name: String,
-    #[serde(default)]
-    keywords: Vec<String>,
-}
 
 #[derive(Clone)]
 pub struct App {
@@ -1837,72 +1823,6 @@ fn read_text_file(path: &Path) -> Result<Option<String>> {
     }
 }
 
-fn detect_room(root: &Path, path: &Path, content: &str, rooms: &[ProjectRoom]) -> String {
-    if rooms.is_empty() {
-        return "general".to_string();
-    }
-
-    let relative = path
-        .strip_prefix(root)
-        .unwrap_or(path)
-        .to_string_lossy()
-        .to_ascii_lowercase()
-        .replace('\\', "/");
-    let filename = path
-        .file_stem()
-        .map(|name| name.to_string_lossy().to_ascii_lowercase())
-        .unwrap_or_default();
-    let content_lower = content
-        .chars()
-        .take(2_000)
-        .collect::<String>()
-        .to_ascii_lowercase();
-
-    for part in relative
-        .split('/')
-        .filter(|part| !part.is_empty())
-        .take_while(|part| !part.contains('.'))
-    {
-        for room in rooms {
-            let mut candidates = vec![room.name.to_ascii_lowercase()];
-            candidates.extend(
-                room.keywords
-                    .iter()
-                    .map(|keyword| keyword.to_ascii_lowercase()),
-            );
-            if candidates.iter().any(|candidate| {
-                part == candidate || candidate.contains(part) || part.contains(candidate)
-            }) {
-                return room.name.clone();
-            }
-        }
-    }
-
-    for room in rooms {
-        let room_name = room.name.to_ascii_lowercase();
-        if filename.contains(&room_name) || room_name.contains(&filename) {
-            return room.name.clone();
-        }
-    }
-
-    let mut best_room = None;
-    let mut best_score = 0;
-    for room in rooms {
-        let mut score = content_lower
-            .matches(&room.name.to_ascii_lowercase())
-            .count();
-        for keyword in &room.keywords {
-            score += content_lower.matches(&keyword.to_ascii_lowercase()).count();
-        }
-        if score > best_score {
-            best_score = score;
-            best_room = Some(room.name.clone());
-        }
-    }
-
-    best_room.unwrap_or_else(|| "general".to_string())
-}
-
 fn chunk_text(text: &str) -> Vec<String> {
     let content = text.trim();
     if content.is_empty() {
@@ -1945,36 +1865,6 @@ fn chunk_text(text: &str) -> Vec<String> {
     }
 
     chunks
-}
-
-fn load_project_rooms(project_dir: &Path) -> Result<Vec<ProjectRoom>> {
-    let config = load_project_config(project_dir)?;
-    Ok(config
-        .and_then(|config| config.rooms)
-        .filter(|rooms| !rooms.is_empty())
-        .unwrap_or_else(|| {
-            vec![ProjectRoom {
-                name: "general".to_string(),
-                keywords: Vec::new(),
-            }]
-        }))
-}
-
-fn load_project_config(project_dir: &Path) -> Result<Option<ProjectConfig>> {
-    for name in ["mempalace.yaml", "mempal.yaml"] {
-        let path = project_dir.join(name);
-        if !path.exists() {
-            continue;
-        }
-
-        let content = fs::read_to_string(path)?;
-        let config = serde_yml::from_str::<ProjectConfig>(&content).map_err(|err| {
-            MempalaceError::InvalidArgument(format!("Invalid project config: {err}"))
-        })?;
-        return Ok(Some(config));
-    }
-
-    Ok(None)
 }
 
 fn should_skip_dir(dirname: &str) -> bool {
@@ -2426,11 +2316,11 @@ mod tests {
         let root = Path::new("/tmp/project");
         let path = Path::new("/tmp/project/src/security.txt");
         let rooms = vec![
-            ProjectRoom {
+            crate::room_detector::ProjectRoom {
                 name: "auth".to_string(),
                 keywords: vec!["jwt".to_string(), "token".to_string()],
             },
-            ProjectRoom {
+            crate::room_detector::ProjectRoom {
                 name: "docs".to_string(),
                 keywords: vec!["guide".to_string()],
             },

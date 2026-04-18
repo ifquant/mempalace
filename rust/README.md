@@ -39,6 +39,13 @@ Rust library structure now also includes an `entity_detector` module mirroring P
 - `detect_entities_for_registry()` for registry/bootstrap callers
 - `scan_for_detection()` for reusable file discovery before detection
 
+Rust library structure now also includes a `room_detector` module mirroring Python
+`room_detector_local.py`:
+
+- `detect_rooms()` for project-local room bootstrap from folder/file signals
+- `load_project_rooms()` for reading `mempalace.yaml` / `mempal.yaml`
+- `detect_room()` for shared project-mining room routing
+
 Current first-phase support:
 
 - `init`
@@ -162,6 +169,7 @@ Current project-mining behavior:
 - `init` also preserves an existing `entity_registry.json` instead of overwriting it
 - `onboarding` refreshes project-local `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md`, but still keeps an existing `mempalace.yaml` room config instead of overwriting it
 - reads `mempalace.yaml` or legacy `mempal.yaml` when present
+- room bootstrap and project-mining room routing now share one `room_detector` helper instead of duplicating room vocabulary and fallback rules
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring

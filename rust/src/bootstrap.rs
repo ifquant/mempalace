@@ -1,115 +1,12 @@
-use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
-use ignore::WalkBuilder;
 use serde::{Deserialize, Serialize};
 
 use crate::entity_detector::detect_entities;
 use crate::error::{MempalaceError, Result};
 use crate::registry::EntityRegistry;
-
-const SKIP_DIRS: &[&str] = &[
-    ".git",
-    "node_modules",
-    "__pycache__",
-    ".venv",
-    "venv",
-    "env",
-    "dist",
-    "build",
-    ".next",
-    "coverage",
-    ".mempalace",
-    ".ruff_cache",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".cache",
-    ".tox",
-    ".nox",
-    ".idea",
-    ".vscode",
-    ".ipynb_checkpoints",
-    ".eggs",
-    "htmlcov",
-    "target",
-];
-
-const FOLDER_ROOM_MAP: &[(&str, &str)] = &[
-    ("frontend", "frontend"),
-    ("front-end", "frontend"),
-    ("front_end", "frontend"),
-    ("client", "frontend"),
-    ("ui", "frontend"),
-    ("views", "frontend"),
-    ("components", "frontend"),
-    ("pages", "frontend"),
-    ("backend", "backend"),
-    ("back-end", "backend"),
-    ("back_end", "backend"),
-    ("server", "backend"),
-    ("api", "backend"),
-    ("routes", "backend"),
-    ("services", "backend"),
-    ("controllers", "backend"),
-    ("models", "backend"),
-    ("database", "backend"),
-    ("db", "backend"),
-    ("docs", "documentation"),
-    ("doc", "documentation"),
-    ("documentation", "documentation"),
-    ("wiki", "documentation"),
-    ("readme", "documentation"),
-    ("notes", "documentation"),
-    ("design", "design"),
-    ("designs", "design"),
-    ("mockups", "design"),
-    ("wireframes", "design"),
-    ("assets", "design"),
-    ("storyboard", "design"),
-    ("costs", "costs"),
-    ("cost", "costs"),
-    ("budget", "costs"),
-    ("finance", "costs"),
-    ("financial", "costs"),
-    ("pricing", "costs"),
-    ("invoices", "costs"),
-    ("accounting", "costs"),
-    ("meetings", "meetings"),
-    ("meeting", "meetings"),
-    ("calls", "meetings"),
-    ("meeting_notes", "meetings"),
-    ("standup", "meetings"),
-    ("minutes", "meetings"),
-    ("team", "team"),
-    ("staff", "team"),
-    ("hr", "team"),
-    ("hiring", "team"),
-    ("employees", "team"),
-    ("people", "team"),
-    ("research", "research"),
-    ("references", "research"),
-    ("reading", "research"),
-    ("papers", "research"),
-    ("planning", "planning"),
-    ("roadmap", "planning"),
-    ("strategy", "planning"),
-    ("specs", "planning"),
-    ("requirements", "planning"),
-    ("tests", "testing"),
-    ("test", "testing"),
-    ("testing", "testing"),
-    ("qa", "testing"),
-    ("scripts", "scripts"),
-    ("tools", "scripts"),
-    ("utils", "scripts"),
-    ("config", "configuration"),
-    ("configs", "configuration"),
-    ("settings", "configuration"),
-    ("infrastructure", "configuration"),
-    ("infra", "configuration"),
-    ("deploy", "configuration"),
-];
+use crate::room_detector::{RoomDetection, detect_rooms};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct InitBootstrap {
@@ -268,13 +165,6 @@ pub fn bootstrap_project(project_dir: &Path) -> Result<InitBootstrap> {
         critical_facts_path: Some(critical_facts_path.display().to_string()),
         critical_facts_written,
     })
-}
-
-#[derive(Clone, Debug)]
-struct RoomDetection {
-    name: String,
-    description: String,
-    keywords: Vec<String>,
 }
 
 pub fn default_wing(project_dir: &Path) -> String {
@@ -491,102 +381,6 @@ fn entity_code(value: &str, max_len: usize) -> String {
         cleaned.push('X');
     }
     cleaned
-}
-
-fn detect_rooms(project_dir: &Path) -> Result<Vec<RoomDetection>> {
-    let mut found_rooms = BTreeMap::new();
-
-    if let Ok(entries) = fs::read_dir(project_dir) {
-        for entry in entries {
-            let path = entry?.path();
-            if path.is_dir() {
-                let name = path
-                    .file_name()
-                    .and_then(|value| value.to_str())
-                    .unwrap_or_default();
-                if SKIP_DIRS.contains(&name) {
-                    continue;
-                }
-                let lower = name.to_ascii_lowercase();
-                if let Some((_, room_name)) = FOLDER_ROOM_MAP
-                    .iter()
-                    .find(|(folder, _)| normalize_roomish(&lower) == *folder)
-                {
-                    found_rooms.insert(
-                        room_name.to_string(),
-                        RoomDetection {
-                            name: room_name.to_string(),
-                            description: format!("Files from {name}/"),
-                            keywords: vec![room_name.to_string(), lower],
-                        },
-                    );
-                } else if name.len() > 2 && name.chars().next().is_some_and(char::is_alphabetic) {
-                    let clean = normalize_roomish(name);
-                    found_rooms.entry(clean.clone()).or_insert(RoomDetection {
-                        name: clean.clone(),
-                        description: format!("Files from {name}/"),
-                        keywords: vec![clean],
-                    });
-                }
-            }
-        }
-    }
-
-    if found_rooms.is_empty() {
-        let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-        for entry in WalkBuilder::new(project_dir)
-            .hidden(false)
-            .git_ignore(true)
-            .git_exclude(true)
-            .parents(true)
-            .build()
-        {
-            let entry = match entry {
-                Ok(entry) => entry,
-                Err(_) => continue,
-            };
-            if !entry
-                .file_type()
-                .is_some_and(|file_type| file_type.is_file())
-            {
-                continue;
-            }
-            let file_name = entry.file_name().to_string_lossy().to_ascii_lowercase();
-            let normalized = normalize_roomish(&file_name);
-            for (keyword, room_name) in FOLDER_ROOM_MAP {
-                if normalized.contains(&normalize_roomish(keyword)) {
-                    *counts.entry((*room_name).to_string()).or_insert(0) += 1;
-                }
-            }
-        }
-        for (room_name, _) in counts.into_iter().filter(|(_, count)| *count >= 2).take(6) {
-            found_rooms.insert(
-                room_name.clone(),
-                RoomDetection {
-                    name: room_name.clone(),
-                    description: format!("Files related to {room_name}"),
-                    keywords: vec![room_name],
-                },
-            );
-        }
-    }
-
-    if !found_rooms.contains_key("general") {
-        found_rooms.insert(
-            "general".to_string(),
-            RoomDetection {
-                name: "general".to_string(),
-                description: "Files that don't fit other rooms".to_string(),
-                keywords: vec![],
-            },
-        );
-    }
-
-    Ok(found_rooms.into_values().collect())
-}
-
-fn normalize_roomish(value: &str) -> String {
-    value.to_ascii_lowercase().replace(['-', ' '], "_")
 }
 
 #[cfg(test)]
