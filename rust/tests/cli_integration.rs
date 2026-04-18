@@ -37,11 +37,15 @@ fn cli_init_status_mine_search_round_trip() {
         .stdout(contains("\"configured_rooms\":"))
         .stdout(contains("\"config_written\": true"))
         .stdout(contains("\"entities_written\":"))
+        .stdout(contains("\"aaak_entities_path\":"))
+        .stdout(contains("\"critical_facts_path\":"))
         .stdout(contains("\"version\":"))
         .stdout(contains("\"schema_version\": 7"))
         .stdout(contains("palace.sqlite3"));
 
     assert!(project.join("mempalace.yaml").exists());
+    assert!(project.join("aaak_entities.md").exists());
+    assert!(project.join("critical_facts.md").exists());
 
     Command::cargo_bin("mempalace-rs")
         .unwrap()
@@ -150,10 +154,14 @@ fn cli_init_writes_entities_json_when_detection_finds_names() {
         .assert()
         .success()
         .stdout(contains("\"entities_written\": true"))
+        .stdout(contains("\"aaak_entities_written\": true"))
+        .stdout(contains("\"critical_facts_written\": true"))
         .stdout(contains("\"detected_people\":"))
         .stdout(contains("\"detected_projects\":"));
 
     assert!(project.join("entities.json").exists());
+    assert!(project.join("aaak_entities.md").exists());
+    assert!(project.join("critical_facts.md").exists());
 }
 
 #[test]
@@ -666,6 +674,8 @@ fn cli_init_human_prints_python_style_summary() {
         .stdout(contains("LanceDB:"))
         .stdout(contains("Schema:  7"))
         .stdout(contains("Config:"))
+        .stdout(contains("AAAK:"))
+        .stdout(contains("Facts:"))
         .stdout(contains("Rooms:"))
         .stdout(contains("Palace initialized."));
 }

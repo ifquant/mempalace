@@ -1149,6 +1149,28 @@ fn print_init_human(summary: &mempalace_rs::model::InitSummary) {
             }
         );
     }
+    if let Some(aaak_entities_path) = &summary.aaak_entities_path {
+        println!(
+            "  AAAK:    {}{}",
+            aaak_entities_path,
+            if summary.aaak_entities_written {
+                " (written)"
+            } else {
+                " (kept)"
+            }
+        );
+    }
+    if let Some(critical_facts_path) = &summary.critical_facts_path {
+        println!(
+            "  Facts:   {}{}",
+            critical_facts_path,
+            if summary.critical_facts_written {
+                " (written)"
+            } else {
+                " (kept)"
+            }
+        );
+    }
     if !summary.detected_people.is_empty() {
         println!("  People:  {}", summary.detected_people.join(", "));
     }

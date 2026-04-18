@@ -39,6 +39,9 @@ const SKIP_FILENAMES: &[&str] = &[
     "mempalace.yml",
     "mempal.yaml",
     "mempal.yml",
+    "entities.json",
+    "aaak_entities.md",
+    "critical_facts.md",
     ".gitignore",
     "package-lock.json",
 ];
@@ -125,6 +128,10 @@ impl App {
             config_written: false,
             entities_path: None,
             entities_written: false,
+            aaak_entities_path: None,
+            aaak_entities_written: false,
+            critical_facts_path: None,
+            critical_facts_written: false,
             palace_path: self.config.palace_path.display().to_string(),
             sqlite_path: self.config.sqlite_path().display().to_string(),
             lance_path: self.config.lance_path().display().to_string(),
@@ -156,6 +163,10 @@ impl App {
             config_written: bootstrap.config_written,
             entities_path: bootstrap.entities_path,
             entities_written: bootstrap.entities_written,
+            aaak_entities_path: bootstrap.aaak_entities_path,
+            aaak_entities_written: bootstrap.aaak_entities_written,
+            critical_facts_path: bootstrap.critical_facts_path,
+            critical_facts_written: bootstrap.critical_facts_written,
             palace_path: self.config.palace_path.display().to_string(),
             sqlite_path: self.config.sqlite_path().display().to_string(),
             lance_path: self.config.lance_path().display().to_string(),
@@ -1627,8 +1638,8 @@ fn render_layer1(drawers: &[DrawerRecord], wing: Option<&str>) -> String {
         lines.push(format!("\n[{room}]"));
         for drawer in entries.into_iter().take(4) {
             let mut snippet = drawer.text.replace('\n', " ").trim().to_string();
-            if snippet.len() > 200 {
-                snippet = format!("{}...", &snippet[..197]);
+            if snippet.chars().count() > 200 {
+                snippet = format!("{}...", snippet.chars().take(197).collect::<String>());
             }
             let mut line = format!("  - {snippet}");
             if !drawer.source_file.is_empty() {
