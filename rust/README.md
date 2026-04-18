@@ -83,6 +83,13 @@ Rust library structure now also includes a `repair` module mirroring Python
 - `read_corrupt_ids()` / `backup_sqlite_source()` for the prune/rebuild filesystem path
 - shared scan/prune/rebuild summary assembly outside `service`
 
+Rust library structure now also includes a `drawers` module for reusable drawer-write
+helpers shared by MCP/manual filing and rebuild paths:
+
+- `build_manual_drawer()` for Python-style manual drawer IDs and metadata
+- `drawer_input_from_record()` for converting SQLite drawer rows back into write inputs
+- shared `sanitize_name()` validation for drawer/KG write surfaces
+
 Current first-phase support:
 
 - `init`
@@ -214,6 +221,7 @@ Current project-mining behavior:
 - repair diagnostics and scan/prune/rebuild summary assembly now also live in a standalone `repair` helper instead of staying embedded inside `service`
 - layer identity loading plus L1/L2 text rendering now also live in the `layers` module instead of staying embedded inside `service`
 - search hit basename normalization, similarity rounding, and stable ordering now also live in the `searcher` module instead of staying embedded inside `service`
+- manual drawer construction plus SQLite-row-to-input conversion now also live in the `drawers` module instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring
