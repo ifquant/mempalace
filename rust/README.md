@@ -46,6 +46,13 @@ Rust library structure now also includes a `room_detector` module mirroring Pyth
 - `load_project_rooms()` for reading `mempalace.yaml` / `mempal.yaml`
 - `detect_room()` for shared project-mining room routing
 
+Rust library structure now also includes a `normalize` module mirroring Python
+`normalize.py`:
+
+- `normalize_conversation_file()` for file-based transcript normalization
+- `normalize_conversation()` for library callers that already hold raw content
+- shared JSON/JSONL chat-export parsing for ChatGPT, Claude, Codex, and Slack-style inputs
+
 Current first-phase support:
 
 - `init`
@@ -170,6 +177,7 @@ Current project-mining behavior:
 - `onboarding` refreshes project-local `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md`, but still keeps an existing `mempalace.yaml` room config instead of overwriting it
 - reads `mempalace.yaml` or legacy `mempal.yaml` when present
 - room bootstrap and project-mining room routing now share one `room_detector` helper instead of duplicating room vocabulary and fallback rules
+- transcript normalization now lives in a standalone `normalize` helper instead of staying embedded inside `convo`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring

@@ -3,11 +3,11 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use mempalace_rs::config::AppConfig;
-use mempalace_rs::convo::normalize_conversation_file;
 use mempalace_rs::hook;
 use mempalace_rs::instructions;
 use mempalace_rs::mcp;
 use mempalace_rs::model::{MineProgressEvent, MineRequest};
+use mempalace_rs::normalize::normalize_conversation_file;
 use mempalace_rs::onboarding::{
     OnboardingRequest, parse_alias_arg, parse_person_arg, run_onboarding,
 };

@@ -8,8 +8,7 @@ use crate::bootstrap::bootstrap_project;
 use crate::config::AppConfig;
 use crate::convo::{
     ConversationChunk, MIN_CONVO_CHUNK_SIZE, detect_convo_room, exchange_rooms,
-    extract_exchange_chunks, extract_general_memories, general_rooms, normalize_conversation_file,
-    scan_convo_files,
+    extract_exchange_chunks, extract_general_memories, general_rooms, scan_convo_files,
 };
 use crate::dialect::{CompressMetadata, Dialect, count_tokens};
 use crate::embed::{EmbeddingProvider, build_embedder};
@@ -27,6 +26,7 @@ use crate::model::{
     RepairSummary, Rooms, SearchFilters, SearchHit, SearchResults, Status, Taxonomy, TunnelRoom,
     WakeUpSummary,
 };
+use crate::normalize::normalize_conversation_file;
 use crate::palace::{SKIP_DIRS, ensure_vector_store, source_state_matches};
 use crate::registry::EntityRegistry;
 use crate::room_detector::{detect_room, load_project_config, load_project_rooms};

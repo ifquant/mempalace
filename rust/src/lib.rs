@@ -11,6 +11,7 @@ pub mod instructions;
 pub mod layers;
 pub mod mcp;
 pub mod model;
+pub mod normalize;
 pub mod onboarding;
 pub mod palace;
 pub mod registry;

@@ -2,11 +2,11 @@ use serde_json::{Value, json};
 
 use crate::audit::WriteAheadLog;
 use crate::config::AppConfig;
-use crate::convo::normalize_conversation_file;
 use crate::dialect::AAAK_SPEC;
 use crate::error::{MempalaceError, Result};
 use crate::hook;
 use crate::instructions;
+use crate::normalize::normalize_conversation_file;
 use crate::onboarding::{OnboardingRequest, parse_alias_arg, parse_person_arg, run_onboarding};
 use crate::service::App;
 use crate::split;
