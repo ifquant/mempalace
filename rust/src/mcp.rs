@@ -5,6 +5,8 @@ use crate::config::AppConfig;
 use crate::convo::normalize_conversation_file;
 use crate::dialect::AAAK_SPEC;
 use crate::error::{MempalaceError, Result};
+use crate::hook;
+use crate::instructions;
 use crate::onboarding::{OnboardingRequest, parse_alias_arg, parse_person_arg, run_onboarding};
 use crate::service::App;
 use crate::split;
@@ -331,6 +333,32 @@ fn tools() -> Vec<Value> {
                     "dry_run": {"type":"boolean","description":"Preview without writing files"}
                 },
                 "required": ["source_dir"]
+            }),
+        ),
+        tool(
+            "mempalace_instructions",
+            "Return one built-in MemPalace instruction document.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "name": {"type":"string","description":"Instruction set name: help, init, mine, search, or status"}
+                },
+                "required": ["name"]
+            }),
+        ),
+        tool(
+            "mempalace_hook_run",
+            "Run one MemPalace hook using explicit MCP arguments instead of stdin.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "hook": {"type":"string","description":"Hook name: session-start, stop, or precompact"},
+                    "harness": {"type":"string","description":"Harness type: claude-code or codex"},
+                    "session_id": {"type":"string","description":"Session identifier"},
+                    "stop_hook_active": {"type":"boolean","description":"Whether the stop hook is already active"},
+                    "transcript_path": {"type":"string","description":"Optional transcript JSONL path for stop counting"}
+                },
+                "required": ["hook", "harness"]
             }),
         ),
         tool(
@@ -1048,6 +1076,64 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                 )),
             }
         }
+        "mempalace_instructions" => {
+            let name = required_str(&arguments, "name", "mempalace_instructions");
+            let Ok(name) = name else {
+                return Ok(tool_error(
+                    "Instructions error",
+                    &MempalaceError::Mcp("mempalace_instructions requires name".to_string()),
+                    "Provide an instruction name, then rerun mempalace_instructions.",
+                ));
+            };
+            match instructions::render(name) {
+                Ok(text) => Ok(json!({
+                    "kind": "instructions",
+                    "name": name,
+                    "text": text,
+                })),
+                Err(err) => Ok(tool_error(
+                    "Instructions error",
+                    &err,
+                    "Use one of help, init, mine, search, or status, then rerun mempalace_instructions.",
+                )),
+            }
+        }
+        "mempalace_hook_run" => {
+            let hook_name = required_str(&arguments, "hook", "mempalace_hook_run");
+            let Ok(hook_name) = hook_name else {
+                return Ok(tool_error(
+                    "Hook run error",
+                    &MempalaceError::Mcp("mempalace_hook_run requires hook".to_string()),
+                    "Provide hook and harness, then rerun mempalace_hook_run.",
+                ));
+            };
+            let harness = required_str(&arguments, "harness", "mempalace_hook_run");
+            let Ok(harness) = harness else {
+                return Ok(tool_error(
+                    "Hook run error",
+                    &MempalaceError::Mcp("mempalace_hook_run requires harness".to_string()),
+                    "Provide hook and harness, then rerun mempalace_hook_run.",
+                ));
+            };
+            let payload = json!({
+                "session_id": arguments.get("session_id").and_then(Value::as_str).unwrap_or("unknown"),
+                "stop_hook_active": arguments.get("stop_hook_active").and_then(Value::as_bool).unwrap_or(false),
+                "transcript_path": arguments.get("transcript_path").and_then(Value::as_str).unwrap_or_default(),
+            });
+            match hook::run_hook_with_data(hook_name, harness, &payload, config) {
+                Ok(result) => Ok(json!({
+                    "kind": "hook_run",
+                    "hook": hook_name,
+                    "harness": harness,
+                    "result": result,
+                })),
+                Err(err) => Ok(tool_error(
+                    "Hook run error",
+                    &err,
+                    "Check hook, harness, and transcript_path, then rerun mempalace_hook_run.",
+                )),
+            }
+        }
         "mempalace_registry_summary" => {
             let project_dir = required_str(&arguments, "project_dir", "mempalace_registry_summary");
             let Ok(project_dir) = project_dir else {
@@ -1683,6 +1769,8 @@ fn requires_existing_palace(tool_name: &str) -> bool {
             | "mempalace_onboarding"
             | "mempalace_normalize"
             | "mempalace_split"
+            | "mempalace_instructions"
+            | "mempalace_hook_run"
             | "mempalace_registry_summary"
             | "mempalace_registry_lookup"
             | "mempalace_registry_query"
@@ -1833,6 +1921,18 @@ fn coerce_argument_types(tool_name: &str, arguments: &mut Value) {
                 };
                 if let Some(min_sessions) = coerced {
                     args.insert("min_sessions".to_string(), min_sessions);
+                }
+            }
+        }
+        "mempalace_hook_run" => {
+            if let Some(value) = args.get("stop_hook_active").cloned() {
+                let coerced = match value {
+                    Value::String(text) => text.parse::<bool>().ok().map(Value::from),
+                    Value::Bool(_) => Some(value),
+                    _ => None,
+                };
+                if let Some(flag) = coerced {
+                    args.insert("stop_hook_active".to_string(), flag);
                 }
             }
         }

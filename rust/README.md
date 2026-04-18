@@ -54,6 +54,7 @@ Current first-phase support:
 - `normalize <file>` to inspect how one chat export/transcript is normalized before mining
 - `mcp --setup` to print Python-style quick setup instructions for wiring the Rust MCP server into MCP-capable hosts
 - `mcp` now defaults to the Python-style quick setup output, while `mcp --serve` explicitly starts the stdio server
+- MCP now also includes helper tools for built-in docs and harness hooks: `instructions`, `hook_run`
 - MCP now also includes the layer trio: `wake_up`, `recall`, `layers_status`
 - MCP now also includes maintenance tools: `repair`, `repair_scan`, `repair_prune`, `repair_rebuild`, `compress`, `dedup`
 - MCP now also includes project bootstrap helpers: `onboarding`, `normalize`, `split`
@@ -206,6 +207,7 @@ Current MCP compatibility notes:
 - `mempalace_wake_up`, `mempalace_recall`, and `mempalace_layers_status` now expose the Rust Layer 0-3 surfaces through MCP
 - `mempalace_repair`, `mempalace_repair_scan`, `mempalace_repair_prune`, `mempalace_repair_rebuild`, `mempalace_compress`, and `mempalace_dedup` now expose the Rust maintenance/AAAK surface through MCP
 - `mempalace_onboarding`, `mempalace_normalize`, and `mempalace_split` now expose the Rust project bootstrap and transcript-prep surface through MCP
+- `mempalace_instructions` and `mempalace_hook_run` now expose the built-in instruction markdown and harness hook runner through MCP
 - `mempalace_traverse`, `mempalace_find_tunnels`, and `mempalace_graph_stats` now expose a Python-style room graph built from Rust drawer metadata
 - `mempalace_kg_query`, `mempalace_kg_timeline`, and `mempalace_kg_stats` now expose a Python-style temporal KG read surface built from Rust SQLite triples
 - `mempalace_kg_add` and `mempalace_kg_invalidate` now expose Python-style KG write operations with structured success payloads

@@ -70,6 +70,8 @@ async fn mcp_read_tools_work() {
     assert!(tool_names.contains(&"mempalace_onboarding"));
     assert!(tool_names.contains(&"mempalace_normalize"));
     assert!(tool_names.contains(&"mempalace_split"));
+    assert!(tool_names.contains(&"mempalace_instructions"));
+    assert!(tool_names.contains(&"mempalace_hook_run"));
     assert!(tool_names.contains(&"mempalace_kg_query"));
     assert!(tool_names.contains(&"mempalace_kg_add"));
     assert!(tool_names.contains(&"mempalace_kg_invalidate"));
@@ -394,6 +396,55 @@ async fn mcp_project_bootstrap_tools_work() {
 }
 
 #[tokio::test]
+async fn mcp_helper_tools_work() {
+    let tmp = tempdir().unwrap();
+    let transcripts = tmp.path().join("session.jsonl");
+    let mut lines = Vec::new();
+    for idx in 0..15 {
+        lines.push(format!(
+            "{{\"type\":\"event_msg\",\"payload\":{{\"type\":\"user_message\",\"message\":\"user turn {idx}\"}}}}"
+        ));
+    }
+    std::fs::write(&transcripts, lines.join("\n")).unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+
+    let instructions = handle_request(
+        json!({"method":"tools/call","id":130,"params":{"name":"mempalace_instructions","arguments":{"name":"help"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let instructions_text = instructions["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert!(instructions_text.contains("\"kind\": \"instructions\""));
+    assert!(instructions_text.contains("# MemPalace"));
+    assert!(instructions_text.contains("Slash Commands"));
+
+    let hook_run = handle_request(
+        json!({"method":"tools/call","id":131,"params":{"name":"mempalace_hook_run","arguments":{
+            "hook": "stop",
+            "harness": "codex",
+            "session_id": "demo-session",
+            "stop_hook_active": "false",
+            "transcript_path": transcripts
+        }}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let hook_text = hook_run["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(hook_text.contains("\"kind\": \"hook_run\""));
+    assert!(hook_text.contains("\"hook\": \"stop\""));
+    assert!(hook_text.contains("\"decision\": \"block\""));
+    assert!(hook_text.contains("AUTO-SAVE checkpoint"));
+}
+
+#[tokio::test]
 async fn mcp_project_bootstrap_tools_return_tool_level_errors_for_missing_args() {
     let tmp = tempdir().unwrap();
     let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
@@ -418,6 +469,54 @@ async fn mcp_project_bootstrap_tools_return_tool_level_errors_for_missing_args()
     ] {
         let response = handle_request(
             json!({"method":"tools/call","id":110,"params":{"name":tool_name,"arguments":{}}}),
+            &config,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert!(response.get("error").is_none());
+        let text = response["result"]["content"][0]["text"].as_str().unwrap();
+        let payload: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert_eq!(payload["error"].as_str().unwrap(), expected_error);
+        assert_eq!(payload["hint"].as_str().unwrap(), expected_hint);
+    }
+}
+
+#[tokio::test]
+async fn mcp_helper_tools_return_tool_level_errors_for_bad_inputs() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+
+    for (tool_name, arguments, expected_error, expected_hint) in [
+        (
+            "mempalace_instructions",
+            json!({}),
+            "Instructions error: MCP error: mempalace_instructions requires name",
+            "Provide an instruction name, then rerun mempalace_instructions.",
+        ),
+        (
+            "mempalace_hook_run",
+            json!({}),
+            "Hook run error: MCP error: mempalace_hook_run requires hook",
+            "Provide hook and harness, then rerun mempalace_hook_run.",
+        ),
+        (
+            "mempalace_hook_run",
+            json!({"hook":"stop","harness":"broken"}),
+            "Hook run error: Invalid argument: Unknown harness: broken",
+            "Check hook, harness, and transcript_path, then rerun mempalace_hook_run.",
+        ),
+        (
+            "mempalace_instructions",
+            json!({"name":"unknown"}),
+            "Instructions error: Invalid argument: Unknown instructions: unknown",
+            "Use one of help, init, mine, search, or status, then rerun mempalace_instructions.",
+        ),
+    ] {
+        let response = handle_request(
+            json!({"method":"tools/call","id":140,"params":{"name":tool_name,"arguments":arguments}}),
             &config,
         )
         .await

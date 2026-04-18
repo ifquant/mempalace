@@ -19,7 +19,16 @@ pub fn run_hook(hook_name: &str, harness: &str, config: &AppConfig) -> Result<Va
     let mut raw = String::new();
     let _ = std::io::stdin().read_to_string(&mut raw);
     let data = serde_json::from_str::<Value>(&raw).unwrap_or_else(|_| json!({}));
-    let parsed = parse_harness_input(&data, harness)?;
+    run_hook_with_data(hook_name, harness, &data, config)
+}
+
+pub fn run_hook_with_data(
+    hook_name: &str,
+    harness: &str,
+    data: &Value,
+    config: &AppConfig,
+) -> Result<Value> {
+    let parsed = parse_harness_input(data, harness)?;
 
     match hook_name {
         "session-start" => hook_session_start(&parsed, config),
