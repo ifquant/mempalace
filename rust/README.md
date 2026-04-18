@@ -26,6 +26,12 @@ facade mirroring Python `layers.py`:
 - `layer1()` for the essential story view
 - `wake_up()` / `recall()` / `search()` / `status()` for the higher-level stack surfaces
 
+Rust library structure now also includes a `searcher` module with a programmatic search facade
+mirroring Python `searcher.py`:
+
+- `Searcher::search()` for programmatic Layer 3 retrieval
+- `render_search_human()` for Python-style human-readable result blocks
+
 Current first-phase support:
 
 - `init`

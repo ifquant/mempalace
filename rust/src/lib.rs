@@ -13,6 +13,7 @@ pub mod model;
 pub mod onboarding;
 pub mod palace;
 pub mod registry;
+pub mod searcher;
 pub mod service;
 pub mod spellcheck;
 pub mod split;

@@ -1516,37 +1516,7 @@ fn print_no_palace(config: &AppConfig) -> anyhow::Result<()> {
 }
 
 fn print_search_human(summary: &mempalace_rs::model::SearchResults) {
-    if summary.results.is_empty() {
-        println!("\n  No results found for: \"{}\"", summary.query);
-        return;
-    }
-
-    println!("\n{}", "=".repeat(60));
-    println!("  Results for: \"{}\"", summary.query);
-    if let Some(wing) = &summary.filters.wing {
-        println!("  Wing: {wing}");
-    }
-    if let Some(room) = &summary.filters.room {
-        println!("  Room: {room}");
-    }
-    println!("{}\n", "=".repeat(60));
-
-    for (index, hit) in summary.results.iter().enumerate() {
-        let similarity = hit
-            .similarity
-            .map(|value| value.to_string())
-            .unwrap_or_else(|| "?".to_string());
-        println!("  [{}] {} / {}", index + 1, hit.wing, hit.room);
-        println!("      Source: {}", hit.source_file);
-        println!("      Match:  {similarity}");
-        println!();
-        for line in hit.text.trim().lines() {
-            println!("      {line}");
-        }
-        println!();
-        println!("  {}", "─".repeat(56));
-    }
-    println!();
+    print!("{}", mempalace_rs::searcher::render_search_human(summary));
 }
 
 fn print_normalize_human(summary: &serde_json::Value) {
