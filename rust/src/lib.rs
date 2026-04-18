@@ -7,6 +7,7 @@ pub mod dedup;
 pub mod dialect;
 pub mod drawers;
 pub mod embed;
+pub mod embedding_runtime;
 pub mod entity_detector;
 pub mod error;
 pub mod hook;

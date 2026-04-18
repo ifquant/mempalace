@@ -97,6 +97,13 @@ planning shared by CLI and future library callers:
 - `CompressSummaryContext` for stable CLI/MCP summary assembly
 - shared conversion from `DrawerRecord` into persisted AAAK rows
 
+Rust library structure now also includes an `embedding_runtime` module for reusable
+doctor/prepare-embedding orchestration around the embedder:
+
+- `finalize_doctor_summary()` for filling stable path/version fields
+- `prepare_embedding_run()` for warmup retry flow and result capture
+- `EmbeddingRuntimeContext` for stable doctor/prepare summary assembly
+
 Current first-phase support:
 
 - `init`
@@ -230,6 +237,7 @@ Current project-mining behavior:
 - search hit basename normalization, similarity rounding, and stable ordering now also live in the `searcher` module instead of staying embedded inside `service`
 - manual drawer construction plus SQLite-row-to-input conversion now also live in the `drawers` module instead of staying embedded inside `service`
 - AAAK `CompressedDrawer` generation and compression summary assembly now also live in the `compress` module instead of staying embedded inside `service`
+- doctor path/version backfill and prepare-embedding warmup retry handling now also live in `embedding_runtime` instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring

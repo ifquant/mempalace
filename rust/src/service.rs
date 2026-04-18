@@ -15,6 +15,9 @@ use crate::dedup::{DedupSummaryContext, Deduplicator};
 use crate::dialect::{Dialect, count_tokens};
 use crate::drawers::{build_manual_drawer, drawer_input_from_record, sanitize_name};
 use crate::embed::{EmbeddingProvider, build_embedder};
+use crate::embedding_runtime::{
+    EmbeddingRuntimeContext, finalize_doctor_summary, prepare_embedding_run,
+};
 use crate::entity_detector::detect_entities_for_registry;
 use crate::error::{MempalaceError, Result};
 use crate::knowledge_graph::KnowledgeGraph;
@@ -403,14 +406,16 @@ impl App {
 
     pub async fn doctor(&self, warm_embedding: bool) -> Result<DoctorSummary> {
         self.config.ensure_dirs()?;
-        let mut summary = self.embedder.doctor(
-            &self.config.palace_path.display().to_string(),
-            warm_embedding,
-        );
-        summary.sqlite_path = self.config.sqlite_path().display().to_string();
-        summary.lance_path = self.config.lance_path().display().to_string();
-        summary.version = VERSION.to_string();
-        Ok(summary)
+        let context = EmbeddingRuntimeContext {
+            palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            lance_path: self.config.lance_path().display().to_string(),
+            version: VERSION.to_string(),
+            provider: self.embedder.profile().provider.clone(),
+            model: self.embedder.profile().model.clone(),
+        };
+        let summary = self.embedder.doctor(&context.palace_path, warm_embedding);
+        Ok(finalize_doctor_summary(summary, &context))
     }
 
     pub async fn prepare_embedding(
@@ -419,55 +424,22 @@ impl App {
         wait_ms: u64,
     ) -> Result<PrepareEmbeddingSummary> {
         self.config.ensure_dirs()?;
-
-        let total_attempts = attempts.max(1);
-        let mut last_error = None;
-        let mut last_doctor = self
-            .embedder
-            .doctor(&self.config.palace_path.display().to_string(), false);
-
-        for attempt in 0..total_attempts {
-            let doctor = self
-                .embedder
-                .doctor(&self.config.palace_path.display().to_string(), true);
-            let success = doctor.warmup_ok;
-            last_error = doctor.warmup_error.clone();
-            last_doctor = doctor;
-
-            if success {
-                return Ok(PrepareEmbeddingSummary {
-                    kind: "prepare_embedding".to_string(),
-                    palace_path: self.config.palace_path.display().to_string(),
-                    sqlite_path: self.config.sqlite_path().display().to_string(),
-                    lance_path: self.config.lance_path().display().to_string(),
-                    version: VERSION.to_string(),
-                    provider: self.embedder.profile().provider.clone(),
-                    model: self.embedder.profile().model.clone(),
-                    attempts: attempt + 1,
-                    success: true,
-                    last_error: None,
-                    doctor: last_doctor,
-                });
-            }
-
-            if attempt + 1 < total_attempts && wait_ms > 0 {
-                tokio::time::sleep(std::time::Duration::from_millis(wait_ms)).await;
-            }
-        }
-
-        Ok(PrepareEmbeddingSummary {
-            kind: "prepare_embedding".to_string(),
+        let context = EmbeddingRuntimeContext {
             palace_path: self.config.palace_path.display().to_string(),
             sqlite_path: self.config.sqlite_path().display().to_string(),
             lance_path: self.config.lance_path().display().to_string(),
             version: VERSION.to_string(),
             provider: self.embedder.profile().provider.clone(),
             model: self.embedder.profile().model.clone(),
-            attempts: total_attempts,
-            success: false,
-            last_error,
-            doctor: last_doctor,
-        })
+        };
+        let run = prepare_embedding_run(
+            self.embedder.clone(),
+            &context.palace_path,
+            attempts,
+            wait_ms,
+        )
+        .await?;
+        Ok(run.into_summary(&context))
     }
 
     pub async fn list_wings(&self) -> Result<BTreeMap<String, usize>> {
