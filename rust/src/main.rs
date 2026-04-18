@@ -283,6 +283,54 @@ enum RegistryCommand {
         #[arg(help = "Print Python-style human-readable learn summary instead of JSON")]
         human: bool,
     },
+    #[command(about = "Add one person to entity_registry.json")]
+    AddPerson {
+        #[arg(help = "Project directory containing entity_registry.json")]
+        dir: PathBuf,
+        #[arg(help = "Person name to add")]
+        name: String,
+        #[arg(long, default_value = "")]
+        #[arg(help = "Relationship or role")]
+        relationship: String,
+        #[arg(long, default_value = "work")]
+        #[arg(help = "Context bucket: work or personal")]
+        context: String,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable write summary instead of JSON")]
+        human: bool,
+    },
+    #[command(about = "Add one project to entity_registry.json")]
+    AddProject {
+        #[arg(help = "Project directory containing entity_registry.json")]
+        dir: PathBuf,
+        #[arg(help = "Project name to add")]
+        name: String,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable write summary instead of JSON")]
+        human: bool,
+    },
+    #[command(about = "Add an alias for an existing person in entity_registry.json")]
+    AddAlias {
+        #[arg(help = "Project directory containing entity_registry.json")]
+        dir: PathBuf,
+        #[arg(help = "Existing canonical person name")]
+        canonical: String,
+        #[arg(help = "Alias or nickname to add")]
+        alias: String,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable write summary instead of JSON")]
+        human: bool,
+    },
+    #[command(about = "Extract known people and unknown capitalized candidates from a query")]
+    Query {
+        #[arg(help = "Project directory containing entity_registry.json")]
+        dir: PathBuf,
+        #[arg(help = "Query text to inspect")]
+        query: String,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable query summary instead of JSON")]
+        human: bool,
+    },
 }
 
 #[tokio::main]
@@ -1007,6 +1055,61 @@ async fn main() -> anyhow::Result<()> {
                     println!("{}", serde_json::to_string_pretty(&summary)?);
                 }
             }
+            RegistryCommand::AddPerson {
+                dir,
+                name,
+                relationship,
+                context,
+                human,
+            } => {
+                let mut config = AppConfig::resolve(palace.as_ref())?;
+                apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+                let app = App::new(config)?;
+                let summary = app.registry_add_person(&dir, &name, &relationship, &context)?;
+                if human {
+                    print_registry_write_human(&summary);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                }
+            }
+            RegistryCommand::AddProject { dir, name, human } => {
+                let mut config = AppConfig::resolve(palace.as_ref())?;
+                apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+                let app = App::new(config)?;
+                let summary = app.registry_add_project(&dir, &name)?;
+                if human {
+                    print_registry_write_human(&summary);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                }
+            }
+            RegistryCommand::AddAlias {
+                dir,
+                canonical,
+                alias,
+                human,
+            } => {
+                let mut config = AppConfig::resolve(palace.as_ref())?;
+                apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+                let app = App::new(config)?;
+                let summary = app.registry_add_alias(&dir, &canonical, &alias)?;
+                if human {
+                    print_registry_write_human(&summary);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                }
+            }
+            RegistryCommand::Query { dir, query, human } => {
+                let mut config = AppConfig::resolve(palace.as_ref())?;
+                apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+                let app = App::new(config)?;
+                let summary = app.registry_query(&dir, &query)?;
+                if human {
+                    print_registry_query_human(&summary);
+                } else {
+                    println!("{}", serde_json::to_string_pretty(&summary)?);
+                }
+            }
         },
         Command::Mcp { setup } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
@@ -1554,6 +1657,40 @@ fn print_registry_learn_human(summary: &mempalace_rs::model::RegistryLearnResult
     println!(
         "\n  Totals: {} people, {} projects",
         summary.total_people, summary.total_projects
+    );
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_registry_write_human(summary: &mempalace_rs::model::RegistryWriteResult) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Registry Write");
+    println!("{}\n", "=".repeat(55));
+    println!("  Registry: {}", summary.registry_path);
+    println!("  Action: {}", summary.action);
+    println!("  Name: {}", summary.name);
+    if let Some(canonical) = &summary.canonical {
+        println!("  Canonical: {canonical}");
+    }
+    println!("  Mode: {}", summary.mode);
+    println!(
+        "  Totals: {} people, {} projects",
+        summary.people_count, summary.project_count
+    );
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_registry_query_human(summary: &mempalace_rs::model::RegistryQueryResult) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Registry Query");
+    println!("{}\n", "=".repeat(55));
+    println!("  Registry: {}", summary.registry_path);
+    println!("  Query: {}", summary.query);
+    println!("  People: {}", summary.people.join(", "));
+    println!(
+        "  Unknown candidates: {}",
+        summary.unknown_candidates.join(", ")
     );
     println!("\n{}", "=".repeat(55));
     println!();

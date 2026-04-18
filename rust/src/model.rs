@@ -521,3 +521,25 @@ pub struct RegistryLearnResult {
     pub total_people: usize,
     pub total_projects: usize,
 }
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RegistryWriteResult {
+    pub kind: String,
+    pub registry_path: String,
+    pub action: String,
+    pub success: bool,
+    pub name: String,
+    pub canonical: Option<String>,
+    pub mode: String,
+    pub people_count: usize,
+    pub project_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct RegistryQueryResult {
+    pub kind: String,
+    pub registry_path: String,
+    pub query: String,
+    pub people: Vec<String>,
+    pub unknown_candidates: Vec<String>,
+}

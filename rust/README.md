@@ -44,11 +44,14 @@ Current first-phase support:
 - `hook run --hook session-start|stop|precompact --harness claude-code|codex` for harness-side auto-save integration
 - `instructions <help|init|mine|search|status>` to print built-in skill guidance markdown
 - `registry summary|lookup|learn` to inspect and update the project-local `entity_registry.json`
+- `registry add-person|add-project|add-alias|query` to maintain and query the local entity registry without editing JSON by hand
 - `split <dir>` to detect transcript mega-files, preview session boundaries, and split them into per-session `.txt` files with `.mega_backup` rollover
 - `mcp --setup` to print Python-style quick setup instructions for wiring the Rust MCP server into MCP-capable hosts
 - Rust now has a standalone `registry` surface instead of treating `entity_registry.json` as a bootstrap-only artifact
 - `registry lookup` now mirrors Python's ambiguous-name disambiguation for common English words such as `Ever`
 - `registry learn` now reuses the local entity detector to append newly discovered people/projects into `entity_registry.json`
+- `registry add-alias` now stores nicknames as alias entries with canonical backreferences, so query extraction returns canonical people names
+- `registry query` now extracts known people plus still-unknown capitalized candidates from free-form user queries
 - `migrate`
 - `repair`
 - `repair scan|prune|rebuild` to inspect vector drift, prune queued orphan IDs, and rebuild LanceDB from SQLite
@@ -151,6 +154,10 @@ Useful verification command:
 - `cargo run -- registry summary /path/to/project`
 - `cargo run -- registry lookup /path/to/project Riley --context "Riley said the deploy was fixed"`
 - `cargo run -- registry learn /path/to/project`
+- `cargo run -- registry add-person /path/to/project Riley --relationship daughter --context personal`
+- `cargo run -- registry add-project /path/to/project Lantern`
+- `cargo run -- registry add-alias /path/to/project Riley Ry`
+- `cargo run -- registry query /path/to/project "Ry said Lantern should ship with Max"`
 - `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding`
 - `MEMPALACE_RS_TEST_HF_ENDPOINT=https://hf-mirror.com cargo test cli_fastembed_prepare_mine_search_smoke -- --ignored --nocapture`
 

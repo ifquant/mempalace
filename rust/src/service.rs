@@ -24,9 +24,10 @@ use crate::model::{
     GraphStatsTunnel, GraphTraversalError, GraphTraversalNode, GraphTraversalResult, InitSummary,
     KgInvalidateResult, KgQueryResult, KgStats, KgTimelineResult, KgTriple, KgWriteResult,
     MigrateSummary, MineProgressEvent, MineRequest, MineSummary, PrepareEmbeddingSummary,
-    RegistryLearnResult, RegistryLookupResult, RegistrySummaryResult, RepairPruneSummary,
-    RepairRebuildSummary, RepairScanSummary, RepairSummary, Rooms, SearchFilters, SearchHit,
-    SearchResults, Status, Taxonomy, TunnelRoom, WakeUpSummary,
+    RegistryLearnResult, RegistryLookupResult, RegistryQueryResult, RegistrySummaryResult,
+    RegistryWriteResult, RepairPruneSummary, RepairRebuildSummary, RepairScanSummary,
+    RepairSummary, Rooms, SearchFilters, SearchHit, SearchResults, Status, Taxonomy, TunnelRoom,
+    WakeUpSummary,
 };
 use crate::registry::EntityRegistry;
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, DrawerRecord, GraphRoomRow, SqliteStore};
@@ -1000,6 +1001,87 @@ impl App {
             added_projects: learned.added_projects,
             total_people: learned.total_people,
             total_projects: learned.total_projects,
+        })
+    }
+
+    pub fn registry_add_person(
+        &self,
+        project_dir: &Path,
+        name: &str,
+        relationship: &str,
+        context: &str,
+    ) -> Result<RegistryWriteResult> {
+        let registry_path = project_dir.join("entity_registry.json");
+        let mut registry = EntityRegistry::load(&registry_path)?;
+        registry.add_person(name, relationship, context);
+        registry.save(&registry_path)?;
+        Ok(RegistryWriteResult {
+            kind: "registry_write".to_string(),
+            registry_path: registry_path.display().to_string(),
+            action: "add_person".to_string(),
+            success: true,
+            name: name.to_string(),
+            canonical: None,
+            mode: registry.mode.clone(),
+            people_count: registry.people.len(),
+            project_count: registry.projects.len(),
+        })
+    }
+
+    pub fn registry_add_project(
+        &self,
+        project_dir: &Path,
+        project: &str,
+    ) -> Result<RegistryWriteResult> {
+        let registry_path = project_dir.join("entity_registry.json");
+        let mut registry = EntityRegistry::load(&registry_path)?;
+        registry.add_project(project);
+        registry.save(&registry_path)?;
+        Ok(RegistryWriteResult {
+            kind: "registry_write".to_string(),
+            registry_path: registry_path.display().to_string(),
+            action: "add_project".to_string(),
+            success: true,
+            name: project.to_string(),
+            canonical: None,
+            mode: registry.mode.clone(),
+            people_count: registry.people.len(),
+            project_count: registry.projects.len(),
+        })
+    }
+
+    pub fn registry_add_alias(
+        &self,
+        project_dir: &Path,
+        canonical: &str,
+        alias: &str,
+    ) -> Result<RegistryWriteResult> {
+        let registry_path = project_dir.join("entity_registry.json");
+        let mut registry = EntityRegistry::load(&registry_path)?;
+        registry.add_alias(canonical, alias);
+        registry.save(&registry_path)?;
+        Ok(RegistryWriteResult {
+            kind: "registry_write".to_string(),
+            registry_path: registry_path.display().to_string(),
+            action: "add_alias".to_string(),
+            success: true,
+            name: alias.to_string(),
+            canonical: Some(canonical.to_string()),
+            mode: registry.mode.clone(),
+            people_count: registry.people.len(),
+            project_count: registry.projects.len(),
+        })
+    }
+
+    pub fn registry_query(&self, project_dir: &Path, query: &str) -> Result<RegistryQueryResult> {
+        let registry_path = project_dir.join("entity_registry.json");
+        let registry = EntityRegistry::load(&registry_path)?;
+        Ok(RegistryQueryResult {
+            kind: "registry_query".to_string(),
+            registry_path: registry_path.display().to_string(),
+            query: query.to_string(),
+            people: registry.extract_people_from_query(query),
+            unknown_candidates: registry.extract_unknown_candidates(query),
         })
     }
 

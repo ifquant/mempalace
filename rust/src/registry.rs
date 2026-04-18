@@ -300,6 +300,67 @@ impl EntityRegistry {
         }
     }
 
+    pub fn add_person(&mut self, name: &str, relationship: &str, context: &str) {
+        self.people.insert(
+            name.to_string(),
+            RegistryPerson {
+                source: "manual".to_string(),
+                contexts: vec![context.to_string()],
+                aliases: Vec::new(),
+                relationship: relationship.to_string(),
+                confidence: 1.0,
+                canonical: None,
+            },
+        );
+        self.recompute_ambiguous_flags();
+    }
+
+    pub fn add_project(&mut self, project: &str) {
+        if !self
+            .projects
+            .iter()
+            .any(|existing| existing.eq_ignore_ascii_case(project))
+        {
+            self.projects.push(project.to_string());
+            self.projects.sort();
+        }
+    }
+
+    pub fn add_alias(&mut self, canonical: &str, alias: &str) {
+        let cloned = if let Some(person) = self.people.get_mut(canonical) {
+            if !person
+                .aliases
+                .iter()
+                .any(|existing| existing.eq_ignore_ascii_case(alias))
+            {
+                person.aliases.push(alias.to_string());
+                person.aliases.sort();
+            }
+            Some((
+                person.source.clone(),
+                person.contexts.clone(),
+                person.relationship.clone(),
+                person.confidence,
+            ))
+        } else {
+            None
+        };
+        if let Some((source, contexts, relationship, confidence)) = cloned {
+            self.people.insert(
+                alias.to_string(),
+                RegistryPerson {
+                    source,
+                    contexts,
+                    aliases: vec![canonical.to_string()],
+                    relationship,
+                    confidence,
+                    canonical: Some(canonical.to_string()),
+                },
+            );
+        }
+        self.recompute_ambiguous_flags();
+    }
+
     pub fn lookup(&self, word: &str, context: &str) -> RegistryLookupResult {
         for (canonical, info) in &self.people {
             let aliases = info.aliases.iter().map(|alias| alias.to_ascii_lowercase());
@@ -371,6 +432,60 @@ impl EntityRegistry {
             people,
             projects: self.projects.clone(),
         }
+    }
+
+    pub fn extract_people_from_query(&self, query: &str) -> Vec<String> {
+        let mut found = Vec::new();
+        for (canonical, info) in &self.people {
+            let canonical_name = info
+                .canonical
+                .as_ref()
+                .cloned()
+                .unwrap_or_else(|| canonical.clone());
+            let names = std::iter::once(canonical.as_str())
+                .chain(info.aliases.iter().map(String::as_str))
+                .collect::<Vec<_>>();
+            for name in names {
+                let pattern = format!(r"\b{}\b", regex::escape(name));
+                let matches = Regex::new(&pattern)
+                    .map(|regex| regex.is_match(query))
+                    .unwrap_or(false);
+                if !matches {
+                    continue;
+                }
+
+                if self
+                    .ambiguous_flags
+                    .iter()
+                    .any(|flag| flag.eq_ignore_ascii_case(name))
+                {
+                    let resolved = self.lookup(name, query);
+                    if resolved.r#type == "person" && !found.contains(&canonical_name) {
+                        found.push(canonical_name.clone());
+                    }
+                } else if !found.contains(&canonical_name) {
+                    found.push(canonical_name.clone());
+                }
+            }
+        }
+        found
+    }
+
+    pub fn extract_unknown_candidates(&self, query: &str) -> Vec<String> {
+        let regex = Regex::new(r"\b[A-Z][a-z]{2,15}\b").expect("capitalized word regex");
+        let mut unknown = regex
+            .captures_iter(query)
+            .filter_map(|capture| capture.get(0).map(|value| value.as_str().to_string()))
+            .filter(|word| {
+                !COMMON_ENGLISH_WORDS
+                    .iter()
+                    .any(|known| known.eq_ignore_ascii_case(word))
+                    && self.lookup(word, "").r#type == "unknown"
+            })
+            .collect::<Vec<_>>();
+        unknown.sort();
+        unknown.dedup();
+        unknown
     }
 
     fn recompute_ambiguous_flags(&mut self) {
@@ -514,5 +629,28 @@ mod tests {
         let loaded = EntityRegistry::load(&path).unwrap();
         assert!(loaded.people.contains_key("Jordan"));
         assert_eq!(loaded.projects, vec!["Atlas".to_string()]);
+    }
+
+    #[test]
+    fn registry_extracts_people_and_unknown_candidates_from_query() {
+        let mut registry = EntityRegistry::empty("work");
+        registry.seed(
+            "work",
+            &[SeedPerson {
+                name: "Jordan".to_string(),
+                relationship: "coworker".to_string(),
+                context: "work".to_string(),
+            }],
+            &["Atlas".to_string()],
+            &BTreeMap::new(),
+        );
+        registry.add_alias("Jordan", "Jordy");
+
+        let people = registry.extract_people_from_query("Jordy said Atlas should ship with Riley.");
+        assert_eq!(people, vec!["Jordan".to_string()]);
+
+        let unknown =
+            registry.extract_unknown_candidates("Jordy said Atlas should ship with Riley.");
+        assert_eq!(unknown, vec!["Riley".to_string()]);
     }
 }
