@@ -5,13 +5,14 @@ use std::sync::Arc;
 
 use crate::VERSION;
 use crate::bootstrap::bootstrap_project;
+use crate::compress::{CompressSummaryContext, CompressionRun};
 use crate::config::AppConfig;
 use crate::convo::{
     ConversationChunk, MIN_CONVO_CHUNK_SIZE, detect_convo_room, exchange_rooms,
     extract_exchange_chunks, extract_general_memories, general_rooms, scan_convo_files,
 };
 use crate::dedup::{DedupSummaryContext, Deduplicator};
-use crate::dialect::{CompressMetadata, Dialect, count_tokens};
+use crate::dialect::{Dialect, count_tokens};
 use crate::drawers::{build_manual_drawer, drawer_input_from_record, sanitize_name};
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::entity_detector::detect_entities_for_registry;
@@ -559,58 +560,19 @@ impl App {
         sqlite.init_schema()?;
         sqlite.ensure_embedding_profile(self.embedder.profile())?;
         let drawers = sqlite.list_drawers(wing)?;
-
-        let mut original_tokens = 0usize;
-        let mut compressed_tokens = 0usize;
-        let entries = drawers
-            .into_iter()
-            .map(|drawer| {
-                let aaak = dialect.compress(
-                    &drawer.text,
-                    CompressMetadata {
-                        wing: &drawer.wing,
-                        room: &drawer.room,
-                        source_file: &drawer.source_file,
-                        filed_at: Some(&drawer.filed_at),
-                    },
-                );
-                let stats = dialect.compression_stats(&drawer.text, &aaak);
-                original_tokens += stats.original_tokens;
-                compressed_tokens += stats.compressed_tokens;
-                crate::model::CompressedDrawer {
-                    drawer_id: drawer.id,
-                    wing: drawer.wing,
-                    room: drawer.room,
-                    source_file: drawer.source_file,
-                    source_path: drawer.source_path,
-                    ingest_mode: drawer.ingest_mode,
-                    extract_mode: drawer.extract_mode,
-                    aaak,
-                    original_tokens: stats.original_tokens,
-                    compressed_tokens: stats.compressed_tokens,
-                    compression_ratio: stats.ratio,
-                }
-            })
-            .collect::<Vec<_>>();
+        let run = CompressionRun::from_drawers(drawers, &dialect);
 
         if !dry_run {
-            sqlite.replace_compressed_drawers(wing, &entries)?;
+            sqlite.replace_compressed_drawers(wing, &run.entries)?;
         }
 
-        Ok(CompressSummary {
-            kind: "compress".to_string(),
+        Ok(run.into_summary(CompressSummaryContext {
             palace_path: self.config.palace_path.display().to_string(),
             sqlite_path: self.config.sqlite_path().display().to_string(),
             version: VERSION.to_string(),
             wing: wing.map(ToOwned::to_owned),
             dry_run,
-            processed: entries.len(),
-            stored: if dry_run { 0 } else { entries.len() },
-            original_tokens,
-            compressed_tokens,
-            compression_ratio: original_tokens as f64 / compressed_tokens.max(1) as f64,
-            entries,
-        })
+        }))
     }
 
     pub async fn wake_up(&self, wing: Option<&str>) -> Result<WakeUpSummary> {

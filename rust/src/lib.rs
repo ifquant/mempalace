@@ -1,5 +1,6 @@
 pub mod audit;
 pub mod bootstrap;
+pub mod compress;
 pub mod config;
 pub mod convo;
 pub mod dedup;

@@ -90,6 +90,13 @@ helpers shared by MCP/manual filing and rebuild paths:
 - `drawer_input_from_record()` for converting SQLite drawer rows back into write inputs
 - shared `sanitize_name()` validation for drawer/KG write surfaces
 
+Rust library structure now also includes a `compress` module for reusable AAAK compression
+planning shared by CLI and future library callers:
+
+- `CompressionRun::from_drawers()` for building `CompressedDrawer` entries plus token totals
+- `CompressSummaryContext` for stable CLI/MCP summary assembly
+- shared conversion from `DrawerRecord` into persisted AAAK rows
+
 Current first-phase support:
 
 - `init`
@@ -222,6 +229,7 @@ Current project-mining behavior:
 - layer identity loading plus L1/L2 text rendering now also live in the `layers` module instead of staying embedded inside `service`
 - search hit basename normalization, similarity rounding, and stable ordering now also live in the `searcher` module instead of staying embedded inside `service`
 - manual drawer construction plus SQLite-row-to-input conversion now also live in the `drawers` module instead of staying embedded inside `service`
+- AAAK `CompressedDrawer` generation and compression summary assembly now also live in the `compress` module instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring
