@@ -44,6 +44,7 @@ Current first-phase support:
 - `hook run --hook session-start|stop|precompact --harness claude-code|codex` for harness-side auto-save integration
 - `instructions <help|init|mine|search|status>` to print built-in skill guidance markdown
 - `split <dir>` to detect transcript mega-files, preview session boundaries, and split them into per-session `.txt` files with `.mega_backup` rollover
+- `mcp --setup` to print Python-style quick setup instructions for wiring the Rust MCP server into MCP-capable hosts
 - `migrate`
 - `repair`
 - `status`

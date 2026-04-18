@@ -188,7 +188,11 @@ enum Command {
         name: String,
     },
     #[command(about = "Run the read-only MCP server on stdio")]
-    Mcp,
+    Mcp {
+        #[arg(long)]
+        #[arg(help = "Print Python-style MCP setup instructions instead of starting the server")]
+        setup: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -761,10 +765,14 @@ async fn main() -> anyhow::Result<()> {
             let text = instructions::render(&name)?;
             print!("{text}");
         }
-        Command::Mcp => {
+        Command::Mcp { setup } => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
             apply_cli_overrides(&mut config, hf_endpoint.as_deref());
-            mcp::run_stdio(config).await?;
+            if setup {
+                print_mcp_setup(&config);
+            } else {
+                mcp::run_stdio(config).await?;
+            }
         }
     }
 
@@ -775,6 +783,32 @@ fn apply_cli_overrides(config: &mut AppConfig, hf_endpoint: Option<&str>) {
     if let Some(endpoint) = hf_endpoint {
         config.embedding.hf_endpoint = Some(endpoint.to_string());
     }
+}
+
+fn print_mcp_setup(config: &AppConfig) {
+    let base_server_cmd = "mempalace-rs mcp";
+    let current_server_cmd = format!(
+        "{base_server_cmd} --palace {}",
+        shell_quote(&config.palace_path.display().to_string())
+    );
+
+    println!("MemPalace MCP quick setup:");
+    println!("  claude mcp add mempalace -- {current_server_cmd}");
+    println!("\nRun the server directly:");
+    println!("  {current_server_cmd}");
+    println!("\nOptional custom palace:");
+    println!("  claude mcp add mempalace -- {base_server_cmd} --palace /path/to/palace");
+    println!("  {base_server_cmd} --palace /path/to/palace");
+}
+
+fn shell_quote(value: &str) -> String {
+    if value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '/' | '.' | '-' | '_' | ':'))
+    {
+        return value.to_string();
+    }
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
 fn palace_exists(config: &AppConfig) -> bool {
