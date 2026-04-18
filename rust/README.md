@@ -38,6 +38,8 @@ Current first-phase support:
 - `search`
 - `compress` to generate and persist AAAK summaries for existing drawers
 - `wake-up` to render palace-local `identity.txt` plus an L1 essential-story summary
+- `hook run --hook session-start|stop|precompact --harness claude-code|codex` for harness-side auto-save integration
+- `instructions <help|init|mine|search|status>` to print built-in skill guidance markdown
 - `migrate`
 - `repair`
 - `status`
@@ -159,6 +161,7 @@ Current MCP compatibility notes:
 - `mempalace_add_drawer` and `mempalace_kg_add` can now auto-bootstrap a new Rust palace, matching the Python write-first workflow more closely
 - `compress` stores AAAK output in SQLite table `compressed_drawers`, keeping the summary layer local to the palace without introducing a second external backend
 - `wake-up` reads identity from `<palace>/identity.txt` instead of the Python global `~/.mempalace/identity.txt`, keeping Rust's local-first palace self-contained
+- hook state now lives under `<palace>/hook_state/` instead of Python's global `~/.mempalace/hook_state/`, keeping auto-save bookkeeping local to the active palace
 
 Local runtime note:
 
@@ -169,7 +172,6 @@ Local runtime note:
 Intentionally not in this first Rust phase:
 
 - the remaining Python write MCP surface beyond drawer/KG/diary basics
-- hooks
 - direct compatibility with Python palace data
 
 Current repair scope:

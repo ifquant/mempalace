@@ -4,6 +4,8 @@ pub mod convo;
 pub mod dialect;
 pub mod embed;
 pub mod error;
+pub mod hook;
+pub mod instructions;
 pub mod mcp;
 pub mod model;
 pub mod service;

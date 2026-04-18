@@ -228,6 +228,140 @@ fn cli_wake_up_human_prints_identity_and_layer1() {
 }
 
 #[test]
+fn cli_hook_session_start_outputs_empty_json_and_initializes_state() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("palace");
+
+    let output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "hook",
+            "run",
+            "--hook",
+            "session-start",
+            "--harness",
+            "codex",
+        ])
+        .write_stdin(r#"{"session_id":"abc-123","stop_hook_active":false}"#)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(payload, serde_json::json!({}));
+    assert!(palace.join("hook_state").join("hook.log").exists());
+}
+
+#[test]
+fn cli_hook_stop_blocks_after_15_messages() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("palace");
+    let transcript = tmp.path().join("transcript.jsonl");
+    let mut lines = String::new();
+    for idx in 0..15 {
+        lines.push_str(&format!(
+            "{{\"message\":{{\"role\":\"user\",\"content\":\"message {idx}\"}}}}\n"
+        ));
+    }
+    fs::write(&transcript, lines).unwrap();
+
+    let output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "hook",
+            "run",
+            "--hook",
+            "stop",
+            "--harness",
+            "claude-code",
+        ])
+        .write_stdin(format!(
+            r#"{{"session_id":"save-me","stop_hook_active":false,"transcript_path":"{}"}}"#,
+            transcript.display()
+        ))
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(payload["decision"], "block");
+    assert!(
+        payload["reason"]
+            .as_str()
+            .unwrap()
+            .contains("AUTO-SAVE checkpoint")
+    );
+}
+
+#[test]
+fn cli_hook_stop_passes_through_when_already_active() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("palace");
+
+    let output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "hook",
+            "run",
+            "--hook",
+            "stop",
+            "--harness",
+            "codex",
+        ])
+        .write_stdin(
+            r#"{"session_id":"active","stop_hook_active":true,"transcript_path":"/tmp/missing"}"#,
+        )
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(payload, serde_json::json!({}));
+}
+
+#[test]
+fn cli_hook_precompact_always_blocks() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("palace");
+
+    let output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "hook",
+            "run",
+            "--hook",
+            "precompact",
+            "--harness",
+            "codex",
+        ])
+        .write_stdin(r#"{"session_id":"compact-me"}"#)
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let payload: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(payload["decision"], "block");
+    assert!(
+        payload["reason"]
+            .as_str()
+            .unwrap()
+            .contains("COMPACTION IMMINENT")
+    );
+}
+
+#[test]
 fn cli_root_help_mentions_core_commands_and_examples() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
@@ -239,9 +373,33 @@ fn cli_root_help_mentions_core_commands_and_examples() {
         ))
         .stdout(contains("mempalace-rs mine ~/projects/my_app"))
         .stdout(contains("compress"))
+        .stdout(contains("hook"))
+        .stdout(contains("instructions"))
         .stdout(contains("wake-up"))
         .stdout(contains("migrate"))
         .stdout(contains("repair"));
+}
+
+#[test]
+fn cli_hook_help_mentions_stdio_behavior() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["hook", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("reads JSON from stdin, outputs JSON to stdout"))
+        .stdout(contains("run"));
+}
+
+#[test]
+fn cli_instructions_help_outputs_markdown() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["instructions", "help"])
+        .assert()
+        .success()
+        .stdout(contains("# MemPalace"))
+        .stdout(contains("mempalace-rs hook run"));
 }
 
 #[test]

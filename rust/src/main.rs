@@ -1,7 +1,10 @@
+use std::io::Write;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use mempalace_rs::config::AppConfig;
+use mempalace_rs::hook;
+use mempalace_rs::instructions;
 use mempalace_rs::mcp;
 use mempalace_rs::model::{MineProgressEvent, MineRequest};
 use mempalace_rs::service::App;
@@ -154,8 +157,29 @@ enum Command {
         #[arg(help = "Print Python-style human-readable prepare summary instead of JSON")]
         human: bool,
     },
+    #[command(about = "Run hook logic (reads JSON from stdin, outputs JSON to stdout)")]
+    Hook {
+        #[command(subcommand)]
+        action: HookCommand,
+    },
+    #[command(about = "Output skill instructions to stdout")]
+    Instructions {
+        #[arg(help = "Instruction set name")]
+        name: String,
+    },
     #[command(about = "Run the read-only MCP server on stdio")]
     Mcp,
+}
+
+#[derive(Subcommand)]
+enum HookCommand {
+    #[command(about = "Execute a hook")]
+    Run {
+        #[arg(long, help = "Hook name to run")]
+        hook: String,
+        #[arg(long, help = "Harness type")]
+        harness: String,
+    },
 }
 
 #[tokio::main]
@@ -685,6 +709,27 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 println!("{}", serde_json::to_string_pretty(&summary)?);
             }
+        }
+        Command::Hook { action } => {
+            let mut config = AppConfig::resolve(palace.as_ref())?;
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+            match action {
+                HookCommand::Run {
+                    hook: hook_name,
+                    harness,
+                } => {
+                    let output = hook::run_hook(&hook_name, &harness, &config)?;
+                    writeln!(
+                        std::io::stdout(),
+                        "{}",
+                        serde_json::to_string_pretty(&output)?
+                    )?;
+                }
+            }
+        }
+        Command::Instructions { name } => {
+            let text = instructions::render(&name)?;
+            print!("{text}");
         }
         Command::Mcp => {
             let mut config = AppConfig::resolve(palace.as_ref())?;
