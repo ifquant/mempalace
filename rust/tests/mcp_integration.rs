@@ -70,6 +70,15 @@ async fn mcp_read_tools_work() {
     assert!(tool_names.contains(&"mempalace_traverse"));
     assert!(tool_names.contains(&"mempalace_find_tunnels"));
     assert!(tool_names.contains(&"mempalace_graph_stats"));
+    assert!(tool_names.contains(&"mempalace_registry_summary"));
+    assert!(tool_names.contains(&"mempalace_registry_lookup"));
+    assert!(tool_names.contains(&"mempalace_registry_query"));
+    assert!(tool_names.contains(&"mempalace_registry_learn"));
+    assert!(tool_names.contains(&"mempalace_registry_add_person"));
+    assert!(tool_names.contains(&"mempalace_registry_add_project"));
+    assert!(tool_names.contains(&"mempalace_registry_add_alias"));
+    assert!(tool_names.contains(&"mempalace_registry_research"));
+    assert!(tool_names.contains(&"mempalace_registry_confirm"));
     let search_tool = tools["result"]["tools"]
         .as_array()
         .unwrap()
@@ -639,6 +648,164 @@ async fn mcp_diary_write_and_read_work() {
     assert!(read_text.contains("\"entries\""));
     assert!(read_text.contains("SESSION: shipped KG read tools"));
     assert!(read_text.contains("\"showing\": 1"));
+}
+
+#[tokio::test]
+async fn mcp_registry_tools_work() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    std::fs::write(
+        project.join("notes.md"),
+        "Ever said Atlas should launch soon.\nEver wrote the Atlas architecture notes.\n",
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init_project(&project).await.unwrap();
+
+    let summary = handle_request(
+        json!({"method":"tools/call","id":60,"params":{"name":"mempalace_registry_summary","arguments":{"project_dir":project}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let summary_text = summary["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(summary_text.contains("\"kind\": \"registry_summary\""));
+    assert!(summary_text.contains("\"people_count\""));
+
+    let lookup = handle_request(
+        json!({"method":"tools/call","id":61,"params":{"name":"mempalace_registry_lookup","arguments":{"project_dir":project,"word":"Ever","context":"Have you ever seen this before?"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let lookup_text = lookup["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(lookup_text.contains("\"type\": \"concept\""));
+
+    let add_person = handle_request(
+        json!({"method":"tools/call","id":62,"params":{"name":"mempalace_registry_add_person","arguments":{"project_dir":project,"name":"Riley","relationship":"daughter","context":"personal"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let add_person_text = add_person["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(add_person_text.contains("\"action\": \"add_person\""));
+
+    let add_project = handle_request(
+        json!({"method":"tools/call","id":63,"params":{"name":"mempalace_registry_add_project","arguments":{"project_dir":project,"name":"Lantern"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let add_project_text = add_project["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert!(add_project_text.contains("\"action\": \"add_project\""));
+
+    let add_alias = handle_request(
+        json!({"method":"tools/call","id":64,"params":{"name":"mempalace_registry_add_alias","arguments":{"project_dir":project,"canonical":"Riley","alias":"Ry"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let add_alias_text = add_alias["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(add_alias_text.contains("\"action\": \"add_alias\""));
+
+    let query = handle_request(
+        json!({"method":"tools/call","id":65,"params":{"name":"mempalace_registry_query","arguments":{"project_dir":project,"query":"Ry said Lantern should ship with Max"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let query_text = query["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(query_text.contains("\"people\""));
+    assert!(query_text.contains("Riley"));
+    assert!(query_text.contains("Max"));
+
+    let registry_path = project.join("entity_registry.json");
+    let mut registry = mempalace_rs::registry::EntityRegistry::load(&registry_path).unwrap();
+    registry.wiki_cache.insert(
+        "Max".to_string(),
+        mempalace_rs::registry::RegistryResearchEntry {
+            word: "Max".to_string(),
+            inferred_type: "person".to_string(),
+            confidence: 0.9,
+            wiki_summary: Some("max is a given name".to_string()),
+            wiki_title: Some("Max".to_string()),
+            note: None,
+            confirmed: false,
+            confirmed_type: None,
+        },
+    );
+    registry.save(&registry_path).unwrap();
+
+    let research = handle_request(
+        json!({"method":"tools/call","id":66,"params":{"name":"mempalace_registry_research","arguments":{"project_dir":project,"word":"Max"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let research_text = research["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(research_text.contains("\"kind\": \"registry_research\""));
+    assert!(research_text.contains("\"word\": \"Max\""));
+
+    let confirm = handle_request(
+        json!({"method":"tools/call","id":67,"params":{"name":"mempalace_registry_confirm","arguments":{"project_dir":project,"word":"Max","entity_type":"person","relationship":"coworker","context":"work"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let confirm_text = confirm["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(confirm_text.contains("\"kind\": \"registry_confirm\""));
+    assert!(confirm_text.contains("\"entity_type\": \"person\""));
+}
+
+#[tokio::test]
+async fn mcp_registry_tools_return_tool_level_errors_for_missing_args() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let response = handle_request(
+        json!({"method":"tools/call","id":68,"params":{"name":"mempalace_registry_lookup","arguments":{"project_dir":"."}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let text = response["result"]["content"][0]["text"].as_str().unwrap();
+    let payload: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(
+        payload["error"].as_str().unwrap(),
+        "Registry lookup error: MCP error: mempalace_registry_lookup requires word"
+    );
+
+    let response = handle_request(
+        json!({"method":"tools/call","id":69,"params":{"name":"mempalace_registry_confirm","arguments":{"project_dir":"."}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let text = response["result"]["content"][0]["text"].as_str().unwrap();
+    let payload: serde_json::Value = serde_json::from_str(text).unwrap();
+    assert_eq!(
+        payload["error"].as_str().unwrap(),
+        "Registry confirm error: MCP error: mempalace_registry_confirm requires word"
+    );
 }
 
 #[tokio::test]

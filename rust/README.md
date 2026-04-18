@@ -55,6 +55,7 @@ Current first-phase support:
 - `registry query` now extracts known people plus still-unknown capitalized candidates from free-form user queries
 - `registry research` now populates `wiki_cache` in `entity_registry.json`, following the Python registry path for unknown-name research
 - `registry confirm` now promotes cached research into person entries with `source = "wiki"`
+- MCP now also includes the project-local registry surface: `registry_summary`, `registry_lookup`, `registry_query`, `registry_learn`, `registry_add_person`, `registry_add_project`, `registry_add_alias`, `registry_research`, `registry_confirm`
 - `migrate`
 - `repair`
 - `repair scan|prune|rebuild` to inspect vector drift, prune queued orphan IDs, and rebuild LanceDB from SQLite
@@ -68,6 +69,7 @@ Current first-phase support:
 - read-only MCP tools now also include the KG read trio: `kg_query`, `kg_timeline`, `kg_stats`
 - MCP now also includes the first diary write/read surface: `diary_write`, `diary_read`
 - MCP now also includes the first Python-style write surface: `add_drawer`, `delete_drawer`, `kg_add`, `kg_invalidate`
+- MCP now also includes registry read/write/research tools against project-local `entity_registry.json`
 - MCP write tools now append a palace-local JSONL write-ahead log under `palace/wal/write_log.jsonl`
 - provider-based embedding layer with batch document embedding
 - SQLite schema version tracking and a minimal migration path
