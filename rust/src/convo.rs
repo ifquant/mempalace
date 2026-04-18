@@ -7,6 +7,7 @@ use regex::Regex;
 use serde_json::Value;
 
 use crate::error::Result;
+use crate::spellcheck::{known_names_for_path, spellcheck_transcript, spellcheck_user_text};
 
 const CONVO_EXTENSIONS: &[&str] = &[".txt", ".md", ".json", ".jsonl"];
 const MAX_CONVO_FILE_SIZE: u64 = 10 * 1024 * 1024;
@@ -381,6 +382,7 @@ pub fn scan_convo_files(
 }
 
 pub fn normalize_conversation_file(path: &Path) -> Result<Option<String>> {
+    let known_names = known_names_for_path(path);
     let raw = match fs::read(path) {
         Ok(bytes) => match String::from_utf8(bytes) {
             Ok(text) => text,
@@ -388,17 +390,21 @@ pub fn normalize_conversation_file(path: &Path) -> Result<Option<String>> {
         },
         Err(err) => return Err(err.into()),
     };
-    normalize_conversation(path, &raw)
+    normalize_conversation(path, &raw, &known_names)
 }
 
-pub fn normalize_conversation(path: &Path, raw: &str) -> Result<Option<String>> {
+pub fn normalize_conversation(
+    path: &Path,
+    raw: &str,
+    known_names: &HashSet<String>,
+) -> Result<Option<String>> {
     let content = raw.trim();
     if content.is_empty() {
         return Ok(None);
     }
 
     if count_quote_lines(content) >= 3 {
-        return Ok(Some(raw.to_string()));
+        return Ok(Some(spellcheck_transcript(raw, known_names)));
     }
 
     let ext = path
@@ -410,7 +416,7 @@ pub fn normalize_conversation(path: &Path, raw: &str) -> Result<Option<String>> 
     if matches!(ext.as_str(), "json" | "jsonl")
         || matches!(content.chars().next(), Some('{') | Some('['))
     {
-        if let Some(normalized) = try_normalize_json(content) {
+        if let Some(normalized) = try_normalize_json(content, known_names) {
             return Ok(Some(normalized));
         }
         if matches!(ext.as_str(), "json" | "jsonl") {
@@ -896,22 +902,22 @@ fn is_force_include(path: &Path, project_path: &Path, include_paths: &HashSet<St
         })
 }
 
-fn try_normalize_json(content: &str) -> Option<String> {
-    if let Some(transcript) = try_claude_code_jsonl(content) {
+fn try_normalize_json(content: &str, known_names: &HashSet<String>) -> Option<String> {
+    if let Some(transcript) = try_claude_code_jsonl(content, known_names) {
         return Some(transcript);
     }
-    if let Some(transcript) = try_codex_jsonl(content) {
+    if let Some(transcript) = try_codex_jsonl(content, known_names) {
         return Some(transcript);
     }
 
     let data: Value = serde_json::from_str(content).ok()?;
-    try_flat_messages_json(&data)
-        .or_else(|| try_claude_ai_json(&data))
-        .or_else(|| try_chatgpt_json(&data))
-        .or_else(|| try_slack_json(&data))
+    try_flat_messages_json(&data, known_names)
+        .or_else(|| try_claude_ai_json(&data, known_names))
+        .or_else(|| try_chatgpt_json(&data, known_names))
+        .or_else(|| try_slack_json(&data, known_names))
 }
 
-fn try_claude_code_jsonl(content: &str) -> Option<String> {
+fn try_claude_code_jsonl(content: &str, known_names: &HashSet<String>) -> Option<String> {
     let mut messages = Vec::new();
     for line in content
         .lines()
@@ -940,10 +946,10 @@ fn try_claude_code_jsonl(content: &str) -> Option<String> {
             _ => {}
         }
     }
-    (messages.len() >= 2).then(|| messages_to_transcript(&messages))
+    (messages.len() >= 2).then(|| messages_to_transcript(&messages, known_names))
 }
 
-fn try_codex_jsonl(content: &str) -> Option<String> {
+fn try_codex_jsonl(content: &str, known_names: &HashSet<String>) -> Option<String> {
     let mut messages = Vec::new();
     let mut has_session_meta = false;
     for line in content
@@ -982,10 +988,11 @@ fn try_codex_jsonl(content: &str) -> Option<String> {
             _ => {}
         }
     }
-    (messages.len() >= 2 && has_session_meta).then(|| messages_to_transcript(&messages))
+    (messages.len() >= 2 && has_session_meta)
+        .then(|| messages_to_transcript(&messages, known_names))
 }
 
-fn try_flat_messages_json(data: &Value) -> Option<String> {
+fn try_flat_messages_json(data: &Value, known_names: &HashSet<String>) -> Option<String> {
     let items = data.as_array()?;
     let mut messages = Vec::new();
     for item in items {
@@ -1000,10 +1007,10 @@ fn try_flat_messages_json(data: &Value) -> Option<String> {
             _ => {}
         }
     }
-    (messages.len() >= 2).then(|| messages_to_transcript(&messages))
+    (messages.len() >= 2).then(|| messages_to_transcript(&messages, known_names))
 }
 
-fn try_claude_ai_json(data: &Value) -> Option<String> {
+fn try_claude_ai_json(data: &Value, known_names: &HashSet<String>) -> Option<String> {
     let list = if let Some(messages) = data.get("messages").and_then(Value::as_array) {
         messages.clone()
     } else if let Some(messages) = data.get("chat_messages").and_then(Value::as_array) {
@@ -1036,7 +1043,8 @@ fn try_claude_ai_json(data: &Value) -> Option<String> {
                 }
             }
         }
-        return (all_messages.len() >= 2).then(|| messages_to_transcript(&all_messages));
+        return (all_messages.len() >= 2)
+            .then(|| messages_to_transcript(&all_messages, known_names));
     }
 
     let mut messages = Vec::new();
@@ -1052,10 +1060,10 @@ fn try_claude_ai_json(data: &Value) -> Option<String> {
             _ => {}
         }
     }
-    (messages.len() >= 2).then(|| messages_to_transcript(&messages))
+    (messages.len() >= 2).then(|| messages_to_transcript(&messages, known_names))
 }
 
-fn try_chatgpt_json(data: &Value) -> Option<String> {
+fn try_chatgpt_json(data: &Value, known_names: &HashSet<String>) -> Option<String> {
     let mapping = data.get("mapping")?.as_object()?;
     let mut root_id = None;
     let mut fallback_root = None;
@@ -1116,10 +1124,10 @@ fn try_chatgpt_json(data: &Value) -> Option<String> {
         }
     }
 
-    (messages.len() >= 2).then(|| messages_to_transcript(&messages))
+    (messages.len() >= 2).then(|| messages_to_transcript(&messages, known_names))
 }
 
-fn try_slack_json(data: &Value) -> Option<String> {
+fn try_slack_json(data: &Value, known_names: &HashSet<String>) -> Option<String> {
     let items = data.as_array()?;
     let mut messages = Vec::new();
     let mut seen_users = Vec::<String>::new();
@@ -1157,7 +1165,7 @@ fn try_slack_json(data: &Value) -> Option<String> {
         messages.push((role, text.to_string()));
     }
 
-    (messages.len() >= 2).then(|| messages_to_transcript(&messages))
+    (messages.len() >= 2).then(|| messages_to_transcript(&messages, known_names))
 }
 
 fn extract_content(value: &Value) -> String {
@@ -1188,13 +1196,16 @@ fn extract_content(value: &Value) -> String {
     }
 }
 
-fn messages_to_transcript(messages: &[(&str, String)]) -> String {
+fn messages_to_transcript(messages: &[(&str, String)], known_names: &HashSet<String>) -> String {
     let mut lines = Vec::new();
     let mut index = 0usize;
     while index < messages.len() {
         let (role, text) = &messages[index];
         if *role == "user" {
-            lines.push(format!("> {}", text.trim()));
+            lines.push(format!(
+                "> {}",
+                spellcheck_user_text(text.trim(), known_names)
+            ));
             if let Some((next_role, next_text)) = messages.get(index + 1)
                 && *next_role == "assistant"
             {
@@ -1212,7 +1223,13 @@ fn messages_to_transcript(messages: &[(&str, String)]) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{detect_convo_room, extract_exchange_chunks, extract_general_memories};
+    use std::collections::HashSet;
+    use std::path::Path;
+
+    use super::{
+        detect_convo_room, extract_exchange_chunks, extract_general_memories,
+        normalize_conversation,
+    };
 
     #[test]
     fn general_extractor_classifies_all_memory_types() {
@@ -1238,6 +1255,24 @@ I feel proud and grateful that the rewrite finally feels solid.
         assert!(kinds.contains(&"milestone"));
         assert!(kinds.contains(&"problem"));
         assert!(kinds.contains(&"emotional"));
+    }
+
+    #[test]
+    fn normalize_json_transcript_spellchecks_user_turns() {
+        let known_names = HashSet::from(["riley".to_string()]);
+        let normalized = normalize_conversation(
+            Path::new("demo.jsonl"),
+            r#"{"type":"session_meta","payload":{"id":"demo"}}
+{"type":"event_msg","payload":{"type":"user_message","message":"Riley knoe the deploy befor lunch"}}
+{"type":"event_msg","payload":{"type":"agent_message","message":"We fixed it."}}
+"#,
+            &known_names,
+        )
+        .unwrap()
+        .unwrap();
+
+        assert!(normalized.contains("> Riley know the deploy before lunch"));
+        assert!(normalized.contains("We fixed it."));
     }
 
     #[test]

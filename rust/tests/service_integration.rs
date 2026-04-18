@@ -7,6 +7,7 @@ use lancedb::query::{ExecutableQuery, QueryBase, Select};
 use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::convo::{detect_convo_room, extract_general_memories};
 use mempalace_rs::model::{DrawerInput, KgTriple, MineRequest};
+use mempalace_rs::registry::EntityRegistry;
 use mempalace_rs::service::App;
 use mempalace_rs::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
 use mempalace_rs::storage::vector::VectorStore;
@@ -1424,6 +1425,56 @@ async fn service_mine_convos_normalizes_json_and_jsonl_chat_exports() {
     assert!(summary.drawers_added >= 2);
     let status = app.status().await.unwrap();
     assert!(status.total_drawers >= 2);
+}
+
+#[tokio::test]
+async fn service_mine_convos_spellchecks_user_turns_without_touching_known_names() {
+    let tmp = tempdir().unwrap();
+    let convo_dir = tmp.path().join("convos");
+    std::fs::create_dir_all(&convo_dir).unwrap();
+    std::fs::write(
+        convo_dir.join("session.jsonl"),
+        r#"{"type":"session_meta","payload":{"id":"demo"}}
+{"type":"event_msg","payload":{"type":"user_message","message":"Riley knoe the deploy befor lunch"}}
+{"type":"event_msg","payload":{"type":"agent_message","message":"We fixed it with MemPalace notes."}}
+"#,
+    )
+    .unwrap();
+
+    let mut registry = EntityRegistry::empty("work");
+    registry.add_person("Riley", "coworker", "work");
+    registry
+        .save(&convo_dir.join("entity_registry.json"))
+        .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let summary = app
+        .mine_project(
+            &convo_dir,
+            &MineRequest {
+                wing: Some("chatlogs".to_string()),
+                mode: "convos".to_string(),
+                agent: "mempalace".to_string(),
+                limit: 0,
+                dry_run: false,
+                respect_gitignore: true,
+                include_ignored: vec![],
+                extract: "exchange".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(summary.files_mined, 1);
+
+    let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    let drawers = sqlite.list_drawers(None).unwrap();
+    let text = &drawers[0].text;
+    assert!(text.contains("Riley know the deploy before lunch"));
+    assert!(text.contains("MemPalace"));
 }
 
 #[test]

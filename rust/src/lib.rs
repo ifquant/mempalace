@@ -11,6 +11,7 @@ pub mod mcp;
 pub mod model;
 pub mod registry;
 pub mod service;
+pub mod spellcheck;
 pub mod split;
 pub mod storage;
 

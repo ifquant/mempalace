@@ -30,6 +30,7 @@ Current first-phase support:
 - drawer metadata now also persists `ingest_mode` and `extract_mode` in both SQLite and LanceDB
 - exchange mode now has explicit coverage for quoted turns, speaker-turn transcripts, and paragraph fallback
 - general mode now has explicit coverage for keeping positive emotional text out of the `problem` bucket
+- convo normalization now applies Python-style spellcheck to user turns, while preserving known registry names and technical tokens
 - project re-mine bookkeeping now tracks `source_mtime` so unchanged files skip more like the Python miner
 - `mine` JSON now carries per-room file counts plus the Python-style search follow-up hint
 - project scanning now matches more Python `scan_project()` edge cases around nested `.gitignore`, negation, and include-overrides for skipped directories
