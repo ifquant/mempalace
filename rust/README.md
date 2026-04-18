@@ -54,6 +54,7 @@ Current first-phase support:
 - `normalize <file>` to inspect how one chat export/transcript is normalized before mining
 - `mcp --setup` to print Python-style quick setup instructions for wiring the Rust MCP server into MCP-capable hosts
 - `mcp` now defaults to the Python-style quick setup output, while `mcp --serve` explicitly starts the stdio server
+- MCP now also includes the layer trio: `wake_up`, `recall`, `layers_status`
 - Rust now has a standalone `registry` surface instead of treating `entity_registry.json` as a bootstrap-only artifact
 - `registry lookup` now mirrors Python's ambiguous-name disambiguation for common English words such as `Ever`
 - `registry learn` now reuses the local entity detector to append newly discovered people/projects into `entity_registry.json`
@@ -200,6 +201,7 @@ Current MCP compatibility notes:
 - `mempalace_search` returns Python-style `query`, `filters`, `source_file`, and `similarity`
 - `mempalace_check_duplicate` now returns Python-style `is_duplicate` and `matches[*].id/wing/room/similarity/content`
 - `mempalace_get_aaak_spec` now exposes the standalone AAAK dialect text like the Python server
+- `mempalace_wake_up`, `mempalace_recall`, and `mempalace_layers_status` now expose the Rust Layer 0-3 surfaces through MCP
 - `mempalace_traverse`, `mempalace_find_tunnels`, and `mempalace_graph_stats` now expose a Python-style room graph built from Rust drawer metadata
 - `mempalace_kg_query`, `mempalace_kg_timeline`, and `mempalace_kg_stats` now expose a Python-style temporal KG read surface built from Rust SQLite triples
 - `mempalace_kg_add` and `mempalace_kg_invalidate` now expose Python-style KG write operations with structured success payloads

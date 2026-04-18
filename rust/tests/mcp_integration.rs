@@ -58,6 +58,9 @@ async fn mcp_read_tools_work() {
     assert!(tool_names.contains(&"mempalace_search"));
     assert!(tool_names.contains(&"mempalace_check_duplicate"));
     assert!(tool_names.contains(&"mempalace_get_aaak_spec"));
+    assert!(tool_names.contains(&"mempalace_wake_up"));
+    assert!(tool_names.contains(&"mempalace_recall"));
+    assert!(tool_names.contains(&"mempalace_layers_status"));
     assert!(tool_names.contains(&"mempalace_kg_query"));
     assert!(tool_names.contains(&"mempalace_kg_add"));
     assert!(tool_names.contains(&"mempalace_kg_invalidate"));
@@ -142,6 +145,44 @@ async fn mcp_read_tools_work() {
     let aaak_text = aaak["result"]["content"][0]["text"].as_str().unwrap();
     assert!(aaak_text.contains("\"aaak_spec\""));
     assert!(aaak_text.contains("AAAK is a compressed memory dialect"));
+
+    let wake_up = handle_request(
+        json!({"method":"tools/call","id":7,"params":{"name":"mempalace_wake_up","arguments":{"wing":"project"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let wake_up_text = wake_up["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(wake_up_text.contains("\"kind\": \"wake_up\""));
+    assert!(wake_up_text.contains("\"identity\""));
+    assert!(wake_up_text.contains("\"layer1\""));
+
+    let recall = handle_request(
+        json!({"method":"tools/call","id":8,"params":{"name":"mempalace_recall","arguments":{"wing":"project","limit":"2"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let recall_text = recall["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(recall_text.contains("\"kind\": \"recall\""));
+    assert!(recall_text.contains("\"results\""));
+    assert!(recall_text.contains("\"total_matches\""));
+
+    let layers_status = handle_request(
+        json!({"method":"tools/call","id":9,"params":{"name":"mempalace_layers_status","arguments":{}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let layers_status_text = layers_status["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert!(layers_status_text.contains("\"kind\": \"layers_status\""));
+    assert!(layers_status_text.contains("\"layer0_description\""));
+    assert!(layers_status_text.contains("\"layer3_description\""));
 }
 
 #[tokio::test]

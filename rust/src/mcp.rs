@@ -205,6 +205,33 @@ fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{}}),
         ),
         tool(
+            "mempalace_wake_up",
+            "Return Layer 0 + Layer 1 context for fast memory wake-up.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "wing": {"type":"string","description":"Optional wing filter for the recent essential story"}
+                }
+            }),
+        ),
+        tool(
+            "mempalace_recall",
+            "Return Layer 2 recall results for one wing/room without semantic search.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "wing": {"type":"string","description":"Optional wing filter"},
+                    "room": {"type":"string","description":"Optional room filter"},
+                    "limit": {"type":"integer","description":"Max drawers to return (default 10)"}
+                }
+            }),
+        ),
+        tool(
+            "mempalace_layers_status",
+            "Return Layer 0-3 stack status for the current palace.",
+            json!({"type":"object","properties":{}}),
+        ),
+        tool(
             "mempalace_registry_summary",
             "Summarize one project-local entity registry.",
             json!({
@@ -664,6 +691,38 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
         "mempalace_get_aaak_spec" => Ok(json!({
             "aaak_spec": AAAK_SPEC,
         })),
+        "mempalace_wake_up" => {
+            let wing = arguments.get("wing").and_then(Value::as_str);
+            match app.wake_up(wing).await {
+                Ok(summary) => Ok(serde_json::to_value(summary)?),
+                Err(err) => Ok(tool_error(
+                    "Wake-up error",
+                    &err,
+                    "Check the palace files and optional wing filter, then rerun mempalace_wake_up.",
+                )),
+            }
+        }
+        "mempalace_recall" => {
+            let wing = arguments.get("wing").and_then(Value::as_str);
+            let room = arguments.get("room").and_then(Value::as_str);
+            let limit = arguments.get("limit").and_then(Value::as_u64).unwrap_or(10) as usize;
+            match app.recall(wing, room, limit).await {
+                Ok(summary) => Ok(serde_json::to_value(summary)?),
+                Err(err) => Ok(tool_error(
+                    "Recall error",
+                    &err,
+                    "Check the palace files and wing/room filters, then rerun mempalace_recall.",
+                )),
+            }
+        }
+        "mempalace_layers_status" => match app.layer_status().await {
+            Ok(summary) => Ok(serde_json::to_value(summary)?),
+            Err(err) => Ok(tool_error(
+                "Layers status error",
+                &err,
+                "Check the palace files, then rerun mempalace_layers_status.",
+            )),
+        },
         "mempalace_registry_summary" => {
             let project_dir = required_str(&arguments, "project_dir", "mempalace_registry_summary");
             let Ok(project_dir) = project_dir else {
@@ -1342,6 +1401,18 @@ fn coerce_argument_types(tool_name: &str, arguments: &mut Value) {
                 };
                 if let Some(threshold) = coerced {
                     args.insert("threshold".to_string(), threshold);
+                }
+            }
+        }
+        "mempalace_recall" => {
+            if let Some(value) = args.get("limit").cloned() {
+                let coerced = match value {
+                    Value::String(text) => text.parse::<u64>().ok().map(Value::from),
+                    Value::Number(_) => value.as_u64().map(Value::from),
+                    _ => None,
+                };
+                if let Some(limit) = coerced {
+                    args.insert("limit".to_string(), limit);
                 }
             }
         }
