@@ -174,6 +174,113 @@ fn cli_init_writes_entities_json_when_detection_finds_names() {
 }
 
 #[test]
+fn cli_onboarding_help_mentions_mode_people_and_scan() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["onboarding", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("--mode"))
+        .stdout(contains("--person"))
+        .stdout(contains("--project"))
+        .stdout(contains("--alias"))
+        .stdout(contains("--scan"));
+}
+
+#[test]
+fn cli_onboarding_json_bootstraps_local_world_files() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("world");
+    fs::create_dir_all(&project).unwrap();
+    fs::write(
+        project.join("notes.md"),
+        "Ever said Lantern should launch soon.\nEver wrote the Lantern architecture notes.",
+    )
+    .unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "onboarding",
+            project.to_str().unwrap(),
+            "--mode",
+            "combo",
+            "--person",
+            "Riley,daughter,personal",
+            "--person",
+            "Ben,co-founder,work",
+            "--project",
+            "Lantern",
+            "--alias",
+            "Ry=Riley",
+            "--wings",
+            "family,work,projects",
+            "--scan",
+            "--auto-accept-detected",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"kind\": \"onboarding\""))
+        .stdout(contains("\"mode\": \"combo\""))
+        .stdout(contains("\"wings\":"))
+        .stdout(contains("\"aliases\":"))
+        .stdout(contains("\"auto_detected_people\":"))
+        .stdout(contains("\"entity_registry_path\":"))
+        .stdout(contains("\"aaak_entities_path\":"))
+        .stdout(contains("\"critical_facts_path\":"));
+
+    assert!(project.join("mempalace.yaml").exists());
+    assert!(project.join("entities.json").exists());
+    assert!(project.join("entity_registry.json").exists());
+    assert!(project.join("aaak_entities.md").exists());
+    assert!(project.join("critical_facts.md").exists());
+
+    let registry: Value =
+        serde_json::from_str(&fs::read_to_string(project.join("entity_registry.json")).unwrap())
+            .unwrap();
+    assert_eq!(registry["mode"], "combo");
+    assert!(registry["people"]["Riley"].is_object());
+    assert!(registry["people"]["Ry"].is_object());
+    assert!(
+        registry["projects"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|value| value == "Lantern")
+    );
+}
+
+#[test]
+fn cli_onboarding_human_prints_setup_summary() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("world");
+    fs::create_dir_all(&project).unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args([
+            "onboarding",
+            project.to_str().unwrap(),
+            "--mode",
+            "work",
+            "--person",
+            "Ben,co-founder,work",
+            "--project",
+            "Lantern",
+            "--wings",
+            "projects,decisions,research",
+            "--human",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Onboarding"))
+        .stdout(contains("Mode:    work"))
+        .stdout(contains("Wings:   projects, decisions, research"))
+        .stdout(contains("Registry:"))
+        .stdout(contains("Your local world bootstrap is ready."));
+}
+
+#[test]
 fn cli_registry_summary_lookup_learn_and_research_work() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");

@@ -8,6 +8,9 @@ use mempalace_rs::hook;
 use mempalace_rs::instructions;
 use mempalace_rs::mcp;
 use mempalace_rs::model::{MineProgressEvent, MineRequest};
+use mempalace_rs::onboarding::{
+    OnboardingRequest, parse_alias_arg, parse_person_arg, run_onboarding,
+};
 use mempalace_rs::service::App;
 use mempalace_rs::split;
 use serde_json::json;
@@ -44,6 +47,35 @@ enum Command {
         yes: bool,
         #[arg(long)]
         #[arg(help = "Print Python-style human-readable init summary instead of JSON")]
+        human: bool,
+    },
+    #[command(about = "Guide first-run registry and AAAK bootstrap for a project")]
+    Onboarding {
+        #[arg(help = "Project directory to seed")]
+        dir: PathBuf,
+        #[arg(long)]
+        #[arg(help = "Usage mode: work, personal, or combo")]
+        mode: Option<String>,
+        #[arg(long = "person")]
+        #[arg(help = "Seed person as name,relationship,context; repeat as needed")]
+        people: Vec<String>,
+        #[arg(long = "project")]
+        #[arg(help = "Seed one project name; repeat as needed")]
+        projects: Vec<String>,
+        #[arg(long = "alias")]
+        #[arg(help = "Seed alias mapping as alias=canonical; repeat as needed")]
+        aliases: Vec<String>,
+        #[arg(long)]
+        #[arg(help = "Comma-separated wing list; defaults follow the selected mode")]
+        wings: Option<String>,
+        #[arg(long)]
+        #[arg(help = "Scan local files for additional names before writing the registry")]
+        scan: bool,
+        #[arg(long)]
+        #[arg(help = "Auto-accept detected names during scan")]
+        auto_accept_detected: bool,
+        #[arg(long)]
+        #[arg(help = "Print Python-style human-readable onboarding summary instead of JSON")]
         human: bool,
     },
     #[command(about = "Mine project files into the palace")]
@@ -421,6 +453,80 @@ async fn main() -> anyhow::Result<()> {
             };
             if human {
                 print_init_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
+        }
+        Command::Onboarding {
+            dir,
+            mode,
+            people,
+            projects,
+            aliases,
+            wings,
+            scan,
+            auto_accept_detected,
+            human,
+        } => {
+            let mut request = OnboardingRequest {
+                mode,
+                people: Vec::new(),
+                projects,
+                aliases: std::collections::BTreeMap::new(),
+                wings: wings
+                    .unwrap_or_default()
+                    .split(',')
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .map(|value| value.to_string())
+                    .collect(),
+                scan: if scan { Some(true) } else { None },
+                auto_accept_detected,
+            };
+
+            for value in people {
+                match parse_person_arg(&value) {
+                    Ok(person) => request.people.push(person),
+                    Err(err) if human => {
+                        print_onboarding_error_human(&err.to_string());
+                        std::process::exit(1);
+                    }
+                    Err(err) => {
+                        print_onboarding_error_json(&err.to_string())?;
+                        std::process::exit(1);
+                    }
+                }
+            }
+
+            for value in aliases {
+                match parse_alias_arg(&value) {
+                    Ok((alias, canonical)) => {
+                        request.aliases.insert(alias, canonical);
+                    }
+                    Err(err) if human => {
+                        print_onboarding_error_human(&err.to_string());
+                        std::process::exit(1);
+                    }
+                    Err(err) => {
+                        print_onboarding_error_json(&err.to_string())?;
+                        std::process::exit(1);
+                    }
+                }
+            }
+
+            let summary = match run_onboarding(&dir, request) {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_onboarding_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_onboarding_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            if human {
+                print_onboarding_human(&summary);
             } else {
                 println!("{}", serde_json::to_string_pretty(&summary)?);
             }
@@ -2012,6 +2118,104 @@ fn print_init_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Init error: {message}"),
         "hint": "Check the palace path and SQLite file, then rerun `mempalace-rs init <dir>`.",
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
+fn print_onboarding_human(summary: &mempalace_rs::model::OnboardingSummary) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Onboarding");
+    println!("{}\n", "=".repeat(55));
+    println!("  Project: {}", summary.project_path);
+    println!("  Mode:    {}", summary.mode);
+    println!("  Wing:    {}", summary.wing);
+    println!("  Wings:   {}", summary.wings.join(", "));
+    println!("  People:  {}", summary.people.len());
+    println!("  Projects: {}", summary.projects.len());
+    if !summary.aliases.is_empty() {
+        println!("  Aliases: {}", summary.aliases.len());
+    }
+    if !summary.auto_detected_people.is_empty() {
+        println!(
+            "  Auto-detected people: {}",
+            summary.auto_detected_people.join(", ")
+        );
+    }
+    if !summary.auto_detected_projects.is_empty() {
+        println!(
+            "  Auto-detected projects: {}",
+            summary.auto_detected_projects.join(", ")
+        );
+    }
+    if !summary.ambiguous_flags.is_empty() {
+        println!("  Ambiguous names: {}", summary.ambiguous_flags.join(", "));
+    }
+    if let Some(config_path) = &summary.config_path {
+        println!(
+            "  Config:  {}{}",
+            config_path,
+            if summary.config_written {
+                " (written)"
+            } else {
+                " (kept)"
+            }
+        );
+    }
+    if let Some(entities_path) = &summary.entities_path {
+        println!(
+            "  Entities: {}{}",
+            entities_path,
+            if summary.entities_written {
+                " (written)"
+            } else {
+                " (kept)"
+            }
+        );
+    }
+    println!(
+        "  Registry: {}{}",
+        summary.entity_registry_path,
+        if summary.entity_registry_written {
+            " (written)"
+        } else {
+            " (kept)"
+        }
+    );
+    println!(
+        "  AAAK:    {}{}",
+        summary.aaak_entities_path,
+        if summary.aaak_entities_written {
+            " (written)"
+        } else {
+            " (kept)"
+        }
+    );
+    println!(
+        "  Facts:   {}{}",
+        summary.critical_facts_path,
+        if summary.critical_facts_written {
+            " (written)"
+        } else {
+            " (kept)"
+        }
+    );
+    println!("\n  Your local world bootstrap is ready.");
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_onboarding_error_human(message: &str) {
+    println!("\n  Onboarding error: {message}");
+    println!(
+        "  Check the project path and onboarding arguments, then rerun `mempalace-rs onboarding <dir>`."
+    );
+}
+
+fn print_onboarding_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Onboarding error: {message}"),
+        "hint": "Check the project path and onboarding arguments, then rerun `mempalace-rs onboarding <dir>`.",
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())

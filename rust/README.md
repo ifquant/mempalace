@@ -19,6 +19,7 @@ Current first-phase support:
 - `init` now bootstraps project-local `mempalace.yaml` room config and writes `entities.json` when it can confidently detect people/projects from local prose files
 - `init` now also writes palace-ready `aaak_entities.md` and `critical_facts.md` bootstrap docs next to the project when those files do not already exist
 - `init` now also writes a project-local `entity_registry.json` bootstrap file seeded from detected people/projects, matching more of Python onboarding's registry surface
+- `onboarding <dir>` now provides a dedicated first-run world bootstrap that seeds people/projects/aliases, writes registry + AAAK docs, and can scan local files for missed names before mining
 - `mine` for project files
 - `mine --dry-run` to preview file discovery and chunk counts without persisting drawers
 - `mine --mode projects --agent <name>` matches more of the Python CLI surface
@@ -126,6 +127,7 @@ Current project-mining behavior:
 - `init` preserves existing `mempalace.yaml` and `entities.json` instead of overwriting them
 - `init` also preserves existing `aaak_entities.md` and `critical_facts.md` instead of overwriting them
 - `init` also preserves an existing `entity_registry.json` instead of overwriting it
+- `onboarding` refreshes project-local `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md`, but still keeps an existing `mempalace.yaml` room config instead of overwriting it
 - reads `mempalace.yaml` or legacy `mempal.yaml` when present
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
@@ -167,6 +169,7 @@ Useful verification command:
 - `cargo run -- registry query /path/to/project "Ry said Lantern should ship with Max"`
 - `cargo run -- registry research /path/to/project Riley --human`
 - `cargo run -- registry confirm /path/to/project Riley --type person --relationship daughter --context personal --human`
+- `cargo run -- onboarding /path/to/project --mode combo --person "Riley,daughter,personal" --project Lantern --alias Ry=Riley --scan --auto-accept-detected --human`
 - `cargo run -- normalize /path/to/transcript.jsonl --human`
 - `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding`
 - `MEMPALACE_RS_TEST_HF_ENDPOINT=https://hf-mirror.com cargo test cli_fastembed_prepare_mine_search_smoke -- --ignored --nocapture`

@@ -322,7 +322,7 @@ pub fn detect_entities_for_registry(project_dir: &Path) -> Result<(Vec<String>, 
     Ok((detected.people, detected.projects))
 }
 
-fn default_wing(project_dir: &Path) -> String {
+pub fn default_wing(project_dir: &Path) -> String {
     project_dir
         .file_name()
         .map(|name| {
@@ -378,6 +378,36 @@ fn write_project_config(config_path: &Path, wing: &str, rooms: &[RoomDetection])
     Ok(())
 }
 
+pub fn write_project_config_from_names(
+    config_path: &Path,
+    wing: &str,
+    room_names: &[String],
+) -> Result<()> {
+    let mut rooms = room_names
+        .iter()
+        .filter_map(|name| {
+            let trimmed = name.trim();
+            if trimmed.is_empty() {
+                None
+            } else {
+                Some(RoomDetection {
+                    name: trimmed.to_string(),
+                    description: format!("Files related to {trimmed}"),
+                    keywords: vec![trimmed.to_string()],
+                })
+            }
+        })
+        .collect::<Vec<_>>();
+    if rooms.is_empty() {
+        rooms.push(RoomDetection {
+            name: "general".to_string(),
+            description: "Files that don't fit other rooms".to_string(),
+            keywords: Vec::new(),
+        });
+    }
+    write_project_config(config_path, wing, &rooms)
+}
+
 fn load_existing_entities(entities_path: &Path) -> Result<ExistingEntities> {
     let content = fs::read_to_string(entities_path)?;
     serde_json::from_str::<ExistingEntities>(&content).map_err(|err| {
@@ -388,7 +418,7 @@ fn load_existing_entities(entities_path: &Path) -> Result<ExistingEntities> {
     })
 }
 
-fn write_entities(entities_path: &Path, people: &[String], projects: &[String]) -> Result<()> {
+pub fn write_entities(entities_path: &Path, people: &[String], projects: &[String]) -> Result<()> {
     let payload = GeneratedEntities {
         people: people.to_vec(),
         projects: projects.to_vec(),
@@ -398,7 +428,7 @@ fn write_entities(entities_path: &Path, people: &[String], projects: &[String]) 
     Ok(())
 }
 
-fn write_entity_registry(
+pub fn write_entity_registry(
     entity_registry_path: &Path,
     people: &[String],
     projects: &[String],
@@ -408,7 +438,7 @@ fn write_entity_registry(
     registry.save(entity_registry_path)
 }
 
-fn write_aaak_entities(
+pub fn write_aaak_entities(
     aaak_entities_path: &Path,
     people: &[String],
     projects: &[String],
@@ -451,7 +481,7 @@ fn write_aaak_entities(
     Ok(())
 }
 
-fn write_critical_facts(
+pub fn write_critical_facts(
     critical_facts_path: &Path,
     people: &[String],
     projects: &[String],

@@ -319,6 +319,32 @@ pub struct InitSummary {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct OnboardingSummary {
+    pub kind: String,
+    pub project_path: String,
+    pub mode: String,
+    pub wing: String,
+    pub wings: Vec<String>,
+    pub people: Vec<String>,
+    pub projects: Vec<String>,
+    pub aliases: BTreeMap<String, String>,
+    pub ambiguous_flags: Vec<String>,
+    pub auto_detected_people: Vec<String>,
+    pub auto_detected_projects: Vec<String>,
+    pub config_path: Option<String>,
+    pub config_written: bool,
+    pub entities_path: Option<String>,
+    pub entities_written: bool,
+    pub entity_registry_path: String,
+    pub entity_registry_written: bool,
+    pub aaak_entities_path: String,
+    pub aaak_entities_written: bool,
+    pub critical_facts_path: String,
+    pub critical_facts_written: bool,
+    pub version: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct MigrateSummary {
     pub kind: String,
     pub palace_path: String,
