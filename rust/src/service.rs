@@ -37,6 +37,7 @@ use crate::palace_graph::{
 use crate::registry::EntityRegistry;
 use crate::repair::{RepairContext, RepairDiagnostics, backup_sqlite_source, read_corrupt_ids};
 use crate::room_detector::{detect_room, load_project_config, load_project_rooms};
+use crate::searcher::{normalize_search_hits, normalize_source_file};
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, DrawerRecord, SqliteStore};
 use crate::storage::vector::VectorStore;
 use chrono::Utc;
@@ -1715,50 +1716,6 @@ fn sanitize_slug(value: &str) -> String {
             }
         })
         .collect()
-}
-
-fn normalize_search_hits(mut hits: Vec<SearchHit>) -> Vec<SearchHit> {
-    for hit in &mut hits {
-        hit.source_file = normalize_source_file(&hit.source_file, &hit.source_path);
-        hit.similarity = hit.similarity.map(round_similarity);
-    }
-
-    hits.sort_by(compare_search_hits);
-    hits
-}
-
-fn normalize_source_file(source_file: &str, source_path: &str) -> String {
-    let candidate = if source_file.is_empty() {
-        source_path
-    } else {
-        source_file
-    };
-
-    Path::new(candidate)
-        .file_name()
-        .map(|name| name.to_string_lossy().to_string())
-        .filter(|name| !name.is_empty())
-        .unwrap_or_else(|| {
-            if candidate.is_empty() {
-                "?".to_string()
-            } else {
-                candidate.to_string()
-            }
-        })
-}
-
-fn round_similarity(value: f64) -> f64 {
-    (value * 1000.0).round() / 1000.0
-}
-
-fn compare_search_hits(left: &SearchHit, right: &SearchHit) -> std::cmp::Ordering {
-    right
-        .similarity
-        .unwrap_or(f64::NEG_INFINITY)
-        .total_cmp(&left.similarity.unwrap_or(f64::NEG_INFINITY))
-        .then_with(|| left.source_file.cmp(&right.source_file))
-        .then_with(|| left.chunk_index.cmp(&right.chunk_index))
-        .then_with(|| left.id.cmp(&right.id))
 }
 
 fn sanitize_name(value: &str, field_name: &str) -> Result<String> {

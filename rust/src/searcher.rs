@@ -1,6 +1,9 @@
+use std::cmp::Ordering;
+use std::path::Path;
+
 use crate::config::AppConfig;
 use crate::error::Result;
-use crate::model::SearchResults;
+use crate::model::{SearchHit, SearchResults};
 use crate::service::App;
 
 #[derive(Clone)]
@@ -64,11 +67,55 @@ pub fn render_search_human(summary: &SearchResults) -> String {
     out
 }
 
+pub fn normalize_search_hits(mut hits: Vec<SearchHit>) -> Vec<SearchHit> {
+    for hit in &mut hits {
+        hit.source_file = normalize_source_file(&hit.source_file, &hit.source_path);
+        hit.similarity = hit.similarity.map(round_similarity);
+    }
+
+    hits.sort_by(compare_search_hits);
+    hits
+}
+
+pub fn normalize_source_file(source_file: &str, source_path: &str) -> String {
+    let candidate = if source_file.is_empty() {
+        source_path
+    } else {
+        source_file
+    };
+
+    Path::new(candidate)
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .filter(|name| !name.is_empty())
+        .unwrap_or_else(|| {
+            if candidate.is_empty() {
+                "?".to_string()
+            } else {
+                candidate.to_string()
+            }
+        })
+}
+
+pub fn round_similarity(value: f64) -> f64 {
+    (value * 1000.0).round() / 1000.0
+}
+
+pub fn compare_search_hits(left: &SearchHit, right: &SearchHit) -> Ordering {
+    right
+        .similarity
+        .unwrap_or(f64::NEG_INFINITY)
+        .total_cmp(&left.similarity.unwrap_or(f64::NEG_INFINITY))
+        .then_with(|| left.source_file.cmp(&right.source_file))
+        .then_with(|| left.chunk_index.cmp(&right.chunk_index))
+        .then_with(|| left.id.cmp(&right.id))
+}
+
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
 
-    use super::{Searcher, render_search_human};
+    use super::{Searcher, normalize_search_hits, render_search_human};
     use crate::config::{AppConfig, EmbeddingBackend};
     use crate::model::{SearchFilters, SearchHit, SearchResults};
     use crate::service::App;
@@ -133,5 +180,66 @@ mod tests {
         assert_eq!(results.filters.room.as_deref(), Some("backend"));
         assert_eq!(results.results.len(), 1);
         assert_eq!(results.results[0].source_file, "plan.txt");
+    }
+
+    #[test]
+    fn normalize_search_hits_uses_python_style_similarity_and_basename() {
+        let hits = vec![SearchHit {
+            id: "drawer_1".to_string(),
+            text: "Alpha".to_string(),
+            wing: "project".to_string(),
+            room: "backend".to_string(),
+            source_file: "notes/plan.txt".to_string(),
+            source_path: "/tmp/project/notes/plan.txt".to_string(),
+            source_mtime: None,
+            chunk_index: 0,
+            added_by: None,
+            filed_at: None,
+            similarity: Some(0.9816),
+            score: Some(0.0184),
+        }];
+
+        let normalized = normalize_search_hits(hits);
+        assert_eq!(normalized[0].source_file, "plan.txt");
+        assert_eq!(normalized[0].similarity, Some(0.982));
+    }
+
+    #[test]
+    fn normalize_search_hits_keeps_duplicate_files_as_separate_hits() {
+        let hits = vec![
+            SearchHit {
+                id: "drawer_2".to_string(),
+                text: "Beta".to_string(),
+                wing: "project".to_string(),
+                room: "backend".to_string(),
+                source_file: "plan.txt".to_string(),
+                source_path: "/tmp/project/plan.txt".to_string(),
+                source_mtime: None,
+                chunk_index: 1,
+                added_by: None,
+                filed_at: None,
+                similarity: Some(0.7),
+                score: Some(0.3),
+            },
+            SearchHit {
+                id: "drawer_1".to_string(),
+                text: "Alpha".to_string(),
+                wing: "project".to_string(),
+                room: "backend".to_string(),
+                source_file: "plan.txt".to_string(),
+                source_path: "/tmp/project/plan.txt".to_string(),
+                source_mtime: None,
+                chunk_index: 0,
+                added_by: None,
+                filed_at: None,
+                similarity: Some(0.7),
+                score: Some(0.3),
+            },
+        ];
+
+        let normalized = normalize_search_hits(hits);
+        assert_eq!(normalized.len(), 2);
+        assert_eq!(normalized[0].id, "drawer_1");
+        assert_eq!(normalized[1].id, "drawer_2");
     }
 }

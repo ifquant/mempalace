@@ -32,6 +32,7 @@ mirroring Python `searcher.py`:
 
 - `Searcher::search()` for programmatic Layer 3 retrieval
 - `render_search_human()` for Python-style human-readable result blocks
+- `normalize_search_hits()` / `normalize_source_file()` for Python-style result normalization and ordering
 
 Rust library structure now also includes an `entity_detector` module mirroring Python
 `entity_detector.py`:
@@ -212,6 +213,7 @@ Current project-mining behavior:
 - dedup planning and cosine-distance logic now also live in a standalone `dedup` helper instead of staying embedded inside `service`
 - repair diagnostics and scan/prune/rebuild summary assembly now also live in a standalone `repair` helper instead of staying embedded inside `service`
 - layer identity loading plus L1/L2 text rendering now also live in the `layers` module instead of staying embedded inside `service`
+- search hit basename normalization, similarity rounding, and stable ordering now also live in the `searcher` module instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring
