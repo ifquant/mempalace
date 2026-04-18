@@ -67,6 +67,9 @@ async fn mcp_read_tools_work() {
     assert!(tool_names.contains(&"mempalace_repair_rebuild"));
     assert!(tool_names.contains(&"mempalace_compress"));
     assert!(tool_names.contains(&"mempalace_dedup"));
+    assert!(tool_names.contains(&"mempalace_onboarding"));
+    assert!(tool_names.contains(&"mempalace_normalize"));
+    assert!(tool_names.contains(&"mempalace_split"));
     assert!(tool_names.contains(&"mempalace_kg_query"));
     assert!(tool_names.contains(&"mempalace_kg_add"));
     assert!(tool_names.contains(&"mempalace_kg_invalidate"));
@@ -276,6 +279,118 @@ async fn mcp_read_tools_work() {
         .unwrap();
     assert!(repair_rebuild_text.contains("\"kind\": \"repair_rebuild\""));
     assert!(repair_rebuild_text.contains("\"rebuilt\""));
+}
+
+#[tokio::test]
+async fn mcp_project_bootstrap_tools_work() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("world");
+    std::fs::create_dir_all(&project).unwrap();
+    std::fs::write(
+        project.join("notes.md"),
+        "Ever said Lantern should launch soon.\nEver wrote the Lantern architecture notes.",
+    )
+    .unwrap();
+    let convo = tmp.path().join("session.jsonl");
+    std::fs::write(
+        &convo,
+        r#"{"type":"session_meta","payload":{"id":"demo"}}
+{"type":"event_msg","payload":{"type":"user_message","message":"Riley knoe the deploy befor lunch"}}
+{"type":"event_msg","payload":{"type":"agent_message","message":"We fixed it."}}
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        tmp.path().join("entity_registry.json"),
+        r#"{
+  "version": 1,
+  "mode": "work",
+  "people": {
+    "Riley": {
+      "source": "manual",
+      "contexts": ["work"],
+      "aliases": [],
+      "relationship": "coworker",
+      "confidence": 1.0
+    }
+  },
+  "projects": [],
+  "ambiguous_flags": [],
+  "wiki_cache": {}
+}"#,
+    )
+    .unwrap();
+
+    let transcripts = tmp.path().join("transcripts");
+    std::fs::create_dir_all(&transcripts).unwrap();
+    std::fs::write(
+        transcripts.join("mega.txt"),
+        concat!(
+            "Claude Code v1\n",
+            "⏺ 9:30 AM Monday, March 30, 2026\n",
+            "> first prompt about pricing migration\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+            "Claude Code v1\n",
+            "⏺ 10:45 AM Monday, March 30, 2026\n",
+            "> second prompt about tunnel graph\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+        ),
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+
+    let onboarding = handle_request(
+        json!({"method":"tools/call","id":100,"params":{"name":"mempalace_onboarding","arguments":{
+            "project_dir": project,
+            "mode": "combo",
+            "people": ["Riley,daughter,personal", "Ben,co-founder,work"],
+            "projects": ["Lantern"],
+            "aliases": ["Ry=Riley"],
+            "wings": ["family", "work", "projects"],
+            "scan": true,
+            "auto_accept_detected": true
+        }}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let onboarding_text = onboarding["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(onboarding_text.contains("\"kind\": \"onboarding\""));
+    assert!(onboarding_text.contains("\"mode\": \"combo\""));
+    assert!(onboarding_text.contains("\"entity_registry_path\""));
+
+    let normalize = handle_request(
+        json!({"method":"tools/call","id":101,"params":{"name":"mempalace_normalize","arguments":{
+            "file_path": convo
+        }}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let normalize_text = normalize["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(normalize_text.contains("\"kind\": \"normalize\""));
+    assert!(normalize_text.contains("\"changed\": true"));
+    assert!(normalize_text.contains("> Riley know the deploy before lunch"));
+
+    let split = handle_request(
+        json!({"method":"tools/call","id":102,"params":{"name":"mempalace_split","arguments":{
+            "source_dir": transcripts,
+            "dry_run": "true",
+            "min_sessions": "2"
+        }}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let split_text = split["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(split_text.contains("\"kind\": \"split\""));
+    assert!(split_text.contains("\"dry_run\": true"));
+    assert!(split_text.contains("\"files_created\": 2"));
 }
 
 #[tokio::test]

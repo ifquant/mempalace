@@ -2,9 +2,12 @@ use serde_json::{Value, json};
 
 use crate::audit::WriteAheadLog;
 use crate::config::AppConfig;
+use crate::convo::normalize_conversation_file;
 use crate::dialect::AAAK_SPEC;
 use crate::error::{MempalaceError, Result};
+use crate::onboarding::{OnboardingRequest, parse_alias_arg, parse_person_arg, run_onboarding};
 use crate::service::App;
+use crate::split;
 
 pub const SUPPORTED_PROTOCOL_VERSIONS: [&str; 4] =
     ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
@@ -285,6 +288,49 @@ fn tools() -> Vec<Value> {
                     "source": {"type":"string","description":"Optional source_file substring filter"},
                     "min_count": {"type":"integer","description":"Minimum group size to consider (default 5)"}
                 }
+            }),
+        ),
+        tool(
+            "mempalace_onboarding",
+            "Bootstrap a project-local world model and registry files.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "project_dir": {"type":"string","description":"Project directory to bootstrap"},
+                    "mode": {"type":"string","description":"Onboarding mode: work, personal, or combo"},
+                    "people": {"type":"array","items":{"type":"string"},"description":"People in name,relationship,context format"},
+                    "projects": {"type":"array","items":{"type":"string"},"description":"Project names to seed"},
+                    "aliases": {"type":"array","items":{"type":"string"},"description":"Alias mappings in alias=canonical format"},
+                    "wings": {"type":"array","items":{"type":"string"},"description":"Wing names to seed"},
+                    "scan": {"type":"boolean","description":"Scan local files for additional names"},
+                    "auto_accept_detected": {"type":"boolean","description":"Auto-accept detected names during scan"}
+                },
+                "required": ["project_dir"]
+            }),
+        ),
+        tool(
+            "mempalace_normalize",
+            "Normalize one chat export or transcript into MemPalace conversation format.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "file_path": {"type":"string","description":"Chat export or transcript file to normalize"}
+                },
+                "required": ["file_path"]
+            }),
+        ),
+        tool(
+            "mempalace_split",
+            "Split transcript mega-files into per-session text files.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "source_dir": {"type":"string","description":"Directory containing transcript files"},
+                    "output_dir": {"type":"string","description":"Optional output directory for split files"},
+                    "min_sessions": {"type":"integer","description":"Only split files with at least this many sessions (default 2)"},
+                    "dry_run": {"type":"boolean","description":"Preview without writing files"}
+                },
+                "required": ["source_dir"]
             }),
         ),
         tool(
@@ -863,6 +909,142 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                     "Dedup error",
                     &err,
                     "Check the palace files and dedup filters, then rerun mempalace_dedup.",
+                )),
+            }
+        }
+        "mempalace_onboarding" => {
+            let project_dir = required_str(&arguments, "project_dir", "mempalace_onboarding");
+            let Ok(project_dir) = project_dir else {
+                return Ok(tool_error(
+                    "Onboarding error",
+                    &MempalaceError::Mcp("mempalace_onboarding requires project_dir".to_string()),
+                    "Provide project_dir, then rerun mempalace_onboarding.",
+                ));
+            };
+            let mut request = OnboardingRequest {
+                mode: arguments
+                    .get("mode")
+                    .and_then(Value::as_str)
+                    .map(ToOwned::to_owned),
+                people: Vec::new(),
+                projects: string_list_arg(&arguments, "projects"),
+                aliases: std::collections::BTreeMap::new(),
+                wings: string_list_arg(&arguments, "wings"),
+                scan: arguments.get("scan").and_then(Value::as_bool),
+                auto_accept_detected: arguments
+                    .get("auto_accept_detected")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false),
+            };
+
+            for person in string_list_arg(&arguments, "people") {
+                match parse_person_arg(&person) {
+                    Ok(value) => request.people.push(value),
+                    Err(err) => {
+                        return Ok(tool_error(
+                            "Onboarding error",
+                            &err,
+                            "Use people entries in name,relationship,context format, then rerun mempalace_onboarding.",
+                        ));
+                    }
+                }
+            }
+            for alias in string_list_arg(&arguments, "aliases") {
+                match parse_alias_arg(&alias) {
+                    Ok((alias, canonical)) => {
+                        request.aliases.insert(alias, canonical);
+                    }
+                    Err(err) => {
+                        return Ok(tool_error(
+                            "Onboarding error",
+                            &err,
+                            "Use aliases in alias=canonical format, then rerun mempalace_onboarding.",
+                        ));
+                    }
+                }
+            }
+
+            match run_onboarding(std::path::Path::new(project_dir), request) {
+                Ok(summary) => Ok(serde_json::to_value(summary)?),
+                Err(err) => Ok(tool_error(
+                    "Onboarding error",
+                    &err,
+                    "Check project_dir and onboarding inputs, then rerun mempalace_onboarding.",
+                )),
+            }
+        }
+        "mempalace_normalize" => {
+            let file_path = required_str(&arguments, "file_path", "mempalace_normalize");
+            let Ok(file_path) = file_path else {
+                return Ok(tool_error(
+                    "Normalize error",
+                    &MempalaceError::Mcp("mempalace_normalize requires file_path".to_string()),
+                    "Provide file_path, then rerun mempalace_normalize.",
+                ));
+            };
+            let path = std::path::Path::new(file_path);
+            let raw = match std::fs::read_to_string(path) {
+                Ok(text) => text,
+                Err(err) => {
+                    return Ok(tool_error(
+                        "Normalize error",
+                        &err,
+                        "Check file_path and file readability, then rerun mempalace_normalize.",
+                    ));
+                }
+            };
+            match normalize_conversation_file(path) {
+                Ok(Some(normalized)) => Ok(json!({
+                    "kind": "normalize",
+                    "file_path": path.display().to_string(),
+                    "changed": normalized != raw,
+                    "chars": normalized.chars().count(),
+                    "quote_turns": normalized.lines().filter(|line| line.trim_start().starts_with('>')).count(),
+                    "normalized": normalized,
+                })),
+                Ok(None) => Ok(tool_error(
+                    "Normalize error",
+                    &MempalaceError::InvalidArgument(
+                        "Unsupported or unreadable conversation file.".to_string(),
+                    ),
+                    "Use a supported .txt, .md, .json, or .jsonl chat export, then rerun mempalace_normalize.",
+                )),
+                Err(err) => Ok(tool_error(
+                    "Normalize error",
+                    &err,
+                    "Check file_path and transcript format, then rerun mempalace_normalize.",
+                )),
+            }
+        }
+        "mempalace_split" => {
+            let source_dir = required_str(&arguments, "source_dir", "mempalace_split");
+            let Ok(source_dir) = source_dir else {
+                return Ok(tool_error(
+                    "Split error",
+                    &MempalaceError::Mcp("mempalace_split requires source_dir".to_string()),
+                    "Provide source_dir, then rerun mempalace_split.",
+                ));
+            };
+            let output_dir = arguments.get("output_dir").and_then(Value::as_str);
+            let min_sessions = arguments
+                .get("min_sessions")
+                .and_then(Value::as_u64)
+                .unwrap_or(2) as usize;
+            let dry_run = arguments
+                .get("dry_run")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            match split::split_directory(
+                std::path::Path::new(source_dir),
+                output_dir.map(std::path::Path::new),
+                min_sessions,
+                dry_run,
+            ) {
+                Ok(summary) => Ok(serde_json::to_value(summary)?),
+                Err(err) => Ok(tool_error(
+                    "Split error",
+                    &err,
+                    "Check source_dir, output_dir, and transcript files, then rerun mempalace_split.",
                 )),
             }
         }
@@ -1498,6 +1680,9 @@ fn requires_existing_palace(tool_name: &str) -> bool {
         "mempalace_diary_write"
             | "mempalace_add_drawer"
             | "mempalace_kg_add"
+            | "mempalace_onboarding"
+            | "mempalace_normalize"
+            | "mempalace_split"
             | "mempalace_registry_summary"
             | "mempalace_registry_lookup"
             | "mempalace_registry_query"
@@ -1615,6 +1800,42 @@ fn coerce_argument_types(tool_name: &str, arguments: &mut Value) {
                 }
             }
         }
+        "mempalace_onboarding" => {
+            for key in ["scan", "auto_accept_detected"] {
+                if let Some(value) = args.get(key).cloned() {
+                    let coerced = match value {
+                        Value::String(text) => text.parse::<bool>().ok().map(Value::from),
+                        Value::Bool(_) => Some(value),
+                        _ => None,
+                    };
+                    if let Some(flag) = coerced {
+                        args.insert(key.to_string(), flag);
+                    }
+                }
+            }
+        }
+        "mempalace_split" => {
+            if let Some(value) = args.get("dry_run").cloned() {
+                let coerced = match value {
+                    Value::String(text) => text.parse::<bool>().ok().map(Value::from),
+                    Value::Bool(_) => Some(value),
+                    _ => None,
+                };
+                if let Some(dry_run) = coerced {
+                    args.insert("dry_run".to_string(), dry_run);
+                }
+            }
+            if let Some(value) = args.get("min_sessions").cloned() {
+                let coerced = match value {
+                    Value::String(text) => text.parse::<u64>().ok().map(Value::from),
+                    Value::Number(_) => value.as_u64().map(Value::from),
+                    _ => None,
+                };
+                if let Some(min_sessions) = coerced {
+                    args.insert("min_sessions".to_string(), min_sessions);
+                }
+            }
+        }
         "mempalace_kg_add"
         | "mempalace_kg_invalidate"
         | "mempalace_add_drawer"
@@ -1674,6 +1895,18 @@ fn required_str<'a>(arguments: &'a Value, key: &str, tool_name: &str) -> Result<
         .get(key)
         .and_then(Value::as_str)
         .ok_or_else(|| MempalaceError::Mcp(format!("{tool_name} requires {key}")))
+}
+
+fn string_list_arg(arguments: &Value, key: &str) -> Vec<String> {
+    match arguments.get(key) {
+        Some(Value::String(value)) => vec![value.clone()],
+        Some(Value::Array(values)) => values
+            .iter()
+            .filter_map(Value::as_str)
+            .map(ToOwned::to_owned)
+            .collect(),
+        _ => Vec::new(),
+    }
 }
 
 fn best_effort_wal_log(config: &AppConfig, operation: &str, params: Value) {
