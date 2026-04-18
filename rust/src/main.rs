@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use mempalace_rs::config::AppConfig;
+use mempalace_rs::convo::normalize_conversation_file;
 use mempalace_rs::hook;
 use mempalace_rs::instructions;
 use mempalace_rs::mcp;
@@ -116,6 +117,14 @@ enum Command {
         #[arg(long)]
         #[arg(help = "Show what would be split without writing files")]
         dry_run: bool,
+    },
+    #[command(about = "Normalize one chat export into MemPalace transcript format")]
+    Normalize {
+        #[arg(help = "Chat export or transcript file to normalize")]
+        file: PathBuf,
+        #[arg(long)]
+        #[arg(help = "Print human-readable preview instead of JSON")]
+        human: bool,
     },
     #[command(about = "Compress drawers into AAAK summaries")]
     Compress {
@@ -575,6 +584,36 @@ async fn main() -> anyhow::Result<()> {
             let summary =
                 split::split_directory(&dir, output_dir.as_deref(), min_sessions, dry_run)?;
             println!("{}", serde_json::to_string_pretty(&summary)?);
+        }
+        Command::Normalize { file, human } => {
+            let raw = std::fs::read_to_string(&file)?;
+            let normalized = normalize_conversation_file(&file)?;
+            let Some(normalized) = normalized else {
+                if human {
+                    print_normalize_error_human("Unsupported or unreadable conversation file.");
+                } else {
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&json!({
+                            "error": "Normalize error: Unsupported or unreadable conversation file."
+                        }))?
+                    );
+                }
+                std::process::exit(1);
+            };
+            let summary = json!({
+                "kind": "normalize",
+                "file_path": file.display().to_string(),
+                "changed": normalized != raw,
+                "chars": normalized.chars().count(),
+                "quote_turns": normalized.lines().filter(|line| line.trim_start().starts_with('>')).count(),
+                "normalized": normalized,
+            });
+            if human {
+                print_normalize_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
         }
         Command::Compress {
             wing,
@@ -1275,6 +1314,40 @@ fn print_search_human(summary: &mempalace_rs::model::SearchResults) {
         println!("  {}", "─".repeat(56));
     }
     println!();
+}
+
+fn print_normalize_human(summary: &serde_json::Value) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Normalize");
+    println!("{}\n", "=".repeat(55));
+    println!(
+        "  File: {}",
+        summary["file_path"].as_str().unwrap_or_default()
+    );
+    println!(
+        "  Changed: {}",
+        summary["changed"].as_bool().unwrap_or(false)
+    );
+    println!("  Chars: {}", summary["chars"].as_u64().unwrap_or(0));
+    println!(
+        "  User turns: {}",
+        summary["quote_turns"].as_u64().unwrap_or(0)
+    );
+    println!("\n  Preview:\n");
+    let preview = summary["normalized"]
+        .as_str()
+        .unwrap_or_default()
+        .lines()
+        .take(12)
+        .collect::<Vec<_>>()
+        .join("\n");
+    println!("{preview}");
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_normalize_error_human(message: &str) {
+    println!("\n  Normalize error: {message}");
 }
 
 fn print_search_no_palace_human(config: &AppConfig) {

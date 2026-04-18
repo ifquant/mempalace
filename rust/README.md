@@ -48,6 +48,7 @@ Current first-phase support:
 - `registry add-person|add-project|add-alias|query` to maintain and query the local entity registry without editing JSON by hand
 - `registry research|confirm` to cache Wikipedia-backed research and promote confirmed names into the local registry
 - `split <dir>` to detect transcript mega-files, preview session boundaries, and split them into per-session `.txt` files with `.mega_backup` rollover
+- `normalize <file>` to inspect how one chat export/transcript is normalized before mining
 - `mcp --setup` to print Python-style quick setup instructions for wiring the Rust MCP server into MCP-capable hosts
 - Rust now has a standalone `registry` surface instead of treating `entity_registry.json` as a bootstrap-only artifact
 - `registry lookup` now mirrors Python's ambiguous-name disambiguation for common English words such as `Ever`
@@ -166,6 +167,7 @@ Useful verification command:
 - `cargo run -- registry query /path/to/project "Ry said Lantern should ship with Max"`
 - `cargo run -- registry research /path/to/project Riley --human`
 - `cargo run -- registry confirm /path/to/project Riley --type person --relationship daughter --context personal --human`
+- `cargo run -- normalize /path/to/transcript.jsonl --human`
 - `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding`
 - `MEMPALACE_RS_TEST_HF_ENDPOINT=https://hf-mirror.com cargo test cli_fastembed_prepare_mine_search_smoke -- --ignored --nocapture`
 

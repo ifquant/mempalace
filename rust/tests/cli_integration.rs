@@ -772,6 +772,87 @@ fn cli_split_help_mentions_transcript_megafiles() {
 }
 
 #[test]
+fn cli_normalize_help_mentions_chat_export_normalization() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["normalize", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "Normalize one chat export into MemPalace transcript format",
+        ))
+        .stdout(contains("human-readable preview"));
+}
+
+#[test]
+fn cli_normalize_json_reports_changed_transcript() {
+    let tmp = tempdir().unwrap();
+    let source = tmp.path().join("session.jsonl");
+    fs::write(
+        &source,
+        r#"{"type":"session_meta","payload":{"id":"demo"}}
+{"type":"event_msg","payload":{"type":"user_message","message":"Riley knoe the deploy befor lunch"}}
+{"type":"event_msg","payload":{"type":"agent_message","message":"We fixed it."}}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        tmp.path().join("entity_registry.json"),
+        r#"{
+  "version": 1,
+  "mode": "work",
+  "people": {
+    "Riley": {
+      "source": "manual",
+      "contexts": ["work"],
+      "aliases": [],
+      "relationship": "coworker",
+      "confidence": 1.0
+    }
+  },
+  "projects": [],
+  "ambiguous_flags": [],
+  "wiki_cache": {}
+}"#,
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["normalize", source.to_str().unwrap()])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let summary: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(summary["kind"], "normalize");
+    assert_eq!(summary["changed"], true);
+    assert!(
+        summary["normalized"]
+            .as_str()
+            .unwrap()
+            .contains("> Riley know the deploy before lunch")
+    );
+}
+
+#[test]
+fn cli_normalize_human_prints_preview() {
+    let tmp = tempdir().unwrap();
+    let source = tmp.path().join("already.txt");
+    fs::write(&source, "> user turn\nassistant turn\n").unwrap();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["normalize", source.to_str().unwrap(), "--human"])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Normalize"))
+        .stdout(contains("Preview"))
+        .stdout(contains("> user turn"));
+}
+
+#[test]
 fn cli_split_dry_run_reports_output_without_writing() {
     let tmp = tempdir().unwrap();
     let source = tmp.path().join("transcripts");
