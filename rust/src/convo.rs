@@ -1272,4 +1272,21 @@ I feel proud and grateful that the rewrite finally feels solid.
             "architecture"
         );
     }
+
+    #[test]
+    fn exchange_chunker_falls_back_to_paragraph_groups() {
+        let text = "We reviewed the migration strategy and kept the old data path for safety.\n\nThis paragraph explains why the deploy failed and what changed in the build.\n\nThe final paragraph describes the testing follow-up and release plan.";
+        let chunks = extract_exchange_chunks(text);
+        assert_eq!(chunks.len(), 3);
+        assert!(chunks.iter().all(|chunk| !chunk.content.is_empty()));
+    }
+
+    #[test]
+    fn general_extractor_keeps_positive_emotional_text_out_of_problem() {
+        let text =
+            "I feel grateful and proud that the difficult rewrite is finally stable and beautiful.";
+        let memories = extract_general_memories(text, 0.3);
+        assert_eq!(memories.len(), 1);
+        assert_eq!(memories[0].room, "emotional");
+    }
 }

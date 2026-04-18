@@ -21,9 +21,12 @@ Current first-phase support:
 - `mine --mode projects --agent <name>` matches more of the Python CLI surface
 - `mine --mode convos --extract exchange` now mines normalized chat transcripts into exchange-pair drawers
 - `mine --mode convos --extract general` now mines 5 heuristic memory types: `decision`, `preference`, `milestone`, `problem`, `emotional`
-- convos mode now supports `.txt/.md/.json/.jsonl`, skips `.meta.json`, symlinks, oversized files, and unsupported/broken chat exports without aborting the batch
+- convos mode now supports `.txt/.md/.json/.jsonl`, including normalized ChatGPT JSON and Codex/Claude-style JSONL exports
+- convos mode skips `.meta.json`, symlinks, oversized files, and unsupported/broken chat exports without aborting the batch
 - convos re-mine now follows the same source-based replacement path as project mining, so re-filing one chat file replaces old chunks instead of duplicating them
 - drawer metadata now also persists `ingest_mode` and `extract_mode` in both SQLite and LanceDB
+- exchange mode now has explicit coverage for quoted turns, speaker-turn transcripts, and paragraph fallback
+- general mode now has explicit coverage for keeping positive emotional text out of the `problem` bucket
 - project re-mine bookkeeping now tracks `source_mtime` so unchanged files skip more like the Python miner
 - `mine` JSON now carries per-room file counts plus the Python-style search follow-up hint
 - project scanning now matches more Python `scan_project()` edge cases around nested `.gitignore`, negation, and include-overrides for skipped directories

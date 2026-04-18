@@ -928,6 +928,81 @@ async fn service_mine_convos_exchange_replaces_existing_source_chunks() {
     assert_eq!(sqlite.total_drawers().unwrap(), 1);
 }
 
+#[tokio::test]
+async fn service_mine_convos_normalizes_json_and_jsonl_chat_exports() {
+    let tmp = tempdir().unwrap();
+    let convo_dir = tmp.path().join("convos");
+    std::fs::create_dir_all(&convo_dir).unwrap();
+    std::fs::write(
+        convo_dir.join("chatgpt.json"),
+        r#"{
+  "mapping": {
+    "root": {"id":"root","parent":null,"message":null,"children":["u1"]},
+    "u1": {
+      "id":"u1",
+      "parent":"root",
+      "message":{"author":{"role":"user"},"content":{"parts":["Why did the deploy fail?"]}},
+      "children":["a1"]
+    },
+    "a1": {
+      "id":"a1",
+      "parent":"u1",
+      "message":{"author":{"role":"assistant"},"content":{"parts":["The server config was broken."]}},
+      "children":["u2"]
+    },
+    "u2": {
+      "id":"u2",
+      "parent":"a1",
+      "message":{"author":{"role":"user"},"content":{"parts":["How did we fix it?"]}},
+      "children":["a2"]
+    },
+    "a2": {
+      "id":"a2",
+      "parent":"u2",
+      "message":{"author":{"role":"assistant"},"content":{"parts":["We fixed the deploy config and reran tests."]}},
+      "children":[]
+    }
+  }
+}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        convo_dir.join("codex.jsonl"),
+        r#"{"type":"session_meta","payload":{"id":"demo"}}
+{"type":"event_msg","payload":{"type":"user_message","message":"Why did the roadmap change?"}}
+{"type":"event_msg","payload":{"type":"agent_message","message":"We reprioritized the milestone after the build issue."}}
+"#,
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+
+    let summary = app
+        .mine_project(
+            &convo_dir,
+            &MineRequest {
+                wing: Some("chatlogs".to_string()),
+                mode: "convos".to_string(),
+                agent: "mempalace".to_string(),
+                limit: 0,
+                dry_run: false,
+                respect_gitignore: true,
+                include_ignored: vec![],
+                extract: "exchange".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(summary.files_mined, 2);
+    assert!(summary.drawers_added >= 2);
+    let status = app.status().await.unwrap();
+    assert!(status.total_drawers >= 2);
+}
+
 #[test]
 fn service_general_extractor_classifies_decision_preference_milestone_problem_emotional() {
     let text = r#"
@@ -951,6 +1026,14 @@ I feel proud and grateful that the rewrite finally feels stable.
     assert!(kinds.contains(&"milestone"));
     assert!(kinds.contains(&"emotional"));
     assert!(!kinds.contains(&"problem"));
+}
+
+#[test]
+fn service_general_extractor_keeps_positive_emotional_text_out_of_problem() {
+    let text = "I feel grateful and proud that the rewrite finally feels stable and beautiful.";
+    let memories = extract_general_memories(text, 0.3);
+    assert_eq!(memories.len(), 1);
+    assert_eq!(memories[0].room, "emotional");
 }
 
 #[test]

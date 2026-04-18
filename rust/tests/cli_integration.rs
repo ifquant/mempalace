@@ -2041,6 +2041,100 @@ fn cli_mine_convos_human_prints_python_style_summary() {
         .stdout(contains("milestone"));
 }
 
+#[test]
+fn cli_mine_convos_exchange_supports_json_chat_export() {
+    let tmp = tempdir().unwrap();
+    let convo_dir = tmp.path().join("convos");
+    fs::create_dir_all(&convo_dir).unwrap();
+    fs::write(
+        convo_dir.join("chatgpt.json"),
+        r#"{
+  "mapping": {
+    "root": {"id":"root","parent":null,"message":null,"children":["u1"]},
+    "u1": {
+      "id":"u1",
+      "parent":"root",
+      "message":{"author":{"role":"user"},"content":{"parts":["Why did the deploy fail?"]}},
+      "children":["a1"]
+    },
+    "a1": {
+      "id":"a1",
+      "parent":"u1",
+      "message":{"author":{"role":"assistant"},"content":{"parts":["The deploy server config was broken."]}},
+      "children":["u2"]
+    },
+    "u2": {
+      "id":"u2",
+      "parent":"a1",
+      "message":{"author":{"role":"user"},"content":{"parts":["How did we fix it?"]}},
+      "children":["a2"]
+    },
+    "a2": {
+      "id":"a2",
+      "parent":"u2",
+      "message":{"author":{"role":"assistant"},"content":{"parts":["We fixed the deploy config and reran tests."]}},
+      "children":[]
+    }
+  }
+}"#,
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            convo_dir.to_str().unwrap(),
+            "--mode",
+            "convos",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"files_mined\": 1"))
+        .stdout(contains("\"drawers_added\": 2"))
+        .stdout(contains("\"technical\":"));
+}
+
+#[test]
+fn cli_mine_convos_general_progress_summarizes_memory_types() {
+    let tmp = tempdir().unwrap();
+    let convo_dir = tmp.path().join("convos");
+    fs::create_dir_all(&convo_dir).unwrap();
+    fs::write(
+        convo_dir.join("memories.md"),
+        "We decided to use LanceDB because the local-first trade-off is better.\n\nI prefer explicit APIs.\n\nThe migration problem was painful, but we fixed it and now it works.\n\nI feel proud and grateful that the rewrite finally feels stable.\n",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            convo_dir.to_str().unwrap(),
+            "--mode",
+            "convos",
+            "--extract",
+            "general",
+            "--dry-run",
+            "--progress",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"extract\": \"general\""))
+        .stderr(contains("[DRY RUN] memories.md ->"))
+        .stderr(contains("decision:"))
+        .stderr(contains("milestone:"))
+        .stderr(contains("emotional:"));
+}
+
 fn run_cli_json(
     palace: &std::path::Path,
     command: &str,
