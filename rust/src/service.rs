@@ -16,6 +16,7 @@ use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::entity_detector::detect_entities_for_registry;
 use crate::error::{MempalaceError, Result};
 use crate::knowledge_graph::KnowledgeGraph;
+use crate::layers::{read_identity_text, render_layer1, render_layer2};
 use crate::model::{
     CompressSummary, DedupSummary, DiaryReadResult, DiaryWriteResult, DoctorSummary,
     DrawerDeleteResult, DrawerInput, DrawerWriteResult, GraphStats, GraphTraversalResult,
@@ -616,13 +617,7 @@ impl App {
         sqlite.init_schema()?;
         sqlite.ensure_embedding_profile(self.embedder.profile())?;
         let identity_path = self.config.identity_path();
-        let identity = if identity_path.exists() {
-            fs::read_to_string(&identity_path)
-                .map(|text| text.trim().to_string())
-                .unwrap_or_else(|_| default_identity_text())
-        } else {
-            default_identity_text()
-        };
+        let identity = read_identity_text(&identity_path);
 
         let recent = sqlite.recent_drawers(wing, 15)?;
         let layer1 = render_layer1(&recent, wing);
@@ -1730,78 +1725,6 @@ fn normalize_search_hits(mut hits: Vec<SearchHit>) -> Vec<SearchHit> {
 
     hits.sort_by(compare_search_hits);
     hits
-}
-
-fn default_identity_text() -> String {
-    "## L0 — IDENTITY\nNo identity configured. Create <palace>/identity.txt".to_string()
-}
-
-fn render_layer1(drawers: &[DrawerRecord], wing: Option<&str>) -> String {
-    if drawers.is_empty() {
-        return if let Some(wing_name) = wing {
-            format!("## L1 — No memories yet for wing '{wing_name}'.")
-        } else {
-            "## L1 — No memories yet.".to_string()
-        };
-    }
-
-    let mut by_room: BTreeMap<String, Vec<&DrawerRecord>> = BTreeMap::new();
-    for drawer in drawers {
-        by_room.entry(drawer.room.clone()).or_default().push(drawer);
-    }
-
-    let mut lines = vec!["## L1 — ESSENTIAL STORY".to_string()];
-    for (room, entries) in by_room {
-        lines.push(format!("\n[{room}]"));
-        for drawer in entries.into_iter().take(4) {
-            let mut snippet = drawer.text.replace('\n', " ").trim().to_string();
-            if snippet.chars().count() > 200 {
-                snippet = format!("{}...", snippet.chars().take(197).collect::<String>());
-            }
-            let mut line = format!("  - {snippet}");
-            if !drawer.source_file.is_empty() {
-                line.push_str(&format!("  ({})", drawer.source_file));
-            }
-            lines.push(line);
-        }
-    }
-
-    lines.join("\n")
-}
-
-fn render_layer2(drawers: &[SearchHit], wing: Option<&str>, room: Option<&str>) -> String {
-    if drawers.is_empty() {
-        let mut label = String::new();
-        if let Some(wing_name) = wing {
-            label.push_str(&format!("wing={wing_name}"));
-        }
-        if let Some(room_name) = room {
-            if !label.is_empty() {
-                label.push(' ');
-            }
-            label.push_str(&format!("room={room_name}"));
-        }
-        if label.is_empty() {
-            "No drawers found.".to_string()
-        } else {
-            format!("No drawers found for {label}.")
-        }
-    } else {
-        let mut lines = vec![format!("## L2 — ON-DEMAND ({} drawers)", drawers.len())];
-        for hit in drawers {
-            let mut snippet = hit.text.trim().replace('\n', " ");
-            if snippet.len() > 300 {
-                snippet.truncate(297);
-                snippet.push_str("...");
-            }
-            let mut entry = format!("  [{}] {}", hit.room, snippet);
-            if !hit.source_file.is_empty() {
-                entry.push_str(&format!("  ({})", hit.source_file));
-            }
-            lines.push(entry);
-        }
-        lines.join("\n")
-    }
 }
 
 fn normalize_source_file(source_file: &str, source_path: &str) -> String {

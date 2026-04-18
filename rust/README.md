@@ -25,6 +25,7 @@ facade mirroring Python `layers.py`:
 - `layer0()` for identity text
 - `layer1()` for the essential story view
 - `wake_up()` / `recall()` / `search()` / `status()` for the higher-level stack surfaces
+- shared `read_identity_text()` / `render_layer1()` / `render_layer2()` helpers for Python-style layer text rendering
 
 Rust library structure now also includes a `searcher` module with a programmatic search facade
 mirroring Python `searcher.py`:
@@ -210,6 +211,7 @@ Current project-mining behavior:
 - KG read/write access now also goes through a standalone `knowledge_graph` facade instead of staying embedded inside `service`
 - dedup planning and cosine-distance logic now also live in a standalone `dedup` helper instead of staying embedded inside `service`
 - repair diagnostics and scan/prune/rebuild summary assembly now also live in a standalone `repair` helper instead of staying embedded inside `service`
+- layer identity loading plus L1/L2 text rendering now also live in the `layers` module instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring
