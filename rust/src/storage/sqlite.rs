@@ -8,9 +8,9 @@ use rusqlite::{Connection, OptionalExtension, params};
 use crate::embed::EmbeddingProfile;
 use crate::error::Result;
 use crate::model::{
-    DiaryEntry, DiaryReadResult, DiaryWriteResult, DrawerDeleteResult, DrawerInput,
-    DrawerWriteResult, KgFact, KgInvalidateResult, KgStats, KgTimelineResult, KgTriple,
-    KgWriteResult, Rooms, Taxonomy,
+    CompressedDrawer, DiaryEntry, DiaryReadResult, DiaryWriteResult, DrawerDeleteResult,
+    DrawerInput, DrawerWriteResult, KgFact, KgInvalidateResult, KgStats, KgTimelineResult,
+    KgTriple, KgWriteResult, Rooms, Taxonomy,
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -20,12 +20,29 @@ pub struct GraphRoomRow {
     pub filed_at: Option<String>,
 }
 
-pub const CURRENT_SCHEMA_VERSION: i64 = 6;
+pub const CURRENT_SCHEMA_VERSION: i64 = 7;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct IngestedFileState {
     pub content_hash: String,
     pub source_mtime: Option<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct DrawerRecord {
+    pub id: String,
+    pub wing: String,
+    pub room: String,
+    pub source_file: String,
+    pub source_path: String,
+    pub source_hash: String,
+    pub source_mtime: Option<f64>,
+    pub chunk_index: i32,
+    pub added_by: String,
+    pub filed_at: String,
+    pub ingest_mode: String,
+    pub extract_mode: String,
+    pub text: String,
 }
 
 pub struct SqliteStore {
@@ -74,6 +91,10 @@ impl SqliteStore {
                 5 => {
                     self.migrate_v5_to_v6()?;
                     version = 6;
+                }
+                6 => {
+                    self.migrate_v6_to_v7()?;
+                    version = 7;
                 }
                 CURRENT_SCHEMA_VERSION => break,
                 other => {
@@ -169,6 +190,21 @@ impl SqliteStore {
                 entry TEXT NOT NULL,
                 timestamp TEXT NOT NULL,
                 date TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS compressed_drawers (
+                drawer_id TEXT PRIMARY KEY,
+                wing TEXT NOT NULL,
+                room TEXT NOT NULL,
+                source_file TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                ingest_mode TEXT NOT NULL,
+                extract_mode TEXT NOT NULL,
+                aaak TEXT NOT NULL,
+                original_tokens INTEGER NOT NULL,
+                compressed_tokens INTEGER NOT NULL,
+                compression_ratio REAL NOT NULL,
                 created_at TEXT NOT NULL
             );
             "#,
@@ -307,6 +343,30 @@ impl SqliteStore {
             6,
             "add ingest_mode and extract_mode drawer metadata for conversation mining parity",
         )?;
+        Ok(())
+    }
+
+    fn migrate_v6_to_v7(&self) -> Result<()> {
+        self.conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS compressed_drawers (
+                drawer_id TEXT PRIMARY KEY,
+                wing TEXT NOT NULL,
+                room TEXT NOT NULL,
+                source_file TEXT NOT NULL,
+                source_path TEXT NOT NULL,
+                ingest_mode TEXT NOT NULL,
+                extract_mode TEXT NOT NULL,
+                aaak TEXT NOT NULL,
+                original_tokens INTEGER NOT NULL,
+                compressed_tokens INTEGER NOT NULL,
+                compression_ratio REAL NOT NULL,
+                created_at TEXT NOT NULL
+            );
+            "#,
+        )?;
+        self.set_meta("schema_version", "7")?;
+        self.record_migration(7, "add compressed_drawers table for AAAK summaries")?;
         Ok(())
     }
 
@@ -607,6 +667,127 @@ impl SqliteStore {
                 .insert(room, count);
         }
         Ok(Taxonomy { taxonomy })
+    }
+
+    pub fn list_drawers(&self, wing: Option<&str>) -> Result<Vec<DrawerRecord>> {
+        let mut query = String::from(
+            "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, text
+             FROM drawers",
+        );
+        let mut records = Vec::new();
+        if let Some(wing_name) = wing {
+            query.push_str(
+                " WHERE wing = ?1
+                  ORDER BY wing, room, source_file, chunk_index, filed_at",
+            );
+            let mut stmt = self.conn.prepare(&query)?;
+            let rows = stmt.query_map([wing_name], map_drawer_record)?;
+            for row in rows {
+                records.push(row?);
+            }
+        } else {
+            query.push_str(" ORDER BY wing, room, source_file, chunk_index, filed_at");
+            let mut stmt = self.conn.prepare(&query)?;
+            let rows = stmt.query_map([], map_drawer_record)?;
+            for row in rows {
+                records.push(row?);
+            }
+        }
+        Ok(records)
+    }
+
+    pub fn recent_drawers(&self, wing: Option<&str>, limit: usize) -> Result<Vec<DrawerRecord>> {
+        let fetch_limit = limit.max(1) as i64;
+        let mut records = Vec::new();
+        if let Some(wing_name) = wing {
+            let mut stmt = self.conn.prepare(
+                "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, text
+                 FROM drawers
+                 WHERE wing = ?1
+                 ORDER BY filed_at DESC, chunk_index ASC
+                 LIMIT ?2",
+            )?;
+            let rows = stmt.query_map(params![wing_name, fetch_limit], map_drawer_record)?;
+            for row in rows {
+                records.push(row?);
+            }
+        } else {
+            let mut stmt = self.conn.prepare(
+                "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, text
+                 FROM drawers
+                 ORDER BY filed_at DESC, chunk_index ASC
+                 LIMIT ?1",
+            )?;
+            let rows = stmt.query_map([fetch_limit], map_drawer_record)?;
+            for row in rows {
+                records.push(row?);
+            }
+        }
+        Ok(records)
+    }
+
+    pub fn replace_compressed_drawers(
+        &mut self,
+        wing: Option<&str>,
+        entries: &[CompressedDrawer],
+    ) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        if let Some(wing_name) = wing {
+            tx.execute(
+                "DELETE FROM compressed_drawers WHERE wing = ?1",
+                [wing_name],
+            )?;
+        } else {
+            tx.execute("DELETE FROM compressed_drawers", [])?;
+        }
+        let mut stmt = tx.prepare(
+            "INSERT INTO compressed_drawers (drawer_id, wing, room, source_file, source_path, ingest_mode, extract_mode, aaak, original_tokens, compressed_tokens, compression_ratio, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        )?;
+        let now = Utc::now().to_rfc3339();
+        for entry in entries {
+            stmt.execute(params![
+                &entry.drawer_id,
+                &entry.wing,
+                &entry.room,
+                &entry.source_file,
+                &entry.source_path,
+                &entry.ingest_mode,
+                &entry.extract_mode,
+                &entry.aaak,
+                entry.original_tokens as i64,
+                entry.compressed_tokens as i64,
+                entry.compression_ratio,
+                &now,
+            ])?;
+        }
+        drop(stmt);
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn list_compressed_drawers(&self, wing: Option<&str>) -> Result<Vec<CompressedDrawer>> {
+        let mut query = String::from(
+            "SELECT drawer_id, wing, room, source_file, source_path, ingest_mode, extract_mode, aaak, original_tokens, compressed_tokens, compression_ratio
+             FROM compressed_drawers",
+        );
+        let mut entries = Vec::new();
+        if let Some(wing_name) = wing {
+            query.push_str(" WHERE wing = ?1 ORDER BY wing, room, source_file, drawer_id");
+            let mut stmt = self.conn.prepare(&query)?;
+            let rows = stmt.query_map([wing_name], map_compressed_drawer)?;
+            for row in rows {
+                entries.push(row?);
+            }
+        } else {
+            query.push_str(" ORDER BY wing, room, source_file, drawer_id");
+            let mut stmt = self.conn.prepare(&query)?;
+            let rows = stmt.query_map([], map_compressed_drawer)?;
+            for row in rows {
+                entries.push(row?);
+            }
+        }
+        Ok(entries)
     }
 
     pub fn graph_room_rows(&self) -> Result<Vec<GraphRoomRow>> {
@@ -989,6 +1170,40 @@ impl SqliteStore {
             entries,
         })
     }
+}
+
+fn map_drawer_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<DrawerRecord> {
+    Ok(DrawerRecord {
+        id: row.get(0)?,
+        wing: row.get(1)?,
+        room: row.get(2)?,
+        source_file: row.get(3)?,
+        source_path: row.get(4)?,
+        source_hash: row.get(5)?,
+        source_mtime: row.get(6)?,
+        chunk_index: row.get(7)?,
+        added_by: row.get(8)?,
+        filed_at: row.get(9)?,
+        ingest_mode: row.get(10)?,
+        extract_mode: row.get(11)?,
+        text: row.get(12)?,
+    })
+}
+
+fn map_compressed_drawer(row: &rusqlite::Row<'_>) -> rusqlite::Result<CompressedDrawer> {
+    Ok(CompressedDrawer {
+        drawer_id: row.get(0)?,
+        wing: row.get(1)?,
+        room: row.get(2)?,
+        source_file: row.get(3)?,
+        source_path: row.get(4)?,
+        ingest_mode: row.get(5)?,
+        extract_mode: row.get(6)?,
+        aaak: row.get(7)?,
+        original_tokens: row.get::<_, i64>(8)? as usize,
+        compressed_tokens: row.get::<_, i64>(9)? as usize,
+        compression_ratio: row.get(10)?,
+    })
 }
 
 fn normalize_agent_name(agent_name: &str) -> String {

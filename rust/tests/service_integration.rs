@@ -807,6 +807,98 @@ async fn init_migrates_v1_sqlite_schema_to_current() {
 }
 
 #[tokio::test]
+async fn migrate_v6_adds_compressed_drawers_table() {
+    let tmp = tempdir().unwrap();
+    let palace = tmp.path().join("palace");
+    std::fs::create_dir_all(&palace).unwrap();
+    let sqlite_path = palace.join("palace.sqlite3");
+
+    let conn = Connection::open(&sqlite_path).unwrap();
+    conn.execute_batch(
+        r#"
+        CREATE TABLE meta (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        );
+        INSERT INTO meta(key, value) VALUES('schema_version', '6');
+
+        CREATE TABLE drawers (
+            id TEXT PRIMARY KEY,
+            wing TEXT NOT NULL,
+            room TEXT NOT NULL,
+            source_file TEXT NOT NULL,
+            source_path TEXT NOT NULL,
+            source_hash TEXT NOT NULL,
+            source_mtime REAL,
+            chunk_index INTEGER NOT NULL,
+            added_by TEXT NOT NULL,
+            filed_at TEXT NOT NULL,
+            ingest_mode TEXT NOT NULL,
+            extract_mode TEXT NOT NULL,
+            text TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE ingested_files (
+            source_path TEXT PRIMARY KEY,
+            content_hash TEXT NOT NULL,
+            source_mtime REAL,
+            wing TEXT NOT NULL,
+            room TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+
+        CREATE TABLE kg_triples (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            subject TEXT NOT NULL,
+            predicate TEXT NOT NULL,
+            object TEXT NOT NULL,
+            valid_from TEXT,
+            valid_to TEXT,
+            created_at TEXT NOT NULL
+        );
+
+        CREATE TABLE schema_migrations (
+            version INTEGER PRIMARY KEY,
+            applied_at TEXT NOT NULL,
+            note TEXT NOT NULL
+        );
+
+        CREATE TABLE diary_entries (
+            id TEXT PRIMARY KEY,
+            agent_name TEXT NOT NULL,
+            wing TEXT NOT NULL,
+            room TEXT NOT NULL,
+            topic TEXT NOT NULL,
+            entry TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            date TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        "#,
+    )
+    .unwrap();
+    drop(conn);
+
+    let mut config = AppConfig::resolve(Some(&palace)).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    let summary = app.migrate().await.unwrap();
+
+    assert_eq!(summary.schema_version_before, Some(6));
+    assert_eq!(summary.schema_version_after, CURRENT_SCHEMA_VERSION);
+    let compressed_columns: i64 = Connection::open(config.sqlite_path())
+        .unwrap()
+        .query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'compressed_drawers'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert_eq!(compressed_columns, 1);
+}
+
+#[tokio::test]
 async fn service_mine_convos_skips_meta_json_symlink_and_large_files() {
     let tmp = tempdir().unwrap();
     let convo_dir = tmp.path().join("convos");
@@ -860,6 +952,68 @@ async fn service_mine_convos_skips_meta_json_symlink_and_large_files() {
     assert_eq!(summary.files_skipped, 1);
     assert_eq!(summary.drawers_added, 2);
     assert_eq!(summary.room_counts["technical"], 1);
+}
+
+#[tokio::test]
+async fn compress_stores_aaak_summaries_and_wake_up_uses_identity() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join("src")).unwrap();
+    std::fs::write(
+        project.join("src").join("auth.txt"),
+        "Alice decided to switch authentication to Clerk because the GraphQL auth flow kept breaking deploys.\n\nThe team felt relieved after the migration worked.",
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let sqlite_path = config.sqlite_path();
+    let identity_path = config.identity_path();
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+    std::fs::write(
+        &identity_path,
+        "## L0 — IDENTITY\nI am Atlas, a local-first memory assistant.",
+    )
+    .unwrap();
+    app.mine_project(
+        &project,
+        &MineRequest {
+            wing: Some("project".to_string()),
+            mode: "projects".to_string(),
+            agent: "codex".to_string(),
+            limit: 0,
+            dry_run: false,
+            respect_gitignore: true,
+            include_ignored: vec![],
+            extract: "exchange".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    let compress = app.compress(Some("project"), false).await.unwrap();
+    assert_eq!(compress.kind, "compress");
+    assert_eq!(compress.processed, 1);
+    assert_eq!(compress.stored, 1);
+    assert!(compress.original_tokens > 0);
+    assert!(compress.compressed_tokens > 0);
+    assert!(compress.entries[0].aaak.contains("project|general|"));
+
+    let conn = Connection::open(sqlite_path).unwrap();
+    let stored: i64 = conn
+        .query_row("SELECT COUNT(*) FROM compressed_drawers", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(stored, 1);
+
+    let wake = app.wake_up(Some("project")).await.unwrap();
+    assert_eq!(wake.kind, "wake_up");
+    assert!(wake.identity.contains("Atlas"));
+    assert!(wake.layer1.contains("ESSENTIAL STORY"));
+    assert!(wake.layer1.contains("auth.txt"));
+    assert!(wake.token_estimate > 0);
 }
 
 #[tokio::test]

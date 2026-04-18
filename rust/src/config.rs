@@ -62,6 +62,10 @@ impl AppConfig {
         self.palace_path.join("lance")
     }
 
+    pub fn identity_path(&self) -> PathBuf {
+        self.palace_path.join("identity.txt")
+    }
+
     pub fn ensure_dirs(&self) -> Result<()> {
         std::fs::create_dir_all(&self.palace_path)?;
         std::fs::create_dir_all(self.lance_path())?;

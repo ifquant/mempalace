@@ -33,7 +33,7 @@ fn cli_init_status_mine_search_round_trip() {
         .success()
         .stdout(contains("\"kind\": \"init\""))
         .stdout(contains("\"version\":"))
-        .stdout(contains("\"schema_version\": 6"))
+        .stdout(contains("\"schema_version\": 7"))
         .stdout(contains("palace.sqlite3"));
 
     Command::cargo_bin("mempalace-rs")
@@ -119,6 +119,115 @@ fn cli_init_status_mine_search_round_trip() {
 }
 
 #[test]
+fn cli_compress_json_stores_aaak_summaries() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("src").join("auth.txt"),
+        "Alice decided to switch authentication to Clerk because the GraphQL auth flow kept failing deploys.",
+    )
+    .unwrap();
+
+    let palace = tmp.path().join("palace");
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    let output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "compress"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let summary: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(summary["kind"], "compress");
+    assert_eq!(summary["processed"], 1);
+    assert_eq!(summary["stored"], 1);
+
+    let stored: i64 = Connection::open(palace.join("palace.sqlite3"))
+        .unwrap()
+        .query_row("SELECT COUNT(*) FROM compressed_drawers", [], |row| {
+            row.get(0)
+        })
+        .unwrap();
+    assert_eq!(stored, 1);
+}
+
+#[test]
+fn cli_wake_up_human_prints_identity_and_layer1() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("src")).unwrap();
+    fs::write(
+        project.join("src").join("auth.txt"),
+        "Alice decided to switch authentication to Clerk because the GraphQL auth flow kept failing deploys.",
+    )
+    .unwrap();
+
+    let palace = tmp.path().join("palace");
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+    fs::write(
+        palace.join("identity.txt"),
+        "## L0 — IDENTITY\nI am Atlas, a local-first memory assistant.",
+    )
+    .unwrap();
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success();
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args(["--palace", palace.to_str().unwrap(), "wake-up", "--human"])
+        .assert()
+        .success()
+        .stdout(contains("I am Atlas"))
+        .stdout(contains("ESSENTIAL STORY"))
+        .stdout(contains("auth.txt"));
+}
+
+#[test]
 fn cli_root_help_mentions_core_commands_and_examples() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
@@ -129,8 +238,32 @@ fn cli_root_help_mentions_core_commands_and_examples() {
             "MemPalace — Give your AI a memory. No API key required.",
         ))
         .stdout(contains("mempalace-rs mine ~/projects/my_app"))
+        .stdout(contains("compress"))
+        .stdout(contains("wake-up"))
         .stdout(contains("migrate"))
         .stdout(contains("repair"));
+}
+
+#[test]
+fn cli_compress_help_mentions_human_output() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["compress", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Compress drawers into AAAK summaries"))
+        .stdout(contains("human-readable compression summary"));
+}
+
+#[test]
+fn cli_wake_up_help_mentions_human_output() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["wake-up", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Show L0 + L1 wake-up context"))
+        .stdout(contains("human-readable wake-up context"));
 }
 
 #[test]
@@ -249,7 +382,7 @@ fn cli_init_human_prints_python_style_summary() {
         .stdout(contains("Palace:"))
         .stdout(contains("SQLite:"))
         .stdout(contains("LanceDB:"))
-        .stdout(contains("Schema:  6"))
+        .stdout(contains("Schema:  7"))
         .stdout(contains("Palace initialized."));
 }
 
@@ -1250,7 +1383,7 @@ fn cli_migrate_upgrades_legacy_sqlite_schema() {
         .stdout(contains("\"kind\": \"migrate\""))
         .stdout(contains("\"version\":"))
         .stdout(contains("\"schema_version_before\": 1"))
-        .stdout(contains("\"schema_version_after\": 6"))
+        .stdout(contains("\"schema_version_after\": 7"))
         .stdout(contains("\"changed\": true"));
 }
 
@@ -1357,7 +1490,7 @@ fn cli_migrate_human_prints_python_style_summary() {
         .stdout(contains("Palace:"))
         .stdout(contains("SQLite:"))
         .stdout(contains("Before:  1"))
-        .stdout(contains("After:   6"))
+        .stdout(contains("After:   7"))
         .stdout(contains("Migration complete."));
 }
 
@@ -1546,7 +1679,7 @@ fn cli_repair_reports_healthy_hash_palace() {
         .stdout(contains("\"ok\": true"))
         .stdout(contains("\"vector_accessible\": true"))
         .stdout(contains("\"embedding_provider\": \"hash\""))
-        .stdout(contains("\"schema_version\": 6"));
+        .stdout(contains("\"schema_version\": 7"));
 }
 
 #[test]
@@ -1594,7 +1727,7 @@ fn cli_repair_human_prints_python_style_diagnostics() {
         .stdout(contains("MemPalace Repair"))
         .stdout(contains("Palace:"))
         .stdout(contains("Drawers found:"))
-        .stdout(contains("Schema version: 6"))
+        .stdout(contains("Schema version: 7"))
         .stdout(contains("Embedding: hash/hash-v1/64"))
         .stdout(contains("Vector access: ok"))
         .stdout(contains("Repair diagnostics look healthy."));

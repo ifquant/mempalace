@@ -11,7 +11,7 @@ use serde_json::json;
 #[command(name = "mempalace-rs")]
 #[command(
     about = "MemPalace — Give your AI a memory. No API key required.",
-    long_about = "MemPalace — Give your AI a memory. No API key required.\n\nCurrent Rust phase supports local-first project mining, search, migration, repair diagnostics, and read-only MCP tools.\n\nExamples:\n  mempalace-rs init ~/projects/my_app\n  mempalace-rs mine ~/projects/my_app\n  mempalace-rs search \"why did we switch to GraphQL\"\n  mempalace-rs status\n  mempalace-rs migrate\n  mempalace-rs repair"
+    long_about = "MemPalace — Give your AI a memory. No API key required.\n\nCurrent Rust phase supports local-first mining, search, AAAK compression, wake-up context, migration, repair diagnostics, and MCP tools.\n\nExamples:\n  mempalace-rs init ~/projects/my_app\n  mempalace-rs mine ~/projects/my_app\n  mempalace-rs search \"why did we switch to GraphQL\"\n  mempalace-rs compress --wing my_app\n  mempalace-rs wake-up --wing my_app\n  mempalace-rs status"
 )]
 struct Cli {
     #[arg(long)]
@@ -92,6 +92,27 @@ enum Command {
         results: usize,
         #[arg(long)]
         #[arg(help = "Print Python-style human-readable search output instead of JSON")]
+        human: bool,
+    },
+    #[command(about = "Compress drawers into AAAK summaries")]
+    Compress {
+        #[arg(long)]
+        #[arg(help = "Limit compression to one project/wing")]
+        wing: Option<String>,
+        #[arg(long)]
+        #[arg(help = "Preview AAAK summaries without storing them")]
+        dry_run: bool,
+        #[arg(long)]
+        #[arg(help = "Print human-readable compression summary instead of JSON")]
+        human: bool,
+    },
+    #[command(about = "Show L0 + L1 wake-up context")]
+    WakeUp {
+        #[arg(long)]
+        #[arg(help = "Show wake-up context for one project/wing")]
+        wing: Option<String>,
+        #[arg(long)]
+        #[arg(help = "Print human-readable wake-up context instead of JSON")]
         human: bool,
     },
     #[command(about = "Upgrade palace SQLite metadata to the current schema version")]
@@ -334,6 +355,108 @@ async fn main() -> anyhow::Result<()> {
             };
             if human {
                 print_search_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
+        }
+        Command::Compress {
+            wing,
+            dry_run,
+            human,
+        } => {
+            let mut config = match AppConfig::resolve(palace.as_ref()) {
+                Ok(config) => config,
+                Err(err) if human => {
+                    print_compress_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_compress_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+            if !palace_exists(&config) {
+                if human {
+                    print_compress_no_palace_human(&config);
+                } else {
+                    print_no_palace(&config)?;
+                }
+                std::process::exit(1);
+            }
+            let app = match App::new(config) {
+                Ok(app) => app,
+                Err(err) if human => {
+                    print_compress_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_compress_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            let summary = match app.compress(wing.as_deref(), dry_run).await {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_compress_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_compress_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            if human {
+                print_compress_human(&summary);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&summary)?);
+            }
+        }
+        Command::WakeUp { wing, human } => {
+            let mut config = match AppConfig::resolve(palace.as_ref()) {
+                Ok(config) => config,
+                Err(err) if human => {
+                    print_wake_up_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_wake_up_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
+            if !palace_exists(&config) {
+                if human {
+                    print_wake_up_no_palace_human(&config);
+                } else {
+                    print_no_palace(&config)?;
+                }
+                std::process::exit(1);
+            }
+            let app = match App::new(config) {
+                Ok(app) => app,
+                Err(err) if human => {
+                    print_wake_up_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_wake_up_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            let summary = match app.wake_up(wing.as_deref()).await {
+                Ok(summary) => summary,
+                Err(err) if human => {
+                    print_wake_up_error_human(&err.to_string());
+                    std::process::exit(1);
+                }
+                Err(err) => {
+                    print_wake_up_error_json(&err.to_string())?;
+                    std::process::exit(1);
+                }
+            };
+            if human {
+                print_wake_up_human(&summary);
             } else {
                 println!("{}", serde_json::to_string_pretty(&summary)?);
             }
@@ -640,6 +763,83 @@ fn print_search_error_json(message: &str) -> anyhow::Result<()> {
     let payload = json!({
         "error": format!("Search error: {message}"),
         "hint": "Check the embedding provider, palace files, or query inputs, then rerun `mempalace-rs search <query>`.",
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
+fn print_compress_human(summary: &mempalace_rs::model::CompressSummary) {
+    println!("\n{}", "=".repeat(55));
+    println!("  MemPalace Compress");
+    println!("{}\n", "=".repeat(55));
+    println!("  Palace:   {}", summary.palace_path);
+    println!("  SQLite:   {}", summary.sqlite_path);
+    println!("  Wing:     {}", summary.wing.as_deref().unwrap_or("all"));
+    println!("  Processed: {}", summary.processed);
+    println!("  Stored:    {}", summary.stored);
+    println!(
+        "  Tokens:    {} -> {} ({:.1}x)",
+        summary.original_tokens, summary.compressed_tokens, summary.compression_ratio
+    );
+    if summary.dry_run {
+        println!("\n  DRY RUN preview:");
+        for entry in summary.entries.iter().take(3) {
+            println!(
+                "    [{} / {}] {}",
+                entry.wing, entry.room, entry.source_file
+            );
+            for line in entry.aaak.lines() {
+                println!("      {line}");
+            }
+        }
+    } else {
+        println!("\n  AAAK summaries stored in SQLite table `compressed_drawers`.");
+    }
+    println!("\n{}", "=".repeat(55));
+    println!();
+}
+
+fn print_compress_no_palace_human(config: &AppConfig) {
+    println!("\n  No palace found at {}", config.palace_path.display());
+    println!("  Run: mempalace init <dir> then mempalace mine <dir>");
+}
+
+fn print_compress_error_human(message: &str) {
+    println!("\n  Compress error: {message}");
+    println!("  Check the palace files, then rerun `mempalace-rs compress`.");
+}
+
+fn print_compress_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Compress error: {message}"),
+        "hint": "Check the palace files, then rerun `mempalace-rs compress`.",
+    });
+    println!("{}", serde_json::to_string_pretty(&payload)?);
+    Ok(())
+}
+
+fn print_wake_up_human(summary: &mempalace_rs::model::WakeUpSummary) {
+    println!("{}", summary.identity);
+    println!();
+    println!("{}", summary.layer1);
+    println!();
+    println!("Token estimate: {}", summary.token_estimate);
+}
+
+fn print_wake_up_no_palace_human(config: &AppConfig) {
+    println!("\n  No palace found at {}", config.palace_path.display());
+    println!("  Run: mempalace init <dir> then mempalace mine <dir>");
+}
+
+fn print_wake_up_error_human(message: &str) {
+    println!("\n  Wake-up error: {message}");
+    println!("  Check the palace files, then rerun `mempalace-rs wake-up`.");
+}
+
+fn print_wake_up_error_json(message: &str) -> anyhow::Result<()> {
+    let payload = json!({
+        "error": format!("Wake-up error: {message}"),
+        "hint": "Check the palace files, then rerun `mempalace-rs wake-up`.",
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())

@@ -1,6 +1,7 @@
 pub mod audit;
 pub mod config;
 pub mod convo;
+pub mod dialect;
 pub mod embed;
 pub mod error;
 pub mod mcp;

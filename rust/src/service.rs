@@ -14,17 +14,18 @@ use crate::convo::{
     extract_exchange_chunks, extract_general_memories, general_rooms, normalize_conversation_file,
     scan_convo_files,
 };
+use crate::dialect::{CompressMetadata, Dialect, count_tokens};
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
-    DiaryReadResult, DiaryWriteResult, DoctorSummary, DrawerDeleteResult, DrawerInput,
-    DrawerWriteResult, GraphStats, GraphStatsTunnel, GraphTraversalError, GraphTraversalNode,
-    GraphTraversalResult, InitSummary, KgInvalidateResult, KgQueryResult, KgStats,
-    KgTimelineResult, KgTriple, KgWriteResult, MigrateSummary, MineProgressEvent, MineRequest,
-    MineSummary, PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters, SearchHit,
-    SearchResults, Status, Taxonomy, TunnelRoom,
+    CompressSummary, DiaryReadResult, DiaryWriteResult, DoctorSummary, DrawerDeleteResult,
+    DrawerInput, DrawerWriteResult, GraphStats, GraphStatsTunnel, GraphTraversalError,
+    GraphTraversalNode, GraphTraversalResult, InitSummary, KgInvalidateResult, KgQueryResult,
+    KgStats, KgTimelineResult, KgTriple, KgWriteResult, MigrateSummary, MineProgressEvent,
+    MineRequest, MineSummary, PrepareEmbeddingSummary, RepairSummary, Rooms, SearchFilters,
+    SearchHit, SearchResults, Status, Taxonomy, TunnelRoom, WakeUpSummary,
 };
-use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, GraphRoomRow, SqliteStore};
+use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, DrawerRecord, GraphRoomRow, SqliteStore};
 use crate::storage::vector::VectorStore;
 
 const READABLE_EXTENSIONS: &[&str] = &[
@@ -521,6 +522,98 @@ impl App {
                 room: room.map(ToOwned::to_owned),
             },
             results: hits,
+        })
+    }
+
+    pub async fn compress(&self, wing: Option<&str>, dry_run: bool) -> Result<CompressSummary> {
+        self.config.ensure_dirs()?;
+        let dialect = Dialect;
+        let mut sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let drawers = sqlite.list_drawers(wing)?;
+
+        let mut original_tokens = 0usize;
+        let mut compressed_tokens = 0usize;
+        let entries = drawers
+            .into_iter()
+            .map(|drawer| {
+                let aaak = dialect.compress(
+                    &drawer.text,
+                    CompressMetadata {
+                        wing: &drawer.wing,
+                        room: &drawer.room,
+                        source_file: &drawer.source_file,
+                        filed_at: Some(&drawer.filed_at),
+                    },
+                );
+                let stats = dialect.compression_stats(&drawer.text, &aaak);
+                original_tokens += stats.original_tokens;
+                compressed_tokens += stats.compressed_tokens;
+                crate::model::CompressedDrawer {
+                    drawer_id: drawer.id,
+                    wing: drawer.wing,
+                    room: drawer.room,
+                    source_file: drawer.source_file,
+                    source_path: drawer.source_path,
+                    ingest_mode: drawer.ingest_mode,
+                    extract_mode: drawer.extract_mode,
+                    aaak,
+                    original_tokens: stats.original_tokens,
+                    compressed_tokens: stats.compressed_tokens,
+                    compression_ratio: stats.ratio,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if !dry_run {
+            sqlite.replace_compressed_drawers(wing, &entries)?;
+        }
+
+        Ok(CompressSummary {
+            kind: "compress".to_string(),
+            palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            version: VERSION.to_string(),
+            wing: wing.map(ToOwned::to_owned),
+            dry_run,
+            processed: entries.len(),
+            stored: if dry_run { 0 } else { entries.len() },
+            original_tokens,
+            compressed_tokens,
+            compression_ratio: original_tokens as f64 / compressed_tokens.max(1) as f64,
+            entries,
+        })
+    }
+
+    pub async fn wake_up(&self, wing: Option<&str>) -> Result<WakeUpSummary> {
+        self.config.ensure_dirs()?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let identity_path = self.config.identity_path();
+        let identity = if identity_path.exists() {
+            fs::read_to_string(&identity_path)
+                .map(|text| text.trim().to_string())
+                .unwrap_or_else(|_| default_identity_text())
+        } else {
+            default_identity_text()
+        };
+
+        let recent = sqlite.recent_drawers(wing, 15)?;
+        let layer1 = render_layer1(&recent, wing);
+        let token_estimate = count_tokens(&identity) + count_tokens(&layer1);
+
+        Ok(WakeUpSummary {
+            kind: "wake_up".to_string(),
+            palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            version: VERSION.to_string(),
+            wing: wing.map(ToOwned::to_owned),
+            identity_path: identity_path.display().to_string(),
+            identity,
+            layer1,
+            token_estimate,
         })
     }
 
@@ -1468,6 +1561,43 @@ fn normalize_search_hits(mut hits: Vec<SearchHit>) -> Vec<SearchHit> {
 
     hits.sort_by(compare_search_hits);
     hits
+}
+
+fn default_identity_text() -> String {
+    "## L0 — IDENTITY\nNo identity configured. Create <palace>/identity.txt".to_string()
+}
+
+fn render_layer1(drawers: &[DrawerRecord], wing: Option<&str>) -> String {
+    if drawers.is_empty() {
+        return if let Some(wing_name) = wing {
+            format!("## L1 — No memories yet for wing '{wing_name}'.")
+        } else {
+            "## L1 — No memories yet.".to_string()
+        };
+    }
+
+    let mut by_room: BTreeMap<String, Vec<&DrawerRecord>> = BTreeMap::new();
+    for drawer in drawers {
+        by_room.entry(drawer.room.clone()).or_default().push(drawer);
+    }
+
+    let mut lines = vec!["## L1 — ESSENTIAL STORY".to_string()];
+    for (room, entries) in by_room {
+        lines.push(format!("\n[{room}]"));
+        for drawer in entries.into_iter().take(4) {
+            let mut snippet = drawer.text.replace('\n', " ").trim().to_string();
+            if snippet.len() > 200 {
+                snippet = format!("{}...", &snippet[..197]);
+            }
+            let mut line = format!("  - {snippet}");
+            if !drawer.source_file.is_empty() {
+                line.push_str(&format!("  ({})", drawer.source_file));
+            }
+            lines.push(line);
+        }
+    }
+
+    lines.join("\n")
 }
 
 #[derive(Clone, Debug, Default)]

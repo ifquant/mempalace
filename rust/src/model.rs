@@ -36,6 +36,21 @@ pub struct SearchHit {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct CompressedDrawer {
+    pub drawer_id: String,
+    pub wing: String,
+    pub room: String,
+    pub source_file: String,
+    pub source_path: String,
+    pub ingest_mode: String,
+    pub extract_mode: String,
+    pub aaak: String,
+    pub original_tokens: usize,
+    pub compressed_tokens: usize,
+    pub compression_ratio: f64,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SearchFilters {
     pub wing: Option<String>,
     pub room: Option<String>,
@@ -353,4 +368,33 @@ pub struct PrepareEmbeddingSummary {
     pub success: bool,
     pub last_error: Option<String>,
     pub doctor: DoctorSummary,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct CompressSummary {
+    pub kind: String,
+    pub palace_path: String,
+    pub sqlite_path: String,
+    pub version: String,
+    pub wing: Option<String>,
+    pub dry_run: bool,
+    pub processed: usize,
+    pub stored: usize,
+    pub original_tokens: usize,
+    pub compressed_tokens: usize,
+    pub compression_ratio: f64,
+    pub entries: Vec<CompressedDrawer>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct WakeUpSummary {
+    pub kind: String,
+    pub palace_path: String,
+    pub sqlite_path: String,
+    pub version: String,
+    pub wing: Option<String>,
+    pub identity_path: String,
+    pub identity: String,
+    pub layer1: String,
+    pub token_estimate: usize,
 }

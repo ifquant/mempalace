@@ -36,6 +36,8 @@ Current first-phase support:
 - LanceDB drawer rows now persist Python-style metadata too: `source_file`, `source_mtime`, `added_by`, `filed_at`
 - legacy LanceDB tables are upgraded in place with those metadata columns during `init`/`mine`/`search`
 - `search`
+- `compress` to generate and persist AAAK summaries for existing drawers
+- `wake-up` to render palace-local `identity.txt` plus an L1 essential-story summary
 - `migrate`
 - `repair`
 - `status`
@@ -155,6 +157,8 @@ Current MCP compatibility notes:
 - empty palaces return the Python-style `{"error":"No palace found","hint":"Run: ..."}` shape
 - execution failures in MCP tools now also return tool-level `{"error":"...","hint":"..."}` payloads instead of escalating transport errors
 - `mempalace_add_drawer` and `mempalace_kg_add` can now auto-bootstrap a new Rust palace, matching the Python write-first workflow more closely
+- `compress` stores AAAK output in SQLite table `compressed_drawers`, keeping the summary layer local to the palace without introducing a second external backend
+- `wake-up` reads identity from `<palace>/identity.txt` instead of the Python global `~/.mempalace/identity.txt`, keeping Rust's local-first palace self-contained
 
 Local runtime note:
 
@@ -166,7 +170,6 @@ Intentionally not in this first Rust phase:
 
 - the remaining Python write MCP surface beyond drawer/KG/diary basics
 - hooks
-- AAAK generation
 - direct compatibility with Python palace data
 
 Current repair scope:
