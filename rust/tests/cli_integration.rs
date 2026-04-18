@@ -518,6 +518,90 @@ fn cli_search_help_mentions_filters_and_results() {
 }
 
 #[test]
+fn cli_split_help_mentions_transcript_megafiles() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["split", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "Split concatenated transcript mega-files into per-session files",
+        ))
+        .stdout(contains("Only split files containing at least N sessions"));
+}
+
+#[test]
+fn cli_split_dry_run_reports_output_without_writing() {
+    let tmp = tempdir().unwrap();
+    let source = tmp.path().join("transcripts");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("mega.txt"),
+        concat!(
+            "Claude Code v1\n",
+            "⏺ 9:30 AM Monday, March 30, 2026\n",
+            "> first prompt about pricing migration\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+            "Claude Code v1\n",
+            "⏺ 10:45 AM Monday, March 30, 2026\n",
+            "> second prompt about tunnel graph\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+        ),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["split", source.to_str().unwrap(), "--dry-run"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let summary: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(summary["kind"], "split");
+    assert_eq!(summary["dry_run"], true);
+    assert_eq!(summary["mega_files"], 1);
+    assert_eq!(summary["files_created"], 2);
+    assert!(source.join("mega.txt").exists());
+    assert!(!source.join("mega.mega_backup").exists());
+}
+
+#[test]
+fn cli_split_writes_files_and_renames_backup() {
+    let tmp = tempdir().unwrap();
+    let source = tmp.path().join("transcripts");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("mega.txt"),
+        concat!(
+            "Claude Code v1\n",
+            "⏺ 9:30 AM Monday, March 30, 2026\n",
+            "> first prompt about pricing migration\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+            "Claude Code v1\n",
+            "⏺ 10:45 AM Monday, March 30, 2026\n",
+            "> second prompt about tunnel graph\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+        ),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["split", source.to_str().unwrap()])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let summary: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(summary["files_created"], 2);
+    assert!(source.join("mega.mega_backup").exists());
+    assert!(!source.join("mega.txt").exists());
+}
+
+#[test]
 fn cli_init_human_prints_python_style_summary() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");

@@ -40,6 +40,7 @@ Current first-phase support:
 - `wake-up` to render palace-local `identity.txt` plus an L1 essential-story summary
 - `hook run --hook session-start|stop|precompact --harness claude-code|codex` for harness-side auto-save integration
 - `instructions <help|init|mine|search|status>` to print built-in skill guidance markdown
+- `split <dir>` to detect transcript mega-files, preview session boundaries, and split them into per-session `.txt` files with `.mega_backup` rollover
 - `migrate`
 - `repair`
 - `status`
@@ -162,6 +163,7 @@ Current MCP compatibility notes:
 - `compress` stores AAAK output in SQLite table `compressed_drawers`, keeping the summary layer local to the palace without introducing a second external backend
 - `wake-up` reads identity from `<palace>/identity.txt` instead of the Python global `~/.mempalace/identity.txt`, keeping Rust's local-first palace self-contained
 - hook state now lives under `<palace>/hook_state/` instead of Python's global `~/.mempalace/hook_state/`, keeping auto-save bookkeeping local to the active palace
+- `split` follows the Python mega-file workflow: detect true `Claude Code v` session starts, skip context-restore headers, and rename the original transcript to `.mega_backup` after a successful split
 
 Local runtime note:
 

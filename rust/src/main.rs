@@ -8,6 +8,7 @@ use mempalace_rs::instructions;
 use mempalace_rs::mcp;
 use mempalace_rs::model::{MineProgressEvent, MineRequest};
 use mempalace_rs::service::App;
+use mempalace_rs::split;
 use serde_json::json;
 
 #[derive(Parser)]
@@ -96,6 +97,20 @@ enum Command {
         #[arg(long)]
         #[arg(help = "Print Python-style human-readable search output instead of JSON")]
         human: bool,
+    },
+    #[command(about = "Split concatenated transcript mega-files into per-session files")]
+    Split {
+        #[arg(help = "Directory containing transcript files")]
+        dir: PathBuf,
+        #[arg(long)]
+        #[arg(help = "Write split files here (default: same directory as source files)")]
+        output_dir: Option<PathBuf>,
+        #[arg(long, default_value_t = 2)]
+        #[arg(help = "Only split files containing at least N sessions")]
+        min_sessions: usize,
+        #[arg(long)]
+        #[arg(help = "Show what would be split without writing files")]
+        dry_run: bool,
     },
     #[command(about = "Compress drawers into AAAK summaries")]
     Compress {
@@ -382,6 +397,16 @@ async fn main() -> anyhow::Result<()> {
             } else {
                 println!("{}", serde_json::to_string_pretty(&summary)?);
             }
+        }
+        Command::Split {
+            dir,
+            output_dir,
+            min_sessions,
+            dry_run,
+        } => {
+            let summary =
+                split::split_directory(&dir, output_dir.as_deref(), min_sessions, dry_run)?;
+            println!("{}", serde_json::to_string_pretty(&summary)?);
         }
         Command::Compress {
             wing,

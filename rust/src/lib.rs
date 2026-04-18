@@ -9,6 +9,7 @@ pub mod instructions;
 pub mod mcp;
 pub mod model;
 pub mod service;
+pub mod split;
 pub mod storage;
 
 pub use config::AppConfig;
