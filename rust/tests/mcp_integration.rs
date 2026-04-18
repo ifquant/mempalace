@@ -394,6 +394,97 @@ async fn mcp_project_bootstrap_tools_work() {
 }
 
 #[tokio::test]
+async fn mcp_project_bootstrap_tools_return_tool_level_errors_for_missing_args() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+
+    for (tool_name, expected_error, expected_hint) in [
+        (
+            "mempalace_onboarding",
+            "Onboarding error: MCP error: mempalace_onboarding requires project_dir",
+            "Provide project_dir, then rerun mempalace_onboarding.",
+        ),
+        (
+            "mempalace_normalize",
+            "Normalize error: MCP error: mempalace_normalize requires file_path",
+            "Provide file_path, then rerun mempalace_normalize.",
+        ),
+        (
+            "mempalace_split",
+            "Split error: MCP error: mempalace_split requires source_dir",
+            "Provide source_dir, then rerun mempalace_split.",
+        ),
+    ] {
+        let response = handle_request(
+            json!({"method":"tools/call","id":110,"params":{"name":tool_name,"arguments":{}}}),
+            &config,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert!(response.get("error").is_none());
+        let text = response["result"]["content"][0]["text"].as_str().unwrap();
+        let payload: serde_json::Value = serde_json::from_str(text).unwrap();
+        assert_eq!(payload["error"].as_str().unwrap(), expected_error);
+        assert_eq!(payload["hint"].as_str().unwrap(), expected_hint);
+    }
+}
+
+#[tokio::test]
+async fn mcp_project_bootstrap_tools_return_tool_level_errors_for_bad_inputs() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("world");
+    std::fs::create_dir_all(&project).unwrap();
+    let unsupported = tmp.path().join("unsupported.json");
+    std::fs::write(&unsupported, "this is not valid json").unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+
+    let onboarding = handle_request(
+        json!({"method":"tools/call","id":120,"params":{"name":"mempalace_onboarding","arguments":{
+            "project_dir": project,
+            "people": [",,"]
+        }}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let onboarding_text = onboarding["result"]["content"][0]["text"].as_str().unwrap();
+    let onboarding_payload: serde_json::Value = serde_json::from_str(onboarding_text).unwrap();
+    assert_eq!(
+        onboarding_payload["error"].as_str().unwrap(),
+        "Onboarding error: Invalid argument: Person must include at least a name"
+    );
+    assert_eq!(
+        onboarding_payload["hint"].as_str().unwrap(),
+        "Use people entries in name,relationship,context format, then rerun mempalace_onboarding."
+    );
+
+    let normalize = handle_request(
+        json!({"method":"tools/call","id":121,"params":{"name":"mempalace_normalize","arguments":{
+            "file_path": unsupported
+        }}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let normalize_text = normalize["result"]["content"][0]["text"].as_str().unwrap();
+    let normalize_payload: serde_json::Value = serde_json::from_str(normalize_text).unwrap();
+    assert_eq!(
+        normalize_payload["error"].as_str().unwrap(),
+        "Normalize error: Invalid argument: Unsupported or unreadable conversation file."
+    );
+    assert_eq!(
+        normalize_payload["hint"].as_str().unwrap(),
+        "Use a supported .txt, .md, .json, or .jsonl chat export, then rerun mempalace_normalize."
+    );
+}
+
+#[tokio::test]
 async fn mcp_read_tools_return_python_style_no_palace_response() {
     let tmp = tempdir().unwrap();
     let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
@@ -466,6 +557,56 @@ async fn mcp_read_tools_return_tool_level_error_payloads_on_broken_sqlite() {
     ] {
         let response = handle_request(
             json!({"method":"tools/call","id":10,"params":{"name":tool_name,"arguments":{}}}),
+            &config,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+
+        assert!(
+            response.get("error").is_none(),
+            "{tool_name} should not raise MCP transport error"
+        );
+        let text = response["result"]["content"][0]["text"].as_str().unwrap();
+        let payload: serde_json::Value = serde_json::from_str(text).unwrap();
+        let error = payload["error"].as_str().unwrap();
+        assert!(
+            !error.is_empty(),
+            "{tool_name} should return tool-level error payload"
+        );
+        assert!(
+            error.contains("malformed")
+                || error.contains("not a database")
+                || error.contains("disk image is malformed"),
+            "{tool_name} should surface SQLite failure, got: {error}"
+        );
+        assert!(
+            payload["hint"].as_str().is_some(),
+            "{tool_name} should include recovery hint"
+        );
+    }
+}
+
+#[tokio::test]
+async fn mcp_maintenance_tools_return_tool_level_error_payloads_on_broken_sqlite() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let sqlite_path = config.sqlite_path();
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    std::fs::write(&sqlite_path, b"not a sqlite database").unwrap();
+
+    for (tool_name, arguments) in [
+        ("mempalace_repair", json!({})),
+        ("mempalace_repair_scan", json!({})),
+        ("mempalace_repair_rebuild", json!({})),
+        ("mempalace_compress", json!({})),
+        ("mempalace_dedup", json!({"dry_run": true})),
+    ] {
+        let response = handle_request(
+            json!({"method":"tools/call","id":18,"params":{"name":tool_name,"arguments":arguments}}),
             &config,
         )
         .await

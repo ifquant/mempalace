@@ -214,6 +214,7 @@ Current MCP compatibility notes:
 - write MCP tools now append audit entries before execution to `palace/wal/write_log.jsonl`, keeping Rust's local-first data under the palace root instead of a global home-level WAL path
 - empty palaces return the Python-style `{"error":"No palace found","hint":"Run: ..."}` shape
 - execution failures in MCP tools now also return tool-level `{"error":"...","hint":"..."}` payloads instead of escalating transport errors
+- the newer maintenance/bootstrap MCP tools follow the same tool-level `error + hint` pattern for broken SQLite, missing args, and unsupported transcript inputs
 - `mempalace_add_drawer` and `mempalace_kg_add` can now auto-bootstrap a new Rust palace, matching the Python write-first workflow more closely
 - `compress` stores AAAK output in SQLite table `compressed_drawers`, keeping the summary layer local to the palace without introducing a second external backend
 - `wake-up` reads identity from `<palace>/identity.txt` instead of the Python global `~/.mempalace/identity.txt`, keeping Rust's local-first palace self-contained
