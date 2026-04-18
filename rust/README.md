@@ -74,6 +74,13 @@ Rust library structure now also includes a `dedup` module mirroring Python
 - `DedupPlan::into_summary()` for turning a plan into the CLI/MCP summary payload
 - shared cosine-distance logic for vector-level duplicate detection
 
+Rust library structure now also includes a `repair` module mirroring Python
+`repair.py`:
+
+- `RepairContext` for shared repair path/version context and summary builders
+- `read_corrupt_ids()` / `backup_sqlite_source()` for the prune/rebuild filesystem path
+- shared scan/prune/rebuild summary assembly outside `service`
+
 Current first-phase support:
 
 - `init`
@@ -202,6 +209,7 @@ Current project-mining behavior:
 - room-graph traversal and tunnel/stats calculation now live in a standalone `palace_graph` helper instead of staying embedded inside `service`
 - KG read/write access now also goes through a standalone `knowledge_graph` facade instead of staying embedded inside `service`
 - dedup planning and cosine-distance logic now also live in a standalone `dedup` helper instead of staying embedded inside `service`
+- repair diagnostics and scan/prune/rebuild summary assembly now also live in a standalone `repair` helper instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring

@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -34,6 +34,7 @@ use crate::palace_graph::{
     traverse_graph as traverse_room_graph,
 };
 use crate::registry::EntityRegistry;
+use crate::repair::{RepairContext, RepairDiagnostics, backup_sqlite_source, read_corrupt_ids};
 use crate::room_detector::{detect_room, load_project_config, load_project_rooms};
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, DrawerRecord, SqliteStore};
 use crate::storage::vector::VectorStore;
@@ -184,7 +185,12 @@ impl App {
     }
 
     pub async fn repair(&self) -> Result<RepairSummary> {
-        let palace_path = self.config.palace_path.display().to_string();
+        let context = RepairContext {
+            palace_path: self.config.palace_path.clone(),
+            sqlite_path: self.config.sqlite_path(),
+            lance_path: self.config.lance_path(),
+            version: VERSION.to_string(),
+        };
         let sqlite_path = self.config.sqlite_path();
         let lance_path = self.config.lance_path();
         let sqlite_exists = sqlite_path.exists();
@@ -239,12 +245,7 @@ impl App {
             false
         };
 
-        Ok(RepairSummary {
-            kind: "repair".to_string(),
-            palace_path,
-            sqlite_path: sqlite_path.display().to_string(),
-            lance_path: lance_path.display().to_string(),
-            version: VERSION.to_string(),
+        Ok(context.build_summary(RepairDiagnostics {
             sqlite_exists,
             lance_exists,
             schema_version,
@@ -253,9 +254,8 @@ impl App {
             embedding_model,
             embedding_dimension,
             vector_accessible,
-            ok: issues.is_empty(),
             issues,
-        })
+        }))
     }
 
     pub async fn repair_scan(&self, wing: Option<&str>) -> Result<RepairScanSummary> {
@@ -269,77 +269,27 @@ impl App {
             .list_drawers(self.embedder.profile().dimension, wing, None)
             .await?;
 
-        let sqlite_ids = sqlite_drawers
-            .iter()
-            .map(|drawer| drawer.id.clone())
-            .collect::<BTreeSet<_>>();
-        let vector_ids = vector_drawers
-            .iter()
-            .map(|drawer| drawer.id.clone())
-            .collect::<BTreeSet<_>>();
-
-        let missing_from_vector = sqlite_ids
-            .difference(&vector_ids)
-            .cloned()
-            .collect::<Vec<_>>();
-        let orphaned_in_vector = vector_ids
-            .difference(&sqlite_ids)
-            .cloned()
-            .collect::<Vec<_>>();
-        let prune_candidates = orphaned_in_vector.len();
-
-        let corrupt_ids_path = self.config.palace_path.join("corrupt_ids.txt");
-        let mut payload = String::new();
-        for drawer_id in &orphaned_in_vector {
-            payload.push_str(drawer_id);
-            payload.push('\n');
-        }
-        fs::write(&corrupt_ids_path, payload)?;
-
-        Ok(RepairScanSummary {
-            kind: "repair_scan".to_string(),
-            palace_path: self.config.palace_path.display().to_string(),
-            sqlite_path: self.config.sqlite_path().display().to_string(),
-            lance_path: self.config.lance_path().display().to_string(),
+        let context = RepairContext {
+            palace_path: self.config.palace_path.clone(),
+            sqlite_path: self.config.sqlite_path(),
+            lance_path: self.config.lance_path(),
             version: VERSION.to_string(),
-            wing: wing.map(ToOwned::to_owned),
-            sqlite_drawers: sqlite_drawers.len(),
-            vector_drawers: vector_drawers.len(),
-            missing_from_vector,
-            orphaned_in_vector,
-            corrupt_ids_path: corrupt_ids_path.display().to_string(),
-            prune_candidates,
-        })
+        };
+        Ok(context.build_scan_summary(wing, &sqlite_drawers, &vector_drawers)?)
     }
 
     pub async fn repair_prune(&self, confirm: bool) -> Result<RepairPruneSummary> {
         self.config.ensure_dirs()?;
-        let corrupt_ids_path = self.config.palace_path.join("corrupt_ids.txt");
-        let queued_ids = if corrupt_ids_path.exists() {
-            fs::read_to_string(&corrupt_ids_path)?
-                .lines()
-                .map(str::trim)
-                .filter(|line| !line.is_empty())
-                .map(ToOwned::to_owned)
-                .collect::<Vec<_>>()
-        } else {
-            Vec::new()
+        let context = RepairContext {
+            palace_path: self.config.palace_path.clone(),
+            sqlite_path: self.config.sqlite_path(),
+            lance_path: self.config.lance_path(),
+            version: VERSION.to_string(),
         };
+        let queued_ids = read_corrupt_ids(&context.corrupt_ids_path())?;
 
         if !confirm {
-            return Ok(RepairPruneSummary {
-                kind: "repair_prune".to_string(),
-                palace_path: self.config.palace_path.display().to_string(),
-                sqlite_path: self.config.sqlite_path().display().to_string(),
-                lance_path: self.config.lance_path().display().to_string(),
-                version: VERSION.to_string(),
-                corrupt_ids_path: corrupt_ids_path.display().to_string(),
-                queued: queued_ids.len(),
-                confirm,
-                deleted_from_vector: 0,
-                deleted_from_sqlite: 0,
-                failed: 0,
-            });
+            return Ok(context.build_prune_preview(&queued_ids, confirm));
         }
 
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
@@ -352,19 +302,13 @@ impl App {
             .delete_drawers(self.embedder.profile().dimension, &queued_ids)
             .await?;
 
-        Ok(RepairPruneSummary {
-            kind: "repair_prune".to_string(),
-            palace_path: self.config.palace_path.display().to_string(),
-            sqlite_path: self.config.sqlite_path().display().to_string(),
-            lance_path: self.config.lance_path().display().to_string(),
-            version: VERSION.to_string(),
-            corrupt_ids_path: corrupt_ids_path.display().to_string(),
-            queued: queued_ids.len(),
+        Ok(context.build_prune_result(
+            &queued_ids,
             confirm,
             deleted_from_vector,
             deleted_from_sqlite,
-            failed: 0,
-        })
+            0,
+        ))
     }
 
     pub async fn repair_rebuild(&self) -> Result<RepairRebuildSummary> {
@@ -375,13 +319,7 @@ impl App {
         sqlite.ensure_embedding_profile(self.embedder.profile())?;
         let drawers = sqlite.list_drawers(None)?;
 
-        let backup_path = if sqlite_path.exists() {
-            let backup_path = sqlite_path.with_extension("sqlite3.backup");
-            fs::copy(&sqlite_path, &backup_path)?;
-            Some(backup_path.display().to_string())
-        } else {
-            None
-        };
+        let backup_path = backup_sqlite_source(&sqlite_path)?;
 
         let vector = VectorStore::connect(&self.config.lance_path()).await?;
         vector
@@ -403,16 +341,13 @@ impl App {
             rebuilt += inputs.len();
         }
 
-        Ok(RepairRebuildSummary {
-            kind: "repair_rebuild".to_string(),
-            palace_path: self.config.palace_path.display().to_string(),
-            sqlite_path: self.config.sqlite_path().display().to_string(),
-            lance_path: self.config.lance_path().display().to_string(),
+        let context = RepairContext {
+            palace_path: self.config.palace_path.clone(),
+            sqlite_path: self.config.sqlite_path(),
+            lance_path: self.config.lance_path(),
             version: VERSION.to_string(),
-            drawers_found: drawers.len(),
-            rebuilt,
-            backup_path,
-        })
+        };
+        Ok(context.build_rebuild_summary(drawers.len(), rebuilt, backup_path))
     }
 
     pub async fn dedup(
