@@ -13,6 +13,12 @@ Current dependency direction:
 The initial Cargo manifest commits to the embedded path only:
 LanceDB for local vector storage, plus SQLite for relational and knowledge-graph state.
 
+Rust library structure now also includes a shared `palace` module for reusable storage-facing helpers such as:
+
+- default skip-directory policy shared with project mining
+- vector-store bootstrap for library/script callers
+- `file_already_mined` / source-state helpers mirroring Python `palace.py`
+
 Current first-phase support:
 
 - `init`
@@ -141,6 +147,7 @@ Current project-mining behavior:
 - routes files to rooms using path, filename, and keyword scoring
 - skips known generated/cache directories and non-readable extensions by default
 - supports explicit `--include-ignored` paths for `.gitignore`d files
+- project and convo re-mine now share one `palace` helper for `source_mtime`/hash-based unchanged-file checks instead of duplicating that logic in two service branches
 
 Embedding configuration:
 

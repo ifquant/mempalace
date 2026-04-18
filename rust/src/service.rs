@@ -30,6 +30,7 @@ use crate::model::{
     RepairSummary, Rooms, SearchFilters, SearchHit, SearchResults, Status, Taxonomy, TunnelRoom,
     WakeUpSummary,
 };
+use crate::palace::{SKIP_DIRS, ensure_vector_store, source_state_matches};
 use crate::registry::EntityRegistry;
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, DrawerRecord, GraphRoomRow, SqliteStore};
 use crate::storage::vector::VectorStore;
@@ -50,32 +51,6 @@ const SKIP_FILENAMES: &[&str] = &[
     "critical_facts.md",
     ".gitignore",
     "package-lock.json",
-];
-
-const SKIP_DIRS: &[&str] = &[
-    ".git",
-    "node_modules",
-    "__pycache__",
-    ".venv",
-    "venv",
-    "env",
-    "dist",
-    "build",
-    ".next",
-    "coverage",
-    ".mempalace",
-    ".ruff_cache",
-    ".mypy_cache",
-    ".pytest_cache",
-    ".cache",
-    ".tox",
-    ".nox",
-    ".idea",
-    ".vscode",
-    ".ipynb_checkpoints",
-    ".eggs",
-    "htmlcov",
-    "target",
 ];
 
 const CHUNK_SIZE: usize = 800;
@@ -117,10 +92,7 @@ impl App {
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
         sqlite.init_schema()?;
         sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        let vector = VectorStore::connect(&self.config.lance_path()).await?;
-        let _ = vector
-            .ensure_table(self.embedder.profile().dimension)
-            .await?;
+        let _vector = ensure_vector_store(&self.config, self.embedder.profile()).await?;
         let schema_version = sqlite.schema_version()?.unwrap_or(CURRENT_SCHEMA_VERSION);
 
         Ok(InitSummary {
@@ -153,10 +125,7 @@ impl App {
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
         sqlite.init_schema()?;
         sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        let vector = VectorStore::connect(&self.config.lance_path()).await?;
-        let _ = vector
-            .ensure_table(self.embedder.profile().dimension)
-            .await?;
+        let _vector = ensure_vector_store(&self.config, self.embedder.profile()).await?;
         let schema_version = sqlite.schema_version()?.unwrap_or(CURRENT_SCHEMA_VERSION);
         let bootstrap = bootstrap_project(project_dir)?;
 
@@ -1306,21 +1275,8 @@ impl App {
             let source_path_buf = path.canonicalize()?;
             let source_path = source_path_buf.display().to_string();
             let source_mtime = SqliteStore::source_mtime(&source_path_buf);
-            let existing = sqlite.ingested_file_state(&source_path)?;
-            let mtime_pair = existing
-                .as_ref()
-                .and_then(|state| state.source_mtime)
-                .zip(source_mtime);
-            if mtime_pair.is_some_and(|(stored, current)| stored == current) {
-                files_skipped_unchanged += 1;
-                continue;
-            }
-
             let source_hash = blake3::hash(contents.as_bytes()).to_hex().to_string();
-            if mtime_pair.is_none()
-                && existing.as_ref().map(|state| state.content_hash.as_str())
-                    == Some(source_hash.as_str())
-            {
+            if source_state_matches(&sqlite, &source_path_buf, &source_hash, source_mtime, true)? {
                 files_skipped_unchanged += 1;
                 continue;
             }
@@ -1494,7 +1450,6 @@ impl App {
             };
             let source_path = source_path_buf.display().to_string();
             let source_mtime = SqliteStore::source_mtime(&source_path_buf);
-            let existing = sqlite.ingested_file_state(&source_path)?;
             let normalized = match normalize_conversation_file(&path) {
                 Ok(Some(text)) => text,
                 Ok(None) => continue,
@@ -1505,18 +1460,7 @@ impl App {
             }
 
             let source_hash = blake3::hash(normalized.as_bytes()).to_hex().to_string();
-            let mtime_pair = existing
-                .as_ref()
-                .and_then(|state| state.source_mtime)
-                .zip(source_mtime);
-            if mtime_pair.is_some_and(|(stored, current)| stored == current) {
-                files_skipped_unchanged += 1;
-                continue;
-            }
-            if mtime_pair.is_none()
-                && existing.as_ref().map(|state| state.content_hash.as_str())
-                    == Some(source_hash.as_str())
-            {
+            if source_state_matches(&sqlite, &source_path_buf, &source_hash, source_mtime, true)? {
                 files_skipped_unchanged += 1;
                 continue;
             }
