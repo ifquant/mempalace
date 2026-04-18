@@ -53,6 +53,13 @@ Rust library structure now also includes a `normalize` module mirroring Python
 - `normalize_conversation()` for library callers that already hold raw content
 - shared JSON/JSONL chat-export parsing for ChatGPT, Claude, Codex, and Slack-style inputs
 
+Rust library structure now also includes a `palace_graph` module mirroring Python
+`palace_graph.py`:
+
+- `build_room_graph()` for graph construction from Rust drawer metadata
+- `traverse_graph()` for BFS traversal from one room
+- `find_tunnels()` and `graph_stats()` for cross-wing bridge discovery and summary stats
+
 Current first-phase support:
 
 - `init`
@@ -178,6 +185,7 @@ Current project-mining behavior:
 - reads `mempalace.yaml` or legacy `mempal.yaml` when present
 - room bootstrap and project-mining room routing now share one `room_detector` helper instead of duplicating room vocabulary and fallback rules
 - transcript normalization now lives in a standalone `normalize` helper instead of staying embedded inside `convo`
+- room-graph traversal and tunnel/stats calculation now live in a standalone `palace_graph` helper instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring

@@ -14,6 +14,7 @@ pub mod model;
 pub mod normalize;
 pub mod onboarding;
 pub mod palace;
+pub mod palace_graph;
 pub mod registry;
 pub mod room_detector;
 pub mod searcher;
