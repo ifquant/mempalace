@@ -67,6 +67,13 @@ Rust library structure now also includes a `knowledge_graph` module mirroring Py
 - `KnowledgeGraph::query_entity()` / `timeline()` for read-side traversal
 - `KnowledgeGraph::stats()` for summary counts and relationship-type inspection
 
+Rust library structure now also includes a `dedup` module mirroring Python
+`dedup.py`:
+
+- `Deduplicator::plan()` for grouping same-source drawers and identifying duplicates
+- `DedupPlan::into_summary()` for turning a plan into the CLI/MCP summary payload
+- shared cosine-distance logic for vector-level duplicate detection
+
 Current first-phase support:
 
 - `init`
@@ -194,6 +201,7 @@ Current project-mining behavior:
 - transcript normalization now lives in a standalone `normalize` helper instead of staying embedded inside `convo`
 - room-graph traversal and tunnel/stats calculation now live in a standalone `palace_graph` helper instead of staying embedded inside `service`
 - KG read/write access now also goes through a standalone `knowledge_graph` facade instead of staying embedded inside `service`
+- dedup planning and cosine-distance logic now also live in a standalone `dedup` helper instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring

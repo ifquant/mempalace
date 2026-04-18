@@ -2,6 +2,7 @@ pub mod audit;
 pub mod bootstrap;
 pub mod config;
 pub mod convo;
+pub mod dedup;
 pub mod dialect;
 pub mod embed;
 pub mod entity_detector;

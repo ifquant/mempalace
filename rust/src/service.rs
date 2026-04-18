@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -10,21 +10,22 @@ use crate::convo::{
     ConversationChunk, MIN_CONVO_CHUNK_SIZE, detect_convo_room, exchange_rooms,
     extract_exchange_chunks, extract_general_memories, general_rooms, scan_convo_files,
 };
+use crate::dedup::{DedupSummaryContext, Deduplicator};
 use crate::dialect::{CompressMetadata, Dialect, count_tokens};
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::entity_detector::detect_entities_for_registry;
 use crate::error::{MempalaceError, Result};
 use crate::knowledge_graph::KnowledgeGraph;
 use crate::model::{
-    CompressSummary, DedupSourceResult, DedupSummary, DiaryReadResult, DiaryWriteResult,
-    DoctorSummary, DrawerDeleteResult, DrawerInput, DrawerWriteResult, GraphStats,
-    GraphTraversalResult, InitSummary, KgInvalidateResult, KgQueryResult, KgStats,
-    KgTimelineResult, KgTriple, KgWriteResult, LayerStatusSummary, MigrateSummary,
-    MineProgressEvent, MineRequest, MineSummary, PrepareEmbeddingSummary, RecallSummary,
-    RegistryConfirmResult, RegistryLearnResult, RegistryLookupResult, RegistryQueryResult,
-    RegistryResearchResult, RegistrySummaryResult, RegistryWriteResult, RepairPruneSummary,
-    RepairRebuildSummary, RepairScanSummary, RepairSummary, Rooms, SearchFilters, SearchHit,
-    SearchResults, Status, Taxonomy, TunnelRoom, WakeUpSummary,
+    CompressSummary, DedupSummary, DiaryReadResult, DiaryWriteResult, DoctorSummary,
+    DrawerDeleteResult, DrawerInput, DrawerWriteResult, GraphStats, GraphTraversalResult,
+    InitSummary, KgInvalidateResult, KgQueryResult, KgStats, KgTimelineResult, KgTriple,
+    KgWriteResult, LayerStatusSummary, MigrateSummary, MineProgressEvent, MineRequest, MineSummary,
+    PrepareEmbeddingSummary, RecallSummary, RegistryConfirmResult, RegistryLearnResult,
+    RegistryLookupResult, RegistryQueryResult, RegistryResearchResult, RegistrySummaryResult,
+    RegistryWriteResult, RepairPruneSummary, RepairRebuildSummary, RepairScanSummary,
+    RepairSummary, Rooms, SearchFilters, SearchHit, SearchResults, Status, Taxonomy, TunnelRoom,
+    WakeUpSummary,
 };
 use crate::normalize::normalize_conversation_file;
 use crate::palace::{SKIP_DIRS, ensure_vector_store, source_state_matches};
@@ -433,83 +434,20 @@ impl App {
         let vector_drawers = vector
             .list_drawers(self.embedder.profile().dimension, wing, source_pattern)
             .await?;
-        let vectors_by_id = vector_drawers
-            .into_iter()
-            .map(|drawer| (drawer.id.clone(), drawer))
-            .collect::<HashMap<_, _>>();
+        let plan = Deduplicator::new(&sqlite_drawers, &vector_drawers).plan(
+            threshold,
+            source_pattern,
+            min_count,
+        );
 
-        let mut grouped = BTreeMap::<String, Vec<DrawerRecord>>::new();
-        for drawer in sqlite_drawers {
-            if let Some(pattern) = source_pattern
-                && !drawer
-                    .source_file
-                    .to_ascii_lowercase()
-                    .contains(&pattern.to_ascii_lowercase())
-            {
-                continue;
-            }
-            grouped
-                .entry(drawer.source_file.clone())
-                .or_default()
-                .push(drawer);
-        }
-
-        let mut groups = Vec::new();
-        let mut delete_ids = Vec::new();
-        let mut kept = 0usize;
-        let mut total_drawers = 0usize;
-
-        for (source_file, mut records) in grouped {
-            if records.len() < min_count {
-                continue;
-            }
-            total_drawers += records.len();
-            records.sort_by(|left, right| right.text.len().cmp(&left.text.len()));
-
-            let mut kept_vectors = Vec::<(&str, &Vec<f32>)>::new();
-            let mut local_deleted = 0usize;
-            let mut local_kept = 0usize;
-
-            for record in &records {
-                let Some(vector_record) = vectors_by_id.get(&record.id) else {
-                    continue;
-                };
-                let is_dup = kept_vectors.iter().any(|(_, kept_vector)| {
-                    cosine_distance(&vector_record.vector, kept_vector) < threshold
-                });
-                if is_dup {
-                    delete_ids.push(record.id.clone());
-                    local_deleted += 1;
-                } else {
-                    kept_vectors.push((record.id.as_str(), &vector_record.vector));
-                    local_kept += 1;
-                }
-            }
-
-            kept += local_kept;
-            groups.push(DedupSourceResult {
-                source_file,
-                before: records.len(),
-                kept: local_kept,
-                deleted: local_deleted,
-            });
-        }
-
-        groups.sort_by(|left, right| {
-            right
-                .before
-                .cmp(&left.before)
-                .then(left.source_file.cmp(&right.source_file))
-        });
-
-        if !dry_run && !stats_only && !delete_ids.is_empty() {
-            sqlite.delete_drawers(&delete_ids)?;
+        if !dry_run && !stats_only && !plan.delete_ids.is_empty() {
+            sqlite.delete_drawers(&plan.delete_ids)?;
             vector
-                .delete_drawers(self.embedder.profile().dimension, &delete_ids)
+                .delete_drawers(self.embedder.profile().dimension, &plan.delete_ids)
                 .await?;
         }
 
-        Ok(DedupSummary {
+        Ok(plan.into_summary(DedupSummaryContext {
             kind: "dedup".to_string(),
             palace_path: self.config.palace_path.display().to_string(),
             sqlite_path: self.config.sqlite_path().display().to_string(),
@@ -520,13 +458,8 @@ impl App {
             wing: wing.map(ToOwned::to_owned),
             source: source_pattern.map(ToOwned::to_owned),
             min_count,
-            sources_checked: groups.len(),
-            total_drawers,
-            kept,
-            deleted: delete_ids.len(),
             stats_only,
-            groups,
-        })
+        }))
     }
 
     pub async fn doctor(&self, warm_embedding: bool) -> Result<DoctorSummary> {
@@ -2072,24 +2005,6 @@ fn drawer_input_from_record(record: &DrawerRecord) -> DrawerInput {
         extract_mode: record.extract_mode.clone(),
         text: record.text.clone(),
     }
-}
-
-fn cosine_distance(left: &[f32], right: &[f32]) -> f64 {
-    let mut dot = 0.0f64;
-    let mut left_norm = 0.0f64;
-    let mut right_norm = 0.0f64;
-    for (lhs, rhs) in left.iter().zip(right.iter()) {
-        let lhs = *lhs as f64;
-        let rhs = *rhs as f64;
-        dot += lhs * rhs;
-        left_norm += lhs * lhs;
-        right_norm += rhs * rhs;
-    }
-    if left_norm == 0.0 || right_norm == 0.0 {
-        return 1.0;
-    }
-    let similarity = dot / (left_norm.sqrt() * right_norm.sqrt());
-    1.0 - similarity.clamp(-1.0, 1.0)
 }
 
 #[cfg(test)]
