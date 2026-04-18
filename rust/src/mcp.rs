@@ -232,6 +232,62 @@ fn tools() -> Vec<Value> {
             json!({"type":"object","properties":{}}),
         ),
         tool(
+            "mempalace_repair",
+            "Run non-destructive palace repair diagnostics.",
+            json!({"type":"object","properties":{}}),
+        ),
+        tool(
+            "mempalace_repair_scan",
+            "Scan SQLite and LanceDB for drift and write corrupt_ids.txt.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "wing": {"type":"string","description":"Optional wing filter for drift scan"}
+                }
+            }),
+        ),
+        tool(
+            "mempalace_repair_prune",
+            "Preview or apply deletion of queued corrupt IDs from corrupt_ids.txt.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "confirm": {"type":"boolean","description":"Actually delete queued IDs instead of previewing"}
+                }
+            }),
+        ),
+        tool(
+            "mempalace_repair_rebuild",
+            "Rebuild LanceDB from SQLite drawers using the active embedder profile.",
+            json!({"type":"object","properties":{}}),
+        ),
+        tool(
+            "mempalace_compress",
+            "Generate AAAK summaries for drawers and optionally store them.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "wing": {"type":"string","description":"Optional wing filter"},
+                    "dry_run": {"type":"boolean","description":"Preview summaries without storing them"}
+                }
+            }),
+        ),
+        tool(
+            "mempalace_dedup",
+            "Deduplicate near-identical drawers grouped by source_file.",
+            json!({
+                "type": "object",
+                "properties": {
+                    "threshold": {"type":"number","description":"Cosine distance threshold (default 0.15)"},
+                    "dry_run": {"type":"boolean","description":"Preview without deleting"},
+                    "stats_only": {"type":"boolean","description":"Show stats without deleting"},
+                    "wing": {"type":"string","description":"Optional wing filter"},
+                    "source": {"type":"string","description":"Optional source_file substring filter"},
+                    "min_count": {"type":"integer","description":"Minimum group size to consider (default 5)"}
+                }
+            }),
+        ),
+        tool(
             "mempalace_registry_summary",
             "Summarize one project-local entity registry.",
             json!({
@@ -723,6 +779,93 @@ async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<V
                 "Check the palace files, then rerun mempalace_layers_status.",
             )),
         },
+        "mempalace_repair" => match app.repair().await {
+            Ok(summary) => Ok(serde_json::to_value(summary)?),
+            Err(err) => Ok(tool_error(
+                "Repair error",
+                &err,
+                "Check the palace files, then rerun mempalace_repair.",
+            )),
+        },
+        "mempalace_repair_scan" => {
+            let wing = arguments.get("wing").and_then(Value::as_str);
+            match app.repair_scan(wing).await {
+                Ok(summary) => Ok(serde_json::to_value(summary)?),
+                Err(err) => Ok(tool_error(
+                    "Repair scan error",
+                    &err,
+                    "Check the palace files and optional wing filter, then rerun mempalace_repair_scan.",
+                )),
+            }
+        }
+        "mempalace_repair_prune" => {
+            let confirm = arguments
+                .get("confirm")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            match app.repair_prune(confirm).await {
+                Ok(summary) => Ok(serde_json::to_value(summary)?),
+                Err(err) => Ok(tool_error(
+                    "Repair prune error",
+                    &err,
+                    "Check corrupt_ids.txt and palace files, then rerun mempalace_repair_prune.",
+                )),
+            }
+        }
+        "mempalace_repair_rebuild" => match app.repair_rebuild().await {
+            Ok(summary) => Ok(serde_json::to_value(summary)?),
+            Err(err) => Ok(tool_error(
+                "Repair rebuild error",
+                &err,
+                "Check the palace files, embedding profile, and vector store, then rerun mempalace_repair_rebuild.",
+            )),
+        },
+        "mempalace_compress" => {
+            let wing = arguments.get("wing").and_then(Value::as_str);
+            let dry_run = arguments
+                .get("dry_run")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            match app.compress(wing, dry_run).await {
+                Ok(summary) => Ok(serde_json::to_value(summary)?),
+                Err(err) => Ok(tool_error(
+                    "Compress error",
+                    &err,
+                    "Check the palace files and optional wing filter, then rerun mempalace_compress.",
+                )),
+            }
+        }
+        "mempalace_dedup" => {
+            let threshold = arguments
+                .get("threshold")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.15);
+            let dry_run = arguments
+                .get("dry_run")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let stats_only = arguments
+                .get("stats_only")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let wing = arguments.get("wing").and_then(Value::as_str);
+            let source = arguments.get("source").and_then(Value::as_str);
+            let min_count = arguments
+                .get("min_count")
+                .and_then(Value::as_u64)
+                .unwrap_or(5) as usize;
+            match app
+                .dedup(threshold, dry_run, wing, source, min_count, stats_only)
+                .await
+            {
+                Ok(summary) => Ok(serde_json::to_value(summary)?),
+                Err(err) => Ok(tool_error(
+                    "Dedup error",
+                    &err,
+                    "Check the palace files and dedup filters, then rerun mempalace_dedup.",
+                )),
+            }
+        }
         "mempalace_registry_summary" => {
             let project_dir = required_str(&arguments, "project_dir", "mempalace_registry_summary");
             let Ok(project_dir) = project_dir else {
@@ -1413,6 +1556,62 @@ fn coerce_argument_types(tool_name: &str, arguments: &mut Value) {
                 };
                 if let Some(limit) = coerced {
                     args.insert("limit".to_string(), limit);
+                }
+            }
+        }
+        "mempalace_repair_prune" | "mempalace_compress" => {
+            if let Some(value) = args.get("confirm").cloned() {
+                let coerced = match value {
+                    Value::String(text) => text.parse::<bool>().ok().map(Value::from),
+                    Value::Bool(_) => Some(value),
+                    _ => None,
+                };
+                if let Some(confirm) = coerced {
+                    args.insert("confirm".to_string(), confirm);
+                }
+            }
+            if let Some(value) = args.get("dry_run").cloned() {
+                let coerced = match value {
+                    Value::String(text) => text.parse::<bool>().ok().map(Value::from),
+                    Value::Bool(_) => Some(value),
+                    _ => None,
+                };
+                if let Some(dry_run) = coerced {
+                    args.insert("dry_run".to_string(), dry_run);
+                }
+            }
+        }
+        "mempalace_dedup" => {
+            if let Some(value) = args.get("threshold").cloned() {
+                let coerced = match value {
+                    Value::String(text) => text.parse::<f64>().ok().map(Value::from),
+                    Value::Number(_) => value.as_f64().map(Value::from),
+                    _ => None,
+                };
+                if let Some(threshold) = coerced {
+                    args.insert("threshold".to_string(), threshold);
+                }
+            }
+            for key in ["dry_run", "stats_only"] {
+                if let Some(value) = args.get(key).cloned() {
+                    let coerced = match value {
+                        Value::String(text) => text.parse::<bool>().ok().map(Value::from),
+                        Value::Bool(_) => Some(value),
+                        _ => None,
+                    };
+                    if let Some(flag) = coerced {
+                        args.insert(key.to_string(), flag);
+                    }
+                }
+            }
+            if let Some(value) = args.get("min_count").cloned() {
+                let coerced = match value {
+                    Value::String(text) => text.parse::<u64>().ok().map(Value::from),
+                    Value::Number(_) => value.as_u64().map(Value::from),
+                    _ => None,
+                };
+                if let Some(min_count) = coerced {
+                    args.insert("min_count".to_string(), min_count);
                 }
             }
         }

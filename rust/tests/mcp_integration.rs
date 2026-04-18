@@ -61,6 +61,12 @@ async fn mcp_read_tools_work() {
     assert!(tool_names.contains(&"mempalace_wake_up"));
     assert!(tool_names.contains(&"mempalace_recall"));
     assert!(tool_names.contains(&"mempalace_layers_status"));
+    assert!(tool_names.contains(&"mempalace_repair"));
+    assert!(tool_names.contains(&"mempalace_repair_scan"));
+    assert!(tool_names.contains(&"mempalace_repair_prune"));
+    assert!(tool_names.contains(&"mempalace_repair_rebuild"));
+    assert!(tool_names.contains(&"mempalace_compress"));
+    assert!(tool_names.contains(&"mempalace_dedup"));
     assert!(tool_names.contains(&"mempalace_kg_query"));
     assert!(tool_names.contains(&"mempalace_kg_add"));
     assert!(tool_names.contains(&"mempalace_kg_invalidate"));
@@ -183,6 +189,93 @@ async fn mcp_read_tools_work() {
     assert!(layers_status_text.contains("\"kind\": \"layers_status\""));
     assert!(layers_status_text.contains("\"layer0_description\""));
     assert!(layers_status_text.contains("\"layer3_description\""));
+
+    let repair = handle_request(
+        json!({"method":"tools/call","id":10,"params":{"name":"mempalace_repair","arguments":{}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let repair_text = repair["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(repair_text.contains("\"kind\": \"repair\""));
+    assert!(repair_text.contains("\"ok\": true"));
+
+    let repair_scan = handle_request(
+        json!({"method":"tools/call","id":11,"params":{"name":"mempalace_repair_scan","arguments":{"wing":"project"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let repair_scan_text = repair_scan["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert!(repair_scan_text.contains("\"kind\": \"repair_scan\""));
+    assert!(repair_scan_text.contains("\"corrupt_ids_path\""));
+
+    let repair_prune = handle_request(
+        json!({"method":"tools/call","id":12,"params":{"name":"mempalace_repair_prune","arguments":{"confirm":"false"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let repair_prune_text = repair_prune["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert!(repair_prune_text.contains("\"kind\": \"repair_prune\""));
+    assert!(repair_prune_text.contains("\"confirm\": false"));
+
+    let compress = handle_request(
+        json!({"method":"tools/call","id":13,"params":{"name":"mempalace_compress","arguments":{"dry_run":"true","wing":"project"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let compress_text = compress["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(compress_text.contains("\"kind\": \"compress\""));
+    assert!(compress_text.contains("\"dry_run\": true"));
+
+    for idx in 0..5 {
+        app.add_drawer(
+            "project",
+            "backend",
+            &format!(
+                "Near-duplicate deployment note for GraphQL rollout and backend migration copy {idx}"
+            ),
+            Some("notes/dedup.txt"),
+            Some("mcp-test"),
+        )
+        .await
+        .unwrap();
+    }
+
+    let dedup = handle_request(
+        json!({"method":"tools/call","id":14,"params":{"name":"mempalace_dedup","arguments":{"dry_run":"true","threshold":"0.15","min_count":"5","source":"dedup"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let dedup_text = dedup["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(dedup_text.contains("\"kind\": \"dedup\""));
+    assert!(dedup_text.contains("\"dry_run\": true"));
+    assert!(dedup_text.contains("\"sources_checked\""));
+
+    let repair_rebuild = handle_request(
+        json!({"method":"tools/call","id":15,"params":{"name":"mempalace_repair_rebuild","arguments":{}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let repair_rebuild_text = repair_rebuild["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap();
+    assert!(repair_rebuild_text.contains("\"kind\": \"repair_rebuild\""));
+    assert!(repair_rebuild_text.contains("\"rebuilt\""));
 }
 
 #[tokio::test]
