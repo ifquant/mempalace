@@ -4,9 +4,10 @@ use std::path::Path;
 
 use crate::VERSION;
 use crate::bootstrap::{
-    default_wing, detect_entities_for_registry, write_aaak_entities, write_critical_facts,
-    write_entities, write_project_config_from_names,
+    default_wing, write_aaak_entities, write_critical_facts, write_entities,
+    write_project_config_from_names,
 };
+use crate::entity_detector::detect_entities_for_registry;
 use crate::error::{MempalaceError, Result};
 use crate::model::OnboardingSummary;
 use crate::registry::{COMMON_ENGLISH_WORDS, EntityRegistry, SeedPerson};

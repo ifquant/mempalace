@@ -32,6 +32,13 @@ mirroring Python `searcher.py`:
 - `Searcher::search()` for programmatic Layer 3 retrieval
 - `render_search_human()` for Python-style human-readable result blocks
 
+Rust library structure now also includes an `entity_detector` module mirroring Python
+`entity_detector.py`:
+
+- `detect_entities()` for project-local people/project detection
+- `detect_entities_for_registry()` for registry/bootstrap callers
+- `scan_for_detection()` for reusable file discovery before detection
+
 Current first-phase support:
 
 - `init`

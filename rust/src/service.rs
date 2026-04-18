@@ -8,7 +8,7 @@ use ignore::WalkBuilder;
 use serde::Deserialize;
 
 use crate::VERSION;
-use crate::bootstrap::{bootstrap_project, detect_entities_for_registry};
+use crate::bootstrap::bootstrap_project;
 use crate::config::AppConfig;
 use crate::convo::{
     ConversationChunk, MIN_CONVO_CHUNK_SIZE, detect_convo_room, exchange_rooms,
@@ -17,6 +17,7 @@ use crate::convo::{
 };
 use crate::dialect::{CompressMetadata, Dialect, count_tokens};
 use crate::embed::{EmbeddingProvider, build_embedder};
+use crate::entity_detector::detect_entities_for_registry;
 use crate::error::{MempalaceError, Result};
 use crate::model::{
     CompressSummary, DedupSourceResult, DedupSummary, DiaryReadResult, DiaryWriteResult,

@@ -4,6 +4,7 @@ pub mod config;
 pub mod convo;
 pub mod dialect;
 pub mod embed;
+pub mod entity_detector;
 pub mod error;
 pub mod hook;
 pub mod instructions;
