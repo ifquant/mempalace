@@ -27,6 +27,12 @@ async fn init_is_idempotent_and_status_starts_empty() {
 
     assert_eq!(first.palace_path, second.palace_path);
     assert_eq!(first.kind, "init");
+    assert_eq!(first.wing, "general");
+    assert_eq!(first.configured_rooms, vec!["general"]);
+    assert!(first.detected_people.is_empty());
+    assert!(first.detected_projects.is_empty());
+    assert!(first.config_path.is_none());
+    assert!(first.entities_path.is_none());
     assert_eq!(first.version, env!("CARGO_PKG_VERSION"));
     assert_eq!(status.total_drawers, 0);
     assert!(status.wings.is_empty());
@@ -40,6 +46,46 @@ async fn init_is_idempotent_and_status_starts_empty() {
     assert_eq!(prepare.version, env!("CARGO_PKG_VERSION"));
     assert!(prepare.sqlite_path.ends_with("palace.sqlite3"));
     assert!(prepare.lance_path.ends_with("lance"));
+}
+
+#[tokio::test]
+async fn init_project_bootstraps_rooms_and_entities() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    std::fs::create_dir_all(project.join("frontend")).unwrap();
+    std::fs::write(
+        project.join("journal.md"),
+        "Jordan said Atlas should launch soon.\nJordan wrote the Atlas system notes.",
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
+
+    let summary = app.init_project(&project).await.unwrap();
+
+    assert_eq!(summary.kind, "init");
+    assert_eq!(summary.project_path, project.display().to_string());
+    assert_eq!(summary.wing, "project");
+    assert!(
+        summary
+            .configured_rooms
+            .iter()
+            .any(|room| room == "frontend")
+    );
+    assert!(
+        summary
+            .configured_rooms
+            .iter()
+            .any(|room| room == "general")
+    );
+    assert!(summary.detected_people.iter().any(|name| name == "Jordan"));
+    assert!(summary.detected_projects.iter().any(|name| name == "Atlas"));
+    assert!(summary.config_written);
+    assert!(summary.entities_written);
+    assert!(project.join("mempalace.yaml").exists());
+    assert!(project.join("entities.json").exists());
 }
 
 #[tokio::test]

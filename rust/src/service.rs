@@ -8,6 +8,7 @@ use ignore::WalkBuilder;
 use serde::Deserialize;
 
 use crate::VERSION;
+use crate::bootstrap::bootstrap_project;
 use crate::config::AppConfig;
 use crate::convo::{
     ConversationChunk, MIN_CONVO_CHUNK_SIZE, detect_convo_room, exchange_rooms,
@@ -115,6 +116,46 @@ impl App {
 
         Ok(InitSummary {
             kind: "init".to_string(),
+            project_path: self.config.palace_path.display().to_string(),
+            wing: "general".to_string(),
+            configured_rooms: vec!["general".to_string()],
+            detected_people: Vec::new(),
+            detected_projects: Vec::new(),
+            config_path: None,
+            config_written: false,
+            entities_path: None,
+            entities_written: false,
+            palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            lance_path: self.config.lance_path().display().to_string(),
+            version: VERSION.to_string(),
+            schema_version,
+        })
+    }
+
+    pub async fn init_project(&self, project_dir: &Path) -> Result<InitSummary> {
+        self.config.ensure_dirs()?;
+        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.init_schema()?;
+        sqlite.ensure_embedding_profile(self.embedder.profile())?;
+        let vector = VectorStore::connect(&self.config.lance_path()).await?;
+        let _ = vector
+            .ensure_table(self.embedder.profile().dimension)
+            .await?;
+        let schema_version = sqlite.schema_version()?.unwrap_or(CURRENT_SCHEMA_VERSION);
+        let bootstrap = bootstrap_project(project_dir)?;
+
+        Ok(InitSummary {
+            kind: "init".to_string(),
+            project_path: project_dir.display().to_string(),
+            wing: bootstrap.wing,
+            configured_rooms: bootstrap.configured_rooms,
+            detected_people: bootstrap.detected_people,
+            detected_projects: bootstrap.detected_projects,
+            config_path: bootstrap.config_path,
+            config_written: bootstrap.config_written,
+            entities_path: bootstrap.entities_path,
+            entities_written: bootstrap.entities_written,
             palace_path: self.config.palace_path.display().to_string(),
             sqlite_path: self.config.sqlite_path().display().to_string(),
             lance_path: self.config.lance_path().display().to_string(),

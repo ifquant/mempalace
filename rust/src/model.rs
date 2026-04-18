@@ -296,6 +296,15 @@ pub enum MineProgressEvent {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct InitSummary {
     pub kind: String,
+    pub project_path: String,
+    pub wing: String,
+    pub configured_rooms: Vec<String>,
+    pub detected_people: Vec<String>,
+    pub detected_projects: Vec<String>,
+    pub config_path: Option<String>,
+    pub config_written: bool,
+    pub entities_path: Option<String>,
+    pub entities_written: bool,
     pub palace_path: String,
     pub sqlite_path: String,
     pub lance_path: String,

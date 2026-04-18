@@ -37,6 +37,11 @@ enum Command {
         #[arg(help = "Project directory to set up")]
         dir: PathBuf,
         #[arg(long)]
+        #[arg(
+            help = "Auto-accept detected bootstrap files (Rust init is already non-interactive)"
+        )]
+        yes: bool,
+        #[arg(long)]
         #[arg(help = "Print Python-style human-readable init summary instead of JSON")]
         human: bool,
     },
@@ -206,7 +211,7 @@ async fn main() -> anyhow::Result<()> {
     } = Cli::parse();
 
     match command {
-        Command::Init { dir, human } => {
+        Command::Init { dir, yes: _, human } => {
             let palace_path = palace.as_ref().unwrap_or(&dir);
             let mut config = match AppConfig::resolve(Some(palace_path)) {
                 Ok(config) => config,
@@ -231,7 +236,7 @@ async fn main() -> anyhow::Result<()> {
                     std::process::exit(1);
                 }
             };
-            let summary = match app.init().await {
+            let summary = match app.init_project(&dir).await {
                 Ok(summary) => summary,
                 Err(err) if human => {
                     print_init_error_human(&err.to_string());
@@ -1113,10 +1118,43 @@ fn print_init_human(summary: &mempalace_rs::model::InitSummary) {
     println!("\n{}", "=".repeat(55));
     println!("  MemPalace Init");
     println!("{}\n", "=".repeat(55));
+    println!("  Project: {}", summary.project_path);
+    println!("  Wing:    {}", summary.wing);
     println!("  Palace:  {}", summary.palace_path);
     println!("  SQLite:  {}", summary.sqlite_path);
     println!("  LanceDB: {}", summary.lance_path);
     println!("  Schema:  {}", summary.schema_version);
+    if !summary.configured_rooms.is_empty() {
+        println!("  Rooms:   {}", summary.configured_rooms.join(", "));
+    }
+    if let Some(config_path) = &summary.config_path {
+        println!(
+            "  Config:  {}{}",
+            config_path,
+            if summary.config_written {
+                " (written)"
+            } else {
+                " (kept)"
+            }
+        );
+    }
+    if let Some(entities_path) = &summary.entities_path {
+        println!(
+            "  Entities: {}{}",
+            entities_path,
+            if summary.entities_written {
+                " (written)"
+            } else {
+                " (kept)"
+            }
+        );
+    }
+    if !summary.detected_people.is_empty() {
+        println!("  People:  {}", summary.detected_people.join(", "));
+    }
+    if !summary.detected_projects.is_empty() {
+        println!("  Projects: {}", summary.detected_projects.join(", "));
+    }
     println!("\n  Palace initialized.");
     println!("\n{}", "=".repeat(55));
     println!();

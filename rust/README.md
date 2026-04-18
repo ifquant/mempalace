@@ -16,6 +16,7 @@ LanceDB for local vector storage, plus SQLite for relational and knowledge-graph
 Current first-phase support:
 
 - `init`
+- `init` now bootstraps project-local `mempalace.yaml` room config and writes `entities.json` when it can confidently detect people/projects from local prose files
 - `mine` for project files
 - `mine --dry-run` to preview file discovery and chunk counts without persisting drawers
 - `mine --mode projects --agent <name>` matches more of the Python CLI surface
@@ -98,6 +99,8 @@ Current first-phase support:
 
 Current project-mining behavior:
 
+- `init` bootstraps `mempalace.yaml` from folder structure / filename patterns when the file does not already exist
+- `init` preserves existing `mempalace.yaml` and `entities.json` instead of overwriting them
 - reads `mempalace.yaml` or legacy `mempal.yaml` when present
 - uses config-defined `wing` and `rooms`
 - routes files to rooms using path, filename, and keyword scoring

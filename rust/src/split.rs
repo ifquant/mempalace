@@ -185,7 +185,7 @@ fn extract_timestamp(lines: &[String]) -> Option<String> {
 
     for line in lines.iter().take(50) {
         if let Some(caps) = pattern.captures(line) {
-            let time = caps.get(1)?.as_str().replace(':', "").replace(' ', "");
+            let time = caps.get(1)?.as_str().replace([':', ' '], "");
             let month = months.get(caps.get(2)?.as_str()).copied().unwrap_or("00");
             let day = format!("{:0>2}", caps.get(3)?.as_str());
             let year = caps.get(4)?.as_str();

@@ -32,9 +32,16 @@ fn cli_init_status_mine_search_round_trip() {
         .assert()
         .success()
         .stdout(contains("\"kind\": \"init\""))
+        .stdout(contains("\"project_path\":"))
+        .stdout(contains("\"wing\": \"project\""))
+        .stdout(contains("\"configured_rooms\":"))
+        .stdout(contains("\"config_written\": true"))
+        .stdout(contains("\"entities_written\":"))
         .stdout(contains("\"version\":"))
         .stdout(contains("\"schema_version\": 7"))
         .stdout(contains("palace.sqlite3"));
+
+    assert!(project.join("mempalace.yaml").exists());
 
     Command::cargo_bin("mempalace-rs")
         .unwrap()
@@ -116,6 +123,37 @@ fn cli_init_status_mine_search_round_trip() {
         .assert()
         .success()
         .stdout(contains("Clerk"));
+}
+
+#[test]
+fn cli_init_writes_entities_json_when_detection_finds_names() {
+    let tmp = tempdir().unwrap();
+    let project = tmp.path().join("project");
+    fs::create_dir_all(project.join("notes")).unwrap();
+    fs::write(
+        project.join("notes").join("people.md"),
+        "Jordan said Atlas should launch soon.\nJordan wrote the Atlas system notes.",
+    )
+    .unwrap();
+
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "init",
+            project.to_str().unwrap(),
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"entities_written\": true"))
+        .stdout(contains("\"detected_people\":"))
+        .stdout(contains("\"detected_projects\":"));
+
+    assert!(project.join("entities.json").exists());
 }
 
 #[test]
@@ -621,10 +659,14 @@ fn cli_init_human_prints_python_style_summary() {
         .assert()
         .success()
         .stdout(contains("MemPalace Init"))
+        .stdout(contains("Project:"))
+        .stdout(contains("Wing:"))
         .stdout(contains("Palace:"))
         .stdout(contains("SQLite:"))
         .stdout(contains("LanceDB:"))
         .stdout(contains("Schema:  7"))
+        .stdout(contains("Config:"))
+        .stdout(contains("Rooms:"))
         .stdout(contains("Palace initialized."));
 }
 
@@ -2226,8 +2268,6 @@ fn cli_search_human_prints_python_style_result_blocks() {
             "Clerk auth",
             "--wing",
             "my_app",
-            "--room",
-            "general",
             "--results",
             "3",
             "--human",
@@ -2236,8 +2276,7 @@ fn cli_search_human_prints_python_style_result_blocks() {
         .success()
         .stdout(contains("Results for: \"Clerk auth\""))
         .stdout(contains("Wing: my_app"))
-        .stdout(contains("Room: general"))
-        .stdout(contains("[1] my_app / general"))
+        .stdout(contains("[1] my_app /"))
         .stdout(contains("Source: auth.txt"))
         .stdout(contains("Match:"))
         .stdout(contains("The team switched to Clerk for auth."));
