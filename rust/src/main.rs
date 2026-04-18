@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use mempalace_rs::config::AppConfig;
@@ -201,10 +201,6 @@ async fn main() -> anyhow::Result<()> {
             progress,
             human,
         } => {
-            if mode != "projects" {
-                print_unsupported_mine_mode(&mode, &extract, &dir, human)?;
-                std::process::exit(2);
-            }
             let mut config = match AppConfig::resolve(palace.as_ref()) {
                 Ok(config) => config,
                 Err(err) if human => {
@@ -246,6 +242,13 @@ async fn main() -> anyhow::Result<()> {
                         drawers,
                     } => {
                         eprintln!("    [DRY RUN] {file_name} -> room:{room} ({drawers} drawers)");
+                    }
+                    MineProgressEvent::DryRunSummary {
+                        file_name,
+                        summary,
+                        drawers,
+                    } => {
+                        eprintln!("    [DRY RUN] {file_name} -> {drawers} memories ({summary})");
                     }
                     MineProgressEvent::Filed {
                         index,
@@ -867,17 +870,19 @@ fn print_mine_human(summary: &mempalace_rs::model::MineSummary) {
     println!("\n{}", "=".repeat(55));
     println!("  MemPalace Mine");
     println!("{}\n", "=".repeat(55));
+    println!("  Mode:     {}", summary.mode);
+    println!("  Extract:  {}", summary.extract);
     println!("  Wing:     {}", summary.wing);
     println!("  Rooms:    {}", summary.configured_rooms.join(", "));
     println!("  Files:    {}", summary.files_planned);
     println!("  Palace:   {}", summary.palace_path);
     println!("  Project:  {}", summary.project_path);
     println!();
-    println!("  Files processed: {}", summary.files_mined);
-    println!("  Files skipped:   {}", summary.files_skipped_unchanged);
+    println!("  Files processed: {}", summary.files_processed);
+    println!("  Files skipped:   {}", summary.files_skipped);
     if summary.dry_run {
         println!("  Drawers previewed: {}", summary.drawers_added);
-        println!("  Mode:            DRY RUN");
+        println!("  Run mode:        DRY RUN");
         println!("  Persistence:     preview only, no drawers were written");
     } else {
         println!("  Drawers filed:   {}", summary.drawers_added);
@@ -1054,46 +1059,6 @@ fn print_prepare_embedding_error_json(message: &str) -> anyhow::Result<()> {
     });
     println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
-}
-
-fn print_unsupported_mine_mode(
-    mode: &str,
-    extract: &str,
-    dir: &Path,
-    human: bool,
-) -> anyhow::Result<()> {
-    if human {
-        print_unsupported_mine_mode_human(mode, extract, dir);
-        return Ok(());
-    }
-    let payload = json!({
-        "error": "Unsupported mine mode",
-        "hint": "Rust currently supports only `mempalace mine <dir>` project ingest. Conversation and general extraction modes are not implemented yet.",
-        "mode": mode,
-        "extract": extract,
-        "project_path": dir.display().to_string(),
-    });
-    println!("{}", serde_json::to_string_pretty(&payload)?);
-    Ok(())
-}
-
-fn print_unsupported_mine_mode_human(mode: &str, extract: &str, dir: &Path) {
-    println!("\n{}", "=".repeat(55));
-    println!("  MemPalace Mine");
-    println!("{}\n", "=".repeat(55));
-    println!("  Project:  {}", dir.display());
-    println!("  Mode:     {mode}");
-    println!("  Extract:  {extract}");
-    println!();
-    println!("  Conversation and general extraction are not implemented in Rust yet.");
-    println!("  Supported today: mempalace-rs mine <dir>");
-    println!();
-    println!("  Suggested next step:");
-    println!(
-        "    Retry with --mode projects, or keep using the Python CLI for conversation mining."
-    );
-    println!("\n{}", "=".repeat(55));
-    println!();
 }
 
 #[cfg(test)]

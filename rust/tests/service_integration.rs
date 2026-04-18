@@ -5,6 +5,7 @@ use arrow_schema::{DataType, Field, Schema};
 use lancedb::connect;
 use lancedb::query::{ExecutableQuery, QueryBase, Select};
 use mempalace_rs::config::{AppConfig, EmbeddingBackend};
+use mempalace_rs::convo::{detect_convo_room, extract_general_memories};
 use mempalace_rs::model::{KgTriple, MineRequest};
 use mempalace_rs::service::App;
 use mempalace_rs::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
@@ -797,10 +798,173 @@ async fn init_migrates_v1_sqlite_schema_to_current() {
     let drawer_columns: i64 = Connection::open(config.sqlite_path())
         .unwrap()
         .query_row(
-            "SELECT COUNT(*) FROM pragma_table_info('drawers') WHERE name IN ('source_file', 'source_mtime', 'added_by', 'filed_at')",
+            "SELECT COUNT(*) FROM pragma_table_info('drawers') WHERE name IN ('source_file', 'source_mtime', 'added_by', 'filed_at', 'ingest_mode', 'extract_mode')",
             [],
             |row| row.get(0),
+    )
+    .unwrap();
+    assert_eq!(drawer_columns, 6);
+}
+
+#[tokio::test]
+async fn service_mine_convos_skips_meta_json_symlink_and_large_files() {
+    let tmp = tempdir().unwrap();
+    let convo_dir = tmp.path().join("convos");
+    std::fs::create_dir_all(&convo_dir).unwrap();
+    std::fs::write(
+        convo_dir.join("quoted.txt"),
+        "> why did the deploy fail?\nThe deploy failed because the server config was broken.\n\n> how did we fix it?\nWe fixed the server config and reran the deploy.\n",
+    )
+    .unwrap();
+    std::fs::write(convo_dir.join("skip.meta.json"), "{\"meta\":true}").unwrap();
+    std::fs::write(convo_dir.join("broken.json"), "{ not valid json").unwrap();
+    std::fs::write(
+        convo_dir.join("huge.md"),
+        "a".repeat((10 * 1024 * 1024) + 128),
+    )
+    .unwrap();
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(
+        convo_dir.join("quoted.txt"),
+        convo_dir.join("quoted-link.txt"),
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config).unwrap();
+    app.init().await.unwrap();
+
+    let summary = app
+        .mine_project(
+            &convo_dir,
+            &MineRequest {
+                wing: Some("chatlogs".to_string()),
+                mode: "convos".to_string(),
+                agent: "mempalace".to_string(),
+                limit: 0,
+                dry_run: true,
+                respect_gitignore: true,
+                include_ignored: vec![],
+                extract: "exchange".to_string(),
+            },
         )
+        .await
         .unwrap();
-    assert_eq!(drawer_columns, 4);
+
+    assert_eq!(summary.mode, "convos");
+    assert_eq!(summary.extract, "exchange");
+    assert_eq!(summary.files_seen, 2);
+    assert_eq!(summary.files_mined, 1);
+    assert_eq!(summary.files_processed, 1);
+    assert_eq!(summary.files_skipped, 1);
+    assert_eq!(summary.drawers_added, 2);
+    assert_eq!(summary.room_counts["technical"], 1);
+}
+
+#[tokio::test]
+async fn service_mine_convos_exchange_replaces_existing_source_chunks() {
+    let tmp = tempdir().unwrap();
+    let convo_dir = tmp.path().join("convos");
+    std::fs::create_dir_all(&convo_dir).unwrap();
+    let transcript = convo_dir.join("session.txt");
+    std::fs::write(
+        &transcript,
+        "> first question\nFirst answer with technical code details.\n\n> second question\nSecond answer about architecture and deploy.\n",
+    )
+    .unwrap();
+
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let first = app
+        .mine_project(
+            &convo_dir,
+            &MineRequest {
+                wing: Some("chatlogs".to_string()),
+                mode: "convos".to_string(),
+                agent: "mempalace".to_string(),
+                limit: 0,
+                dry_run: false,
+                respect_gitignore: true,
+                include_ignored: vec![],
+                extract: "exchange".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(first.drawers_added, 2);
+    assert_eq!(app.status().await.unwrap().total_drawers, 2);
+
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+    std::fs::write(
+        &transcript,
+        "Human: what changed?\nAssistant: We switched to one room and one answer.\n",
+    )
+    .unwrap();
+
+    let second = app
+        .mine_project(
+            &convo_dir,
+            &MineRequest {
+                wing: Some("chatlogs".to_string()),
+                mode: "convos".to_string(),
+                agent: "mempalace".to_string(),
+                limit: 0,
+                dry_run: false,
+                respect_gitignore: true,
+                include_ignored: vec![],
+                extract: "exchange".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(second.files_mined, 1);
+    assert_eq!(app.status().await.unwrap().total_drawers, 1);
+
+    let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    assert_eq!(sqlite.total_drawers().unwrap(), 1);
+}
+
+#[test]
+fn service_general_extractor_classifies_decision_preference_milestone_problem_emotional() {
+    let text = r#"
+We decided to use LanceDB because the local-first trade-off is better.
+
+I prefer explicit APIs and never hide hot paths behind convenience wrappers.
+
+The migration problem was painful, but we fixed it and now it works.
+
+I feel proud and grateful that the rewrite finally feels stable.
+"#;
+
+    let memories = extract_general_memories(text, 0.3);
+    let kinds = memories
+        .iter()
+        .map(|chunk| chunk.room.as_str())
+        .collect::<Vec<_>>();
+
+    assert!(kinds.contains(&"decision"));
+    assert!(kinds.contains(&"preference"));
+    assert!(kinds.contains(&"milestone"));
+    assert!(kinds.contains(&"emotional"));
+    assert!(!kinds.contains(&"problem"));
+}
+
+#[test]
+fn service_convo_room_detection_matches_python_keyword_buckets() {
+    assert_eq!(
+        detect_convo_room("We should update the roadmap and backlog before the next sprint."),
+        "planning"
+    );
+    assert_eq!(
+        detect_convo_room("The service architecture and module design changed."),
+        "architecture"
+    );
+    assert_eq!(
+        detect_convo_room("The server error and deploy bug were fixed after debugging."),
+        "technical"
+    );
 }

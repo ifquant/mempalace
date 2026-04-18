@@ -20,7 +20,7 @@ pub struct GraphRoomRow {
     pub filed_at: Option<String>,
 }
 
-pub const CURRENT_SCHEMA_VERSION: i64 = 5;
+pub const CURRENT_SCHEMA_VERSION: i64 = 6;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct IngestedFileState {
@@ -70,6 +70,10 @@ impl SqliteStore {
                 4 => {
                     self.migrate_v4_to_v5()?;
                     version = 5;
+                }
+                5 => {
+                    self.migrate_v5_to_v6()?;
+                    version = 6;
                 }
                 CURRENT_SCHEMA_VERSION => break,
                 other => {
@@ -121,6 +125,8 @@ impl SqliteStore {
                 chunk_index INTEGER NOT NULL,
                 added_by TEXT NOT NULL,
                 filed_at TEXT NOT NULL,
+                ingest_mode TEXT NOT NULL,
+                extract_mode TEXT NOT NULL,
                 text TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
@@ -289,6 +295,21 @@ impl SqliteStore {
         Ok(())
     }
 
+    fn migrate_v5_to_v6(&self) -> Result<()> {
+        self.conn.execute_batch(
+            r#"
+            ALTER TABLE drawers ADD COLUMN ingest_mode TEXT NOT NULL DEFAULT 'projects';
+            ALTER TABLE drawers ADD COLUMN extract_mode TEXT NOT NULL DEFAULT 'exchange';
+            "#,
+        )?;
+        self.set_meta("schema_version", "6")?;
+        self.record_migration(
+            6,
+            "add ingest_mode and extract_mode drawer metadata for conversation mining parity",
+        )?;
+        Ok(())
+    }
+
     fn record_migration(&self, version: i64, note: &str) -> Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO schema_migrations(version, applied_at, note) VALUES(?1, ?2, ?3)",
@@ -399,8 +420,8 @@ impl SqliteStore {
         let now = Utc::now().to_rfc3339();
         {
             let mut stmt = tx.prepare(
-                "INSERT INTO drawers (id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, text, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+                "INSERT INTO drawers (id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, text, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             )?;
             for drawer in drawers {
                 stmt.execute(params![
@@ -414,6 +435,8 @@ impl SqliteStore {
                     drawer.chunk_index,
                     &drawer.added_by,
                     &drawer.filed_at,
+                    &drawer.ingest_mode,
+                    &drawer.extract_mode,
                     &drawer.text,
                     &now,
                 ])?;
@@ -453,8 +476,8 @@ impl SqliteStore {
         }
 
         self.conn.execute(
-            "INSERT INTO drawers (id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, text, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            "INSERT INTO drawers (id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, text, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
             params![
                 &drawer.id,
                 &drawer.wing,
@@ -466,6 +489,8 @@ impl SqliteStore {
                 drawer.chunk_index,
                 &drawer.added_by,
                 &drawer.filed_at,
+                &drawer.ingest_mode,
+                &drawer.extract_mode,
                 &drawer.text,
                 Utc::now().to_rfc3339(),
             ],
@@ -612,7 +637,7 @@ impl SqliteStore {
             normalize_entity_fragment(&triple.subject),
             normalize_entity_fragment(&triple.predicate),
             normalize_entity_fragment(&triple.object),
-            blake3::hash(
+            &blake3::hash(
                 format!(
                     "{}|{}|{}|{}|{}|{}",
                     triple.subject,
@@ -625,7 +650,6 @@ impl SqliteStore {
                 .as_bytes()
             )
             .to_hex()[..12]
-                .to_string()
         );
         self.conn.execute(
             "INSERT INTO kg_triples(subject, predicate, object, valid_from, valid_to, created_at)
@@ -968,11 +992,7 @@ impl SqliteStore {
 }
 
 fn normalize_agent_name(agent_name: &str) -> String {
-    agent_name
-        .trim()
-        .to_lowercase()
-        .replace(' ', "_")
-        .replace('-', "_")
+    agent_name.trim().to_lowercase().replace([' ', '-'], "_")
 }
 
 fn normalize_entity_fragment(value: &str) -> String {

@@ -776,6 +776,8 @@ async fn seed_graph_palace(config: &AppConfig) {
                 chunk_index: 0,
                 added_by: "test".to_string(),
                 filed_at: "2026-04-14T10:00:00Z".to_string(),
+                ingest_mode: "projects".to_string(),
+                extract_mode: "exchange".to_string(),
                 text: "shared room in code wing".to_string(),
             }],
         )
@@ -798,6 +800,8 @@ async fn seed_graph_palace(config: &AppConfig) {
                 chunk_index: 0,
                 added_by: "test".to_string(),
                 filed_at: "2026-04-14T11:00:00Z".to_string(),
+                ingest_mode: "projects".to_string(),
+                extract_mode: "exchange".to_string(),
                 text: "shared room in team wing".to_string(),
             }],
         )
@@ -820,6 +824,8 @@ async fn seed_graph_palace(config: &AppConfig) {
                 chunk_index: 0,
                 added_by: "test".to_string(),
                 filed_at: "2026-04-14T12:00:00Z".to_string(),
+                ingest_mode: "projects".to_string(),
+                extract_mode: "exchange".to_string(),
                 text: "solo room in team wing".to_string(),
             }],
         )

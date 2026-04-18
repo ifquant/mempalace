@@ -14,6 +14,8 @@ pub struct DrawerInput {
     pub chunk_index: i32,
     pub added_by: String,
     pub filed_at: String,
+    pub ingest_mode: String,
+    pub extract_mode: String,
     pub text: String,
 }
 
@@ -235,8 +237,10 @@ pub struct MineSummary {
     pub include_ignored: Vec<String>,
     pub files_planned: usize,
     pub files_seen: usize,
+    pub files_processed: usize,
     pub files_mined: usize,
     pub drawers_added: usize,
+    pub files_skipped: usize,
     pub files_skipped_unchanged: usize,
     pub room_counts: BTreeMap<String, usize>,
     pub next_hint: String,
@@ -259,6 +263,11 @@ pub enum MineProgressEvent {
     DryRun {
         file_name: String,
         room: String,
+        drawers: usize,
+    },
+    DryRunSummary {
+        file_name: String,
+        summary: String,
         drawers: usize,
     },
     Filed {

@@ -9,6 +9,11 @@ use serde::Deserialize;
 
 use crate::VERSION;
 use crate::config::AppConfig;
+use crate::convo::{
+    ConversationChunk, MIN_CONVO_CHUNK_SIZE, detect_convo_room, exchange_rooms,
+    extract_exchange_chunks, extract_general_memories, general_rooms, normalize_conversation_file,
+    scan_convo_files,
+};
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::{MempalaceError, Result};
 use crate::model::{
@@ -532,6 +537,17 @@ impl App {
     where
         F: FnMut(MineProgressEvent),
     {
+        if request.mode == "convos" {
+            return self
+                .mine_conversations_with_progress(dir, request, on_progress)
+                .await;
+        }
+        if request.mode != "projects" {
+            return Err(MempalaceError::InvalidArgument(format!(
+                "Unsupported mine mode: {}",
+                request.mode
+            )));
+        }
         if !dir.exists() {
             return Err(MempalaceError::InvalidArgument(format!(
                 "Project directory does not exist: {}",
@@ -641,6 +657,8 @@ impl App {
                     chunk_index: idx as i32,
                     added_by: request.agent.clone(),
                     filed_at: filed_at.clone(),
+                    ingest_mode: "projects".to_string(),
+                    extract_mode: request.extract.clone(),
                     text: chunk.clone(),
                 })
                 .collect();
@@ -697,8 +715,229 @@ impl App {
             include_ignored: request.include_ignored.clone(),
             files_planned,
             files_seen,
+            files_processed: files_mined,
             files_mined,
             drawers_added,
+            files_skipped: files_skipped_unchanged,
+            files_skipped_unchanged,
+            room_counts,
+            next_hint: "mempalace search \"what you're looking for\"".to_string(),
+        })
+    }
+
+    async fn mine_conversations_with_progress<F>(
+        &self,
+        dir: &Path,
+        request: &MineRequest,
+        mut on_progress: F,
+    ) -> Result<MineSummary>
+    where
+        F: FnMut(MineProgressEvent),
+    {
+        if !dir.exists() {
+            return Err(MempalaceError::InvalidArgument(format!(
+                "Conversation directory does not exist: {}",
+                dir.display()
+            )));
+        }
+        if !matches!(request.extract.as_str(), "exchange" | "general") {
+            return Err(MempalaceError::InvalidArgument(format!(
+                "Unsupported conversation extract mode: {}",
+                request.extract
+            )));
+        }
+
+        self.init().await?;
+        let wing = request
+            .wing
+            .clone()
+            .unwrap_or_else(|| default_convo_wing(dir));
+        let configured_rooms = if request.extract == "general" {
+            general_rooms()
+        } else {
+            exchange_rooms()
+        };
+
+        let files = scan_convo_files(
+            dir,
+            request.respect_gitignore,
+            &request.include_ignored,
+            SKIP_DIRS,
+        )?;
+        let files_planned = if request.limit == 0 {
+            files.len()
+        } else {
+            files.len().min(request.limit)
+        };
+        let vector = if request.dry_run {
+            None
+        } else {
+            Some(VectorStore::connect(&self.config.lance_path()).await?)
+        };
+        let mut sqlite = SqliteStore::open(&self.config.sqlite_path())?;
+        sqlite.init_schema()?;
+
+        let mut files_seen = 0usize;
+        let mut files_mined = 0usize;
+        let mut files_skipped_unchanged = 0usize;
+        let mut drawers_added = 0usize;
+        let mut room_counts = BTreeMap::new();
+
+        for path in files.into_iter().take(if request.limit == 0 {
+            usize::MAX
+        } else {
+            request.limit
+        }) {
+            files_seen += 1;
+            let source_path_buf = match path.canonicalize() {
+                Ok(path) => path,
+                Err(_) => continue,
+            };
+            let source_path = source_path_buf.display().to_string();
+            let source_mtime = SqliteStore::source_mtime(&source_path_buf);
+            let existing = sqlite.ingested_file_state(&source_path)?;
+            let normalized = match normalize_conversation_file(&path) {
+                Ok(Some(text)) => text,
+                Ok(None) => continue,
+                Err(_) => continue,
+            };
+            if normalized.trim().len() < MIN_CONVO_CHUNK_SIZE {
+                continue;
+            }
+
+            let source_hash = blake3::hash(normalized.as_bytes()).to_hex().to_string();
+            let mtime_pair = existing
+                .as_ref()
+                .and_then(|state| state.source_mtime)
+                .zip(source_mtime);
+            if mtime_pair.is_some_and(|(stored, current)| stored == current) {
+                files_skipped_unchanged += 1;
+                continue;
+            }
+            if mtime_pair.is_none()
+                && existing.as_ref().map(|state| state.content_hash.as_str())
+                    == Some(source_hash.as_str())
+            {
+                files_skipped_unchanged += 1;
+                continue;
+            }
+
+            let chunks = if request.extract == "general" {
+                extract_general_memories(&normalized, 0.3)
+            } else {
+                extract_exchange_chunks(&normalized)
+            };
+            if chunks.is_empty() {
+                continue;
+            }
+
+            let source_file = path
+                .file_name()
+                .map(|name| name.to_string_lossy().to_string())
+                .unwrap_or_else(|| source_path.clone());
+            let filed_at = Utc::now().to_rfc3339();
+            let drawers = build_conversation_drawers(
+                &ConversationDrawerContext {
+                    wing: &wing,
+                    source_file: &source_file,
+                    source_path: &source_path,
+                    source_hash: &source_hash,
+                    source_mtime,
+                    agent: &request.agent,
+                    filed_at: &filed_at,
+                    extract_mode: &request.extract,
+                },
+                &chunks,
+            );
+
+            drawers_added += drawers.len();
+            files_mined += 1;
+
+            if request.extract == "general" {
+                let mut per_file = BTreeMap::new();
+                for chunk in &chunks {
+                    *per_file.entry(chunk.room.clone()).or_insert(0usize) += 1;
+                    *room_counts.entry(chunk.room.clone()).or_insert(0usize) += 1;
+                }
+                if request.dry_run {
+                    let summary = per_file
+                        .iter()
+                        .map(|(room, count)| format!("{room}:{count}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    on_progress(MineProgressEvent::DryRunSummary {
+                        file_name: source_file,
+                        summary,
+                        drawers: drawers.len(),
+                    });
+                    continue;
+                }
+            } else {
+                let room = chunks
+                    .first()
+                    .map(|chunk| chunk.room.clone())
+                    .unwrap_or_else(|| detect_convo_room(&normalized));
+                *room_counts.entry(room.clone()).or_insert(0usize) += 1;
+                if request.dry_run {
+                    on_progress(MineProgressEvent::DryRun {
+                        file_name: source_file,
+                        room,
+                        drawers: drawers.len(),
+                    });
+                    continue;
+                }
+            }
+
+            let drawer_texts = drawers
+                .iter()
+                .map(|drawer| drawer.text.clone())
+                .collect::<Vec<_>>();
+            let embeddings = self.embedder.embed_documents(&drawer_texts)?;
+            if let Some(vector) = &vector {
+                vector.replace_source(&drawers, &embeddings).await?;
+            }
+            sqlite.replace_source(
+                &source_path,
+                &wing,
+                chunks
+                    .first()
+                    .map(|chunk| chunk.room.as_str())
+                    .unwrap_or("general"),
+                &source_hash,
+                source_mtime,
+                &drawers,
+            )?;
+            on_progress(MineProgressEvent::Filed {
+                index: files_mined + files_skipped_unchanged,
+                total: files_planned,
+                file_name: source_file,
+                drawers: drawers.len(),
+            });
+        }
+
+        Ok(MineSummary {
+            kind: "mine".to_string(),
+            mode: request.mode.clone(),
+            extract: request.extract.clone(),
+            agent: request.agent.clone(),
+            wing,
+            configured_rooms,
+            project_path: dir.display().to_string(),
+            palace_path: self.config.palace_path.display().to_string(),
+            version: VERSION.to_string(),
+            dry_run: request.dry_run,
+            filters: SearchFilters {
+                wing: request.wing.clone(),
+                room: None,
+            },
+            respect_gitignore: request.respect_gitignore,
+            include_ignored: request.include_ignored.clone(),
+            files_planned,
+            files_seen,
+            files_processed: files_mined,
+            files_mined,
+            drawers_added,
+            files_skipped: files_seen.saturating_sub(files_mined),
             files_skipped_unchanged,
             room_counts,
             next_hint: "mempalace search \"what you're looking for\"".to_string(),
@@ -830,6 +1069,8 @@ impl App {
             chunk_index: 0,
             added_by: sanitized_added_by,
             filed_at: Utc::now().to_rfc3339(),
+            ingest_mode: "mcp".to_string(),
+            extract_mode: "manual".to_string(),
             text: sanitized_content.clone(),
         };
 
@@ -1154,6 +1395,58 @@ fn is_force_include(path: &Path, project_path: &Path, include_paths: &HashSet<St
         })
 }
 
+struct ConversationDrawerContext<'a> {
+    wing: &'a str,
+    source_file: &'a str,
+    source_path: &'a str,
+    source_hash: &'a str,
+    source_mtime: Option<f64>,
+    agent: &'a str,
+    filed_at: &'a str,
+    extract_mode: &'a str,
+}
+
+fn build_conversation_drawers(
+    context: &ConversationDrawerContext<'_>,
+    chunks: &[ConversationChunk],
+) -> Vec<DrawerInput> {
+    chunks
+        .iter()
+        .map(|chunk| DrawerInput {
+            id: format!(
+                "drawer_{}_{}_{}",
+                sanitize_slug(context.wing),
+                sanitize_slug(&chunk.room),
+                blake3::hash(format!("{}:{}", context.source_path, chunk.chunk_index).as_bytes())
+                    .to_hex(),
+            ),
+            wing: context.wing.to_string(),
+            room: chunk.room.clone(),
+            source_file: context.source_file.to_string(),
+            source_path: context.source_path.to_string(),
+            source_hash: context.source_hash.to_string(),
+            source_mtime: context.source_mtime,
+            chunk_index: chunk.chunk_index,
+            added_by: context.agent.to_string(),
+            filed_at: context.filed_at.to_string(),
+            ingest_mode: "convos".to_string(),
+            extract_mode: context.extract_mode.to_string(),
+            text: chunk.content.clone(),
+        })
+        .collect()
+}
+
+fn default_convo_wing(dir: &Path) -> String {
+    dir.file_name()
+        .map(|name| {
+            name.to_string_lossy()
+                .to_ascii_lowercase()
+                .replace([' ', '-'], "_")
+        })
+        .filter(|value| !value.is_empty())
+        .unwrap_or_else(|| "conversations".to_string())
+}
+
 fn sanitize_slug(value: &str) -> String {
     value
         .chars()
@@ -1173,7 +1466,7 @@ fn normalize_search_hits(mut hits: Vec<SearchHit>) -> Vec<SearchHit> {
         hit.similarity = hit.similarity.map(round_similarity);
     }
 
-    hits.sort_by(|left, right| compare_search_hits(left, right));
+    hits.sort_by(compare_search_hits);
     hits
 }
 
@@ -1197,14 +1490,13 @@ fn build_room_graph(rows: &[GraphRoomRow]) -> RoomGraph {
         let node = nodes.entry(row.room.clone()).or_default();
         node.wings.insert(row.wing.clone());
         node.count += 1;
-        if let Some(filed_at) = &row.filed_at {
-            if node
+        if let Some(filed_at) = &row.filed_at
+            && node
                 .recent
                 .as_ref()
                 .is_none_or(|current| filed_at > current)
-            {
-                node.recent = Some(filed_at.clone());
-            }
+        {
+            node.recent = Some(filed_at.clone());
         }
     }
 

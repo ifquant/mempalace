@@ -19,7 +19,11 @@ Current first-phase support:
 - `mine` for project files
 - `mine --dry-run` to preview file discovery and chunk counts without persisting drawers
 - `mine --mode projects --agent <name>` matches more of the Python CLI surface
-- `mine --mode convos` and `--extract general` are accepted at the CLI boundary but currently return a structured "not implemented yet" response
+- `mine --mode convos --extract exchange` now mines normalized chat transcripts into exchange-pair drawers
+- `mine --mode convos --extract general` now mines 5 heuristic memory types: `decision`, `preference`, `milestone`, `problem`, `emotional`
+- convos mode now supports `.txt/.md/.json/.jsonl`, skips `.meta.json`, symlinks, oversized files, and unsupported/broken chat exports without aborting the batch
+- convos re-mine now follows the same source-based replacement path as project mining, so re-filing one chat file replaces old chunks instead of duplicating them
+- drawer metadata now also persists `ingest_mode` and `extract_mode` in both SQLite and LanceDB
 - project re-mine bookkeeping now tracks `source_mtime` so unchanged files skip more like the Python miner
 - `mine` JSON now carries per-room file counts plus the Python-style search follow-up hint
 - project scanning now matches more Python `scan_project()` edge cases around nested `.gitignore`, negation, and include-overrides for skipped directories
@@ -77,7 +81,7 @@ Current first-phase support:
 - `prepare-embedding --human` prints a Python-style readable embedding preparation summary while the default CLI output stays JSON, including a suggested next step when model warm-up still fails
 - `doctor` and `prepare-embedding` now also emit structured JSON errors for invalid embedding-provider failures by default, while their `--human` variants keep command-specific readable text
 - `mine --human` prints a Python-style readable mine summary while the default CLI output stays JSON and `--progress` keeps using stderr
-- `mine --human --mode convos` now also fails with a readable text hint instead of a JSON blob, while the default unsupported-mode path stays JSON
+- `mine --human --mode convos` now prints a readable conversation-mining summary instead of falling back to an unsupported-mode hint
 - `mine --human` now also explains when project scanning found no matching files, instead of only showing zero counts
 - `mine --human --dry-run` now makes it explicit that the run was preview-only, labels drawer counts as previewed, and states that nothing was written
 - `init` and `mine` now also carry stable `kind`/path/version context fields
@@ -121,6 +125,8 @@ Recommended first-run flow for fastembed:
 1. `cargo run -- --palace /tmp/mempalace doctor`
 2. `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding --attempts 3 --wait-ms 1000`
 3. `cargo run -- --palace /tmp/mempalace mine /path/to/project`
+4. `cargo run -- --palace /tmp/mempalace mine /path/to/chats --mode convos --extract exchange`
+5. `cargo run -- --palace /tmp/mempalace mine /path/to/chats --mode convos --extract general`
 
 Fastembed smoke test note:
 
@@ -158,7 +164,6 @@ Intentionally not in this first Rust phase:
 - the remaining Python write MCP surface beyond drawer/KG/diary basics
 - hooks
 - AAAK generation
-- conversation mining
 - direct compatibility with Python palace data
 
 Current repair scope:

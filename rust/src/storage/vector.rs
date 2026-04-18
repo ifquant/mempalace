@@ -151,6 +151,12 @@ impl VectorStore {
         if table_schema.field_with_name("filed_at").is_err() {
             transforms.push(("filed_at".into(), "CAST(NULL AS STRING)".into()));
         }
+        if table_schema.field_with_name("ingest_mode").is_err() {
+            transforms.push(("ingest_mode".into(), "'projects'".into()));
+        }
+        if table_schema.field_with_name("extract_mode").is_err() {
+            transforms.push(("extract_mode".into(), "'exchange'".into()));
+        }
 
         if !transforms.is_empty() {
             table
@@ -173,6 +179,8 @@ fn schema(dimension: usize) -> SchemaRef {
         Field::new("chunk_index", DataType::Int32, false),
         Field::new("added_by", DataType::Utf8, true),
         Field::new("filed_at", DataType::Utf8, true),
+        Field::new("ingest_mode", DataType::Utf8, true),
+        Field::new("extract_mode", DataType::Utf8, true),
         Field::new("text", DataType::Utf8, false),
         Field::new(
             "vector",
@@ -202,6 +210,9 @@ fn record_batch(
     let chunk_indices = Int32Array::from_iter_values(drawers.iter().map(|d| d.chunk_index));
     let added_bys = StringArray::from_iter(drawers.iter().map(|d| Some(d.added_by.as_str())));
     let filed_ats = StringArray::from_iter(drawers.iter().map(|d| Some(d.filed_at.as_str())));
+    let ingest_modes = StringArray::from_iter(drawers.iter().map(|d| Some(d.ingest_mode.as_str())));
+    let extract_modes =
+        StringArray::from_iter(drawers.iter().map(|d| Some(d.extract_mode.as_str())));
     let texts = StringArray::from_iter_values(drawers.iter().map(|d| d.text.as_str()));
     let vectors = FixedSizeListArray::from_iter_primitive::<Float32Type, _, _>(
         embeddings
@@ -222,6 +233,8 @@ fn record_batch(
             Arc::new(chunk_indices),
             Arc::new(added_bys),
             Arc::new(filed_ats),
+            Arc::new(ingest_modes),
+            Arc::new(extract_modes),
             Arc::new(texts),
             Arc::new(vectors),
         ],

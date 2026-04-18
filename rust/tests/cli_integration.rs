@@ -33,7 +33,7 @@ fn cli_init_status_mine_search_round_trip() {
         .success()
         .stdout(contains("\"kind\": \"init\""))
         .stdout(contains("\"version\":"))
-        .stdout(contains("\"schema_version\": 4"))
+        .stdout(contains("\"schema_version\": 6"))
         .stdout(contains("palace.sqlite3"));
 
     Command::cargo_bin("mempalace-rs")
@@ -249,7 +249,7 @@ fn cli_init_human_prints_python_style_summary() {
         .stdout(contains("Palace:"))
         .stdout(contains("SQLite:"))
         .stdout(contains("LanceDB:"))
-        .stdout(contains("Schema:  4"))
+        .stdout(contains("Schema:  6"))
         .stdout(contains("Palace initialized."));
 }
 
@@ -975,7 +975,7 @@ fn cli_mine_human_dry_run_reports_preview_only() {
         .assert()
         .success()
         .stdout(contains("MemPalace Mine"))
-        .stdout(contains("Mode:            DRY RUN"))
+        .stdout(contains("Run mode:        DRY RUN"))
         .stdout(contains("Drawers previewed: 1"))
         .stdout(contains(
             "Persistence:     preview only, no drawers were written",
@@ -1077,7 +1077,7 @@ fn cli_mine_dry_run_progress_prints_python_style_preview_to_stderr() {
 }
 
 #[test]
-fn cli_mine_rejects_unsupported_convos_mode_with_json_hint() {
+fn cli_mine_convos_general_empty_dir_returns_empty_summary_json() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("chats");
     fs::create_dir_all(&project).unwrap();
@@ -1096,15 +1096,15 @@ fn cli_mine_rejects_unsupported_convos_mode_with_json_hint() {
             "general",
         ])
         .assert()
-        .failure()
-        .code(2)
-        .stdout(contains("\"error\": \"Unsupported mine mode\""))
+        .success()
         .stdout(contains("\"mode\": \"convos\""))
-        .stdout(contains("\"extract\": \"general\""));
+        .stdout(contains("\"extract\": \"general\""))
+        .stdout(contains("\"files_planned\": 0"))
+        .stdout(contains("\"files_processed\": 0"));
 }
 
 #[test]
-fn cli_mine_human_rejects_unsupported_convos_mode_with_text_hint() {
+fn cli_mine_convos_general_empty_dir_returns_empty_summary_human() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("chats");
     fs::create_dir_all(&project).unwrap();
@@ -1124,15 +1124,12 @@ fn cli_mine_human_rejects_unsupported_convos_mode_with_text_hint() {
             "--human",
         ])
         .assert()
-        .failure()
-        .code(2)
+        .success()
         .stdout(contains("MemPalace Mine"))
         .stdout(contains("Mode:     convos"))
         .stdout(contains("Extract:  general"))
-        .stdout(contains(
-            "Conversation and general extraction are not implemented in Rust yet.",
-        ))
-        .stdout(contains("Retry with --mode projects"));
+        .stdout(contains("Files processed: 0"))
+        .stdout(contains("No matching files found."));
 }
 
 #[test]
@@ -1253,7 +1250,7 @@ fn cli_migrate_upgrades_legacy_sqlite_schema() {
         .stdout(contains("\"kind\": \"migrate\""))
         .stdout(contains("\"version\":"))
         .stdout(contains("\"schema_version_before\": 1"))
-        .stdout(contains("\"schema_version_after\": 4"))
+        .stdout(contains("\"schema_version_after\": 6"))
         .stdout(contains("\"changed\": true"));
 }
 
@@ -1360,7 +1357,7 @@ fn cli_migrate_human_prints_python_style_summary() {
         .stdout(contains("Palace:"))
         .stdout(contains("SQLite:"))
         .stdout(contains("Before:  1"))
-        .stdout(contains("After:   4"))
+        .stdout(contains("After:   6"))
         .stdout(contains("Migration complete."));
 }
 
@@ -1549,7 +1546,7 @@ fn cli_repair_reports_healthy_hash_palace() {
         .stdout(contains("\"ok\": true"))
         .stdout(contains("\"vector_accessible\": true"))
         .stdout(contains("\"embedding_provider\": \"hash\""))
-        .stdout(contains("\"schema_version\": 4"));
+        .stdout(contains("\"schema_version\": 6"));
 }
 
 #[test]
@@ -1597,7 +1594,7 @@ fn cli_repair_human_prints_python_style_diagnostics() {
         .stdout(contains("MemPalace Repair"))
         .stdout(contains("Palace:"))
         .stdout(contains("Drawers found:"))
-        .stdout(contains("Schema version: 4"))
+        .stdout(contains("Schema version: 6"))
         .stdout(contains("Embedding: hash/hash-v1/64"))
         .stdout(contains("Vector access: ok"))
         .stdout(contains("Repair diagnostics look healthy."));
@@ -1907,6 +1904,141 @@ fn cli_search_human_reports_no_results_like_python() {
         .stdout(contains(
             "No results found for: \"xyzzy_nonexistent_query\"",
         ));
+}
+
+#[test]
+fn cli_mine_convos_exchange_smoke() {
+    let tmp = tempdir().unwrap();
+    let convo_dir = tmp.path().join("convos");
+    fs::create_dir_all(&convo_dir).unwrap();
+    fs::write(
+        convo_dir.join("chat.txt"),
+        "> why did the deploy fail?\nThe deploy failed because the server config was broken.\n\n> how did we fix it?\nWe fixed the server config and reran the deploy.\n",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            convo_dir.to_str().unwrap(),
+            "--mode",
+            "convos",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"mode\": \"convos\""))
+        .stdout(contains("\"extract\": \"exchange\""))
+        .stdout(contains("\"files_mined\": 1"))
+        .stdout(contains("\"drawers_added\": 2"))
+        .stdout(contains("\"room_counts\":"));
+}
+
+#[test]
+fn cli_mine_convos_general_smoke() {
+    let tmp = tempdir().unwrap();
+    let convo_dir = tmp.path().join("convos");
+    fs::create_dir_all(&convo_dir).unwrap();
+    fs::write(
+        convo_dir.join("memories.md"),
+        "We decided to use LanceDB because the local-first trade-off is better.\n\nI prefer explicit APIs.\n\nThe migration problem was painful, but we fixed it and now it works.\n\nI feel proud and grateful that the rewrite finally feels stable.\n",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            convo_dir.to_str().unwrap(),
+            "--mode",
+            "convos",
+            "--extract",
+            "general",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"mode\": \"convos\""))
+        .stdout(contains("\"extract\": \"general\""))
+        .stdout(contains("\"decision\":"))
+        .stdout(contains("\"milestone\":"))
+        .stdout(contains("\"emotional\":"));
+}
+
+#[test]
+fn cli_mine_convos_dry_run_reports_room_counts() {
+    let tmp = tempdir().unwrap();
+    let convo_dir = tmp.path().join("convos");
+    fs::create_dir_all(&convo_dir).unwrap();
+    fs::write(
+        convo_dir.join("chat.txt"),
+        "Human: why did the deploy fail?\nAssistant: The server config was broken.\nHuman: what fixed it?\nAssistant: We updated the deploy config and reran tests.\n",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            convo_dir.to_str().unwrap(),
+            "--mode",
+            "convos",
+            "--dry-run",
+            "--progress",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("\"dry_run\": true"))
+        .stdout(contains("\"room_counts\":"))
+        .stderr(contains("[DRY RUN] chat.txt -> room:technical"));
+}
+
+#[test]
+fn cli_mine_convos_human_prints_python_style_summary() {
+    let tmp = tempdir().unwrap();
+    let convo_dir = tmp.path().join("convos");
+    fs::create_dir_all(&convo_dir).unwrap();
+    fs::write(
+        convo_dir.join("memories.md"),
+        "We decided to use LanceDB because the local-first trade-off is better.\n\nI prefer explicit APIs.\n\nThe migration problem was painful, but we fixed it and now it works.\n",
+    )
+    .unwrap();
+    let palace = tmp.path().join("palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_RS_EMBED_PROVIDER", "hash")
+        .args([
+            "--palace",
+            palace.to_str().unwrap(),
+            "mine",
+            convo_dir.to_str().unwrap(),
+            "--mode",
+            "convos",
+            "--extract",
+            "general",
+            "--human",
+        ])
+        .assert()
+        .success()
+        .stdout(contains("MemPalace Mine"))
+        .stdout(contains("Mode:     convos"))
+        .stdout(contains("Extract:  general"))
+        .stdout(contains("Files processed: 1"))
+        .stdout(contains("Rooms filed:"))
+        .stdout(contains("decision"))
+        .stdout(contains("milestone"));
 }
 
 fn run_cli_json(
