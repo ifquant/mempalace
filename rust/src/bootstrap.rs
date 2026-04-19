@@ -1,12 +1,13 @@
-use std::fs;
 use std::path::Path;
 
-use serde::{Deserialize, Serialize};
-
+use crate::bootstrap_docs::write_entity_registry;
+use crate::bootstrap_files::{load_existing_entities, load_existing_rooms, write_project_config};
 use crate::entity_detector::detect_entities;
 use crate::error::{MempalaceError, Result};
-use crate::registry::EntityRegistry;
-use crate::room_detector::{RoomDetection, detect_rooms};
+use crate::room_detector::detect_rooms;
+
+pub use crate::bootstrap_docs::{write_aaak_entities, write_critical_facts};
+pub use crate::bootstrap_files::{write_entities, write_project_config_from_names};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct InitBootstrap {
@@ -24,44 +25,6 @@ pub struct InitBootstrap {
     pub aaak_entities_written: bool,
     pub critical_facts_path: Option<String>,
     pub critical_facts_written: bool,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct ExistingProjectConfig {
-    wing: Option<String>,
-    rooms: Option<Vec<ExistingRoom>>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct ExistingRoom {
-    name: String,
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct GeneratedProjectConfig {
-    wing: String,
-    rooms: Vec<GeneratedRoom>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct GeneratedRoom {
-    name: String,
-    description: String,
-    keywords: Vec<String>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct ExistingEntities {
-    #[serde(default)]
-    people: Vec<String>,
-    #[serde(default)]
-    projects: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize)]
-struct GeneratedEntities {
-    people: Vec<String>,
-    projects: Vec<String>,
 }
 
 pub fn bootstrap_project(project_dir: &Path) -> Result<InitBootstrap> {
@@ -179,212 +142,10 @@ pub fn default_wing(project_dir: &Path) -> String {
         .unwrap_or_else(|| "project".to_string())
 }
 
-fn load_existing_rooms(config_path: &Path, fallback_wing: &str) -> Result<(String, Vec<String>)> {
-    let content = fs::read_to_string(config_path)?;
-    let config = serde_yml::from_str::<ExistingProjectConfig>(&content).map_err(|err| {
-        MempalaceError::InvalidArgument(format!(
-            "Failed to parse existing project config {}: {err}",
-            config_path.display()
-        ))
-    })?;
-    let mut rooms = config
-        .rooms
-        .unwrap_or_default()
-        .into_iter()
-        .map(|room| room.name)
-        .filter(|name| !name.trim().is_empty())
-        .collect::<Vec<_>>();
-    if rooms.is_empty() {
-        rooms.push("general".to_string());
-    }
-    let wing = config.wing.unwrap_or_else(|| fallback_wing.to_string());
-    Ok((wing, rooms))
-}
-
-fn write_project_config(config_path: &Path, wing: &str, rooms: &[RoomDetection]) -> Result<()> {
-    let config = GeneratedProjectConfig {
-        wing: wing.to_string(),
-        rooms: rooms
-            .iter()
-            .map(|room| GeneratedRoom {
-                name: room.name.clone(),
-                description: room.description.clone(),
-                keywords: room.keywords.clone(),
-            })
-            .collect(),
-    };
-    let content = serde_yml::to_string(&config).map_err(|err| {
-        MempalaceError::InvalidArgument(format!(
-            "Failed to render project config {}: {err}",
-            config_path.display()
-        ))
-    })?;
-    fs::write(config_path, content)?;
-    Ok(())
-}
-
-pub fn write_project_config_from_names(
-    config_path: &Path,
-    wing: &str,
-    room_names: &[String],
-) -> Result<()> {
-    let mut rooms = room_names
-        .iter()
-        .filter_map(|name| {
-            let trimmed = name.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(RoomDetection {
-                    name: trimmed.to_string(),
-                    description: format!("Files related to {trimmed}"),
-                    keywords: vec![trimmed.to_string()],
-                })
-            }
-        })
-        .collect::<Vec<_>>();
-    if rooms.is_empty() {
-        rooms.push(RoomDetection {
-            name: "general".to_string(),
-            description: "Files that don't fit other rooms".to_string(),
-            keywords: Vec::new(),
-        });
-    }
-    write_project_config(config_path, wing, &rooms)
-}
-
-fn load_existing_entities(entities_path: &Path) -> Result<ExistingEntities> {
-    let content = fs::read_to_string(entities_path)?;
-    serde_json::from_str::<ExistingEntities>(&content).map_err(|err| {
-        MempalaceError::InvalidArgument(format!(
-            "Failed to parse existing entities file {}: {err}",
-            entities_path.display()
-        ))
-    })
-}
-
-pub fn write_entities(entities_path: &Path, people: &[String], projects: &[String]) -> Result<()> {
-    let payload = GeneratedEntities {
-        people: people.to_vec(),
-        projects: projects.to_vec(),
-    };
-    let content = serde_json::to_string_pretty(&payload)?;
-    fs::write(entities_path, content)?;
-    Ok(())
-}
-
-pub fn write_entity_registry(
-    entity_registry_path: &Path,
-    people: &[String],
-    projects: &[String],
-    mode: &str,
-) -> Result<()> {
-    let registry = EntityRegistry::bootstrap(mode, people, projects);
-    registry.save(entity_registry_path)
-}
-
-pub fn write_aaak_entities(
-    aaak_entities_path: &Path,
-    people: &[String],
-    projects: &[String],
-    mode: &str,
-) -> Result<()> {
-    let mut registry_lines = vec![
-        "# AAAK Entity Registry".to_string(),
-        "# Auto-generated by mempalace-rs init. Update as needed.".to_string(),
-        String::new(),
-        format!("Mode: {mode}"),
-        String::new(),
-        "## People".to_string(),
-    ];
-
-    for person in people {
-        registry_lines.push(format!("  {}={person}", entity_code(person, 3)));
-    }
-    if people.is_empty() {
-        registry_lines.push("  (none detected yet)".to_string());
-    }
-
-    registry_lines.push(String::new());
-    registry_lines.push("## Projects".to_string());
-    for project in projects {
-        registry_lines.push(format!("  {}={project}", entity_code(project, 4)));
-    }
-    if projects.is_empty() {
-        registry_lines.push("  (none detected yet)".to_string());
-    }
-
-    registry_lines.extend([
-        String::new(),
-        "## AAAK Quick Reference".to_string(),
-        "  Symbols: ♡=love ★=importance ⚠=warning →=relationship |=separator".to_string(),
-        "  Structure: KEY:value | GROUP(details) | entity.attribute".to_string(),
-        "  Read naturally — expand codes, treat *markers* as emotional context.".to_string(),
-    ]);
-
-    fs::write(aaak_entities_path, registry_lines.join("\n"))?;
-    Ok(())
-}
-
-pub fn write_critical_facts(
-    critical_facts_path: &Path,
-    people: &[String],
-    projects: &[String],
-    configured_rooms: &[String],
-    wing: &str,
-    mode: &str,
-) -> Result<()> {
-    let mut lines = vec![
-        "# Critical Facts (bootstrap — will be enriched after mining)".to_string(),
-        String::new(),
-        "## People".to_string(),
-    ];
-
-    for person in people {
-        lines.push(format!("- **{person}** ({})", entity_code(person, 3)));
-    }
-    if people.is_empty() {
-        lines.push("- none detected yet".to_string());
-    }
-
-    lines.push(String::new());
-    lines.push("## Projects".to_string());
-    for project in projects {
-        lines.push(format!("- **{project}**"));
-    }
-    if projects.is_empty() {
-        lines.push("- none detected yet".to_string());
-    }
-
-    lines.extend([
-        String::new(),
-        "## Palace".to_string(),
-        format!("Wing: {wing}"),
-        format!("Rooms: {}", configured_rooms.join(", ")),
-        format!("Mode: {mode}"),
-        String::new(),
-        "*This file will be enriched after mining.*".to_string(),
-    ]);
-
-    fs::write(critical_facts_path, lines.join("\n"))?;
-    Ok(())
-}
-
-fn entity_code(value: &str, max_len: usize) -> String {
-    let mut cleaned = value
-        .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric())
-        .collect::<String>()
-        .to_ascii_uppercase();
-    cleaned.truncate(max_len);
-    while cleaned.len() < max_len {
-        cleaned.push('X');
-    }
-    cleaned
-}
-
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
     use tempfile::tempdir;
 

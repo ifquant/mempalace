@@ -1,5 +1,7 @@
 pub mod audit;
 pub mod bootstrap;
+pub mod bootstrap_docs;
+pub mod bootstrap_files;
 pub mod compress;
 pub mod compression_runtime;
 pub mod config;

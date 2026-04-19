@@ -186,6 +186,13 @@ keeping project mining, convo mining, and shared file/chunk helpers in one file:
 - `miner_support` for shared discovery, chunking, slugging, and conversation drawer assembly helpers
 - `miner` itself now stays a thin facade over the public mining entrypoints
 
+Rust bootstrap internals are now also split by concern instead of keeping file
+parsing/writing and generated bootstrap docs in one file:
+
+- `bootstrap_files` for config/entities load-save helpers
+- `bootstrap_docs` for `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` generation helpers
+- `bootstrap` itself now stays focused on bootstrap orchestration and result assembly
+
 Rust library structure now also includes a `palace_ops` module for project-local
 manual palace operations across diary, KG, and manual drawer surfaces:
 
