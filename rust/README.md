@@ -305,6 +305,15 @@ into one read-sized file:
 - `palace_cli_read_support` for shared config/app/bootstrap helpers reused by those read handlers
 - `palace_cli_read` itself now stays a thin facade that re-exports the read command family
 
+Rust embedding-facing palace CLI is now also split one step further so
+`doctor` and `prepare-embedding` do not keep their renderers and bootstrap
+helpers in one file:
+
+- `palace_cli_embedding_doctor` for doctor command handling plus doctor-specific human/json rendering
+- `palace_cli_embedding_prepare` for prepare-embedding command handling plus preparation-specific human/json rendering
+- `palace_cli_embedding_support` for shared config/app/bootstrap helpers reused by those embedding handlers
+- `palace_cli_embedding` itself now stays a thin facade that re-exports the embedding command family
+
 Rust project-facing CLI is now also split by command family instead of keeping
 bootstrap, mining, and transcript prep in one file:
 
