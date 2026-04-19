@@ -262,6 +262,15 @@ surface no longer lives inline inside `main.rs`:
 - `handle_registry_command()` for the registry subcommand dispatch path
 - shared human-readable registry renderers kept next to the registry command wiring
 
+Rust registry CLI is now also split by command family instead of keeping read,
+write, research, and bootstrap helpers in one file:
+
+- `registry_cli_read` for `summary`, `lookup`, `learn`, and `query`
+- `registry_cli_write` for `add-person`, `add-project`, and `add-alias`
+- `registry_cli_research` for `research` and `confirm`
+- `registry_cli_support` for shared app/bootstrap and JSON rendering helpers
+- `registry_cli` itself now stays a thin facade for clap schema plus top-level routing
+
 Rust CLI structure now also includes a `palace_cli` module so the palace-facing
 maintenance/read command family no longer lives inline inside `main.rs`:
 

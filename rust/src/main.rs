@@ -22,6 +22,10 @@ mod project_cli_mining;
 mod project_cli_support;
 mod project_cli_transcript;
 mod registry_cli;
+mod registry_cli_read;
+mod registry_cli_research;
+mod registry_cli_support;
+mod registry_cli_write;
 mod root_cli;
 
 use cli_runtime::run_cli;

@@ -1,14 +1,10 @@
 use std::path::PathBuf;
 
 use clap::Subcommand;
-use mempalace_rs::config::AppConfig;
-use mempalace_rs::model::{
-    RegistryConfirmResult, RegistryLearnResult, RegistryLookupResult, RegistryQueryResult,
-    RegistryResearchResult, RegistrySummaryResult, RegistryWriteResult,
-};
-use mempalace_rs::service::App;
 
-use crate::cli_support::apply_cli_overrides;
+use crate::registry_cli_read::handle_registry_read_command;
+use crate::registry_cli_research::handle_registry_research_command;
+use crate::registry_cli_write::handle_registry_write_command;
 
 #[derive(Subcommand)]
 pub enum RegistryCommand {
@@ -129,279 +125,19 @@ pub fn handle_registry_command(
     hf_endpoint: Option<&str>,
 ) -> anyhow::Result<()> {
     match action {
-        RegistryCommand::Summary { dir, human } => {
-            let app = build_registry_app(palace, hf_endpoint)?;
-            let summary = app.registry_summary(&dir)?;
-            if human {
-                print_registry_summary_human(&summary);
-            } else {
-                print_json(&summary)?;
-            }
+        RegistryCommand::Summary { .. }
+        | RegistryCommand::Lookup { .. }
+        | RegistryCommand::Learn { .. }
+        | RegistryCommand::Query { .. } => {
+            handle_registry_read_command(action, palace, hf_endpoint)
         }
-        RegistryCommand::Lookup {
-            dir,
-            word,
-            context,
-            human,
-        } => {
-            let app = build_registry_app(palace, hf_endpoint)?;
-            let summary = app.registry_lookup(&dir, &word, &context)?;
-            if human {
-                print_registry_lookup_human(&summary);
-            } else {
-                print_json(&summary)?;
-            }
+        RegistryCommand::AddPerson { .. }
+        | RegistryCommand::AddProject { .. }
+        | RegistryCommand::AddAlias { .. } => {
+            handle_registry_write_command(action, palace, hf_endpoint)
         }
-        RegistryCommand::Learn { dir, human } => {
-            let app = build_registry_app(palace, hf_endpoint)?;
-            let summary = app.registry_learn(&dir)?;
-            if human {
-                print_registry_learn_human(&summary);
-            } else {
-                print_json(&summary)?;
-            }
-        }
-        RegistryCommand::AddPerson {
-            dir,
-            name,
-            relationship,
-            context,
-            human,
-        } => {
-            let app = build_registry_app(palace, hf_endpoint)?;
-            let summary = app.registry_add_person(&dir, &name, &relationship, &context)?;
-            if human {
-                print_registry_write_human(&summary);
-            } else {
-                print_json(&summary)?;
-            }
-        }
-        RegistryCommand::AddProject { dir, name, human } => {
-            let app = build_registry_app(palace, hf_endpoint)?;
-            let summary = app.registry_add_project(&dir, &name)?;
-            if human {
-                print_registry_write_human(&summary);
-            } else {
-                print_json(&summary)?;
-            }
-        }
-        RegistryCommand::AddAlias {
-            dir,
-            canonical,
-            alias,
-            human,
-        } => {
-            let app = build_registry_app(palace, hf_endpoint)?;
-            let summary = app.registry_add_alias(&dir, &canonical, &alias)?;
-            if human {
-                print_registry_write_human(&summary);
-            } else {
-                print_json(&summary)?;
-            }
-        }
-        RegistryCommand::Query { dir, query, human } => {
-            let app = build_registry_app(palace, hf_endpoint)?;
-            let summary = app.registry_query(&dir, &query)?;
-            if human {
-                print_registry_query_human(&summary);
-            } else {
-                print_json(&summary)?;
-            }
-        }
-        RegistryCommand::Research {
-            dir,
-            word,
-            auto_confirm,
-            human,
-        } => {
-            let app = build_registry_app(palace, hf_endpoint)?;
-            let summary = app.registry_research(&dir, &word, auto_confirm)?;
-            if human {
-                print_registry_research_human(&summary);
-            } else {
-                print_json(&summary)?;
-            }
-        }
-        RegistryCommand::Confirm {
-            dir,
-            word,
-            entity_type,
-            relationship,
-            context,
-            human,
-        } => {
-            let app = build_registry_app(palace, hf_endpoint)?;
-            let summary =
-                app.registry_confirm_research(&dir, &word, &entity_type, &relationship, &context)?;
-            if human {
-                print_registry_confirm_human(&summary);
-            } else {
-                print_json(&summary)?;
-            }
+        RegistryCommand::Research { .. } | RegistryCommand::Confirm { .. } => {
+            handle_registry_research_command(action, palace, hf_endpoint)
         }
     }
-
-    Ok(())
-}
-
-fn build_registry_app(palace: Option<&PathBuf>, hf_endpoint: Option<&str>) -> anyhow::Result<App> {
-    let mut config = AppConfig::resolve(palace)?;
-    apply_cli_overrides(&mut config, hf_endpoint);
-    Ok(App::new(config)?)
-}
-
-fn print_json<T: serde::Serialize>(value: &T) -> anyhow::Result<()> {
-    println!("{}", serde_json::to_string_pretty(value)?);
-    Ok(())
-}
-
-fn print_registry_summary_human(summary: &RegistrySummaryResult) {
-    println!("\n{}", "=".repeat(55));
-    println!("  MemPalace Registry");
-    println!("{}\n", "=".repeat(55));
-    println!("  Registry: {}", summary.registry_path);
-    println!("  Mode: {}", summary.mode);
-    println!("  People: {}", summary.people_count);
-    println!("  Projects: {}", summary.project_count);
-    if !summary.ambiguous_flags.is_empty() {
-        println!("  Ambiguous flags: {}", summary.ambiguous_flags.join(", "));
-    }
-    if !summary.people.is_empty() {
-        println!("\n  People:");
-        for person in &summary.people {
-            println!("    - {person}");
-        }
-    }
-    if !summary.projects.is_empty() {
-        println!("\n  Projects:");
-        for project in &summary.projects {
-            println!("    - {project}");
-        }
-    }
-    println!("\n{}", "=".repeat(55));
-    println!();
-}
-
-fn print_registry_lookup_human(summary: &RegistryLookupResult) {
-    println!("\n{}", "=".repeat(55));
-    println!("  MemPalace Registry Lookup");
-    println!("{}\n", "=".repeat(55));
-    println!("  Registry: {}", summary.registry_path);
-    println!("  Word: {}", summary.word);
-    println!("  Type: {}", summary.r#type);
-    println!("  Name: {}", summary.name);
-    println!("  Confidence: {:.2}", summary.confidence);
-    println!("  Source: {}", summary.source);
-    if !summary.context.is_empty() {
-        println!("  Contexts: {}", summary.context.join(", "));
-    }
-    if let Some(disambiguated_by) = &summary.disambiguated_by {
-        println!("  Disambiguated by: {disambiguated_by}");
-    }
-    println!("\n{}", "=".repeat(55));
-    println!();
-}
-
-fn print_registry_learn_human(summary: &RegistryLearnResult) {
-    println!("\n{}", "=".repeat(55));
-    println!("  MemPalace Registry Learn");
-    println!("{}\n", "=".repeat(55));
-    println!("  Project: {}", summary.project_path);
-    println!("  Registry: {}", summary.registry_path);
-    println!("  Added people: {}", summary.added_people.len());
-    println!("  Added projects: {}", summary.added_projects.len());
-    if !summary.added_people.is_empty() {
-        println!("\n  New people:");
-        for person in &summary.added_people {
-            println!("    - {person}");
-        }
-    }
-    if !summary.added_projects.is_empty() {
-        println!("\n  New projects:");
-        for project in &summary.added_projects {
-            println!("    - {project}");
-        }
-    }
-    println!(
-        "\n  Totals: {} people, {} projects",
-        summary.total_people, summary.total_projects
-    );
-    println!("\n{}", "=".repeat(55));
-    println!();
-}
-
-fn print_registry_write_human(summary: &RegistryWriteResult) {
-    println!("\n{}", "=".repeat(55));
-    println!("  MemPalace Registry Write");
-    println!("{}\n", "=".repeat(55));
-    println!("  Registry: {}", summary.registry_path);
-    println!("  Action: {}", summary.action);
-    println!("  Name: {}", summary.name);
-    if let Some(canonical) = &summary.canonical {
-        println!("  Canonical: {canonical}");
-    }
-    println!("  Mode: {}", summary.mode);
-    println!(
-        "  Totals: {} people, {} projects",
-        summary.people_count, summary.project_count
-    );
-    println!("\n{}", "=".repeat(55));
-    println!();
-}
-
-fn print_registry_query_human(summary: &RegistryQueryResult) {
-    println!("\n{}", "=".repeat(55));
-    println!("  MemPalace Registry Query");
-    println!("{}\n", "=".repeat(55));
-    println!("  Registry: {}", summary.registry_path);
-    println!("  Query: {}", summary.query);
-    println!("  People: {}", summary.people.join(", "));
-    println!(
-        "  Unknown candidates: {}",
-        summary.unknown_candidates.join(", ")
-    );
-    println!("\n{}", "=".repeat(55));
-    println!();
-}
-
-fn print_registry_research_human(summary: &RegistryResearchResult) {
-    println!("\n{}", "=".repeat(55));
-    println!("  MemPalace Registry Research");
-    println!("{}\n", "=".repeat(55));
-    println!("  Registry: {}", summary.registry_path);
-    println!("  Word: {}", summary.word);
-    println!("  Inferred type: {}", summary.inferred_type);
-    println!("  Confidence: {:.0}%", summary.confidence * 100.0);
-    if let Some(title) = &summary.wiki_title {
-        println!("  Wiki title: {title}");
-    }
-    if let Some(note) = &summary.note {
-        println!("  Note: {note}");
-    }
-    println!("  Confirmed: {}", summary.confirmed);
-    if let Some(confirmed_type) = &summary.confirmed_type {
-        println!("  Confirmed type: {confirmed_type}");
-    }
-    if let Some(wiki_summary) = &summary.wiki_summary {
-        println!("  Summary: {wiki_summary}");
-    }
-    println!("\n{}", "=".repeat(55));
-    println!();
-}
-
-fn print_registry_confirm_human(summary: &RegistryConfirmResult) {
-    println!("\n{}", "=".repeat(55));
-    println!("  MemPalace Registry Confirm");
-    println!("{}\n", "=".repeat(55));
-    println!("  Registry: {}", summary.registry_path);
-    println!("  Word: {}", summary.word);
-    println!("  Type: {}", summary.entity_type);
-    println!("  Relationship: {}", summary.relationship);
-    println!("  Context: {}", summary.context);
-    println!(
-        "  Totals: {} people, {} projects, {} wiki cache entries",
-        summary.total_people, summary.total_projects, summary.wiki_cache_entries
-    );
-    println!("\n{}", "=".repeat(55));
-    println!();
 }
