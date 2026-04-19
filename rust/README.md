@@ -204,11 +204,14 @@ handler and renderer in one giant file:
 - `palace_cli_embedding` for `doctor` and `prepare-embedding`
 - `palace_cli_support` for shared config/app/bootstrap helpers used across those handlers
 
-Rust CLI structure now also includes a `project_cli` module so the project/bootstrap
-command family no longer lives inline inside `main.rs`:
+Rust project-facing CLI is now also split by command family instead of keeping
+bootstrap, mining, and transcript prep in one file:
 
-- `handle_project_command()` for `init`, `onboarding`, `mine`, `search`, `split`, and `normalize`
-- shared progress wiring plus human-readable renderers and JSON error helpers for that command family
+- `project_cli_bootstrap` for `init` and `onboarding`
+- `project_cli_mining` for `mine` and `search`
+- `project_cli_transcript` for `split` and `normalize`
+- `project_cli_support` for shared config/app/bootstrap helpers used across those handlers
+- `project_cli` itself now stays a thin dispatcher over those project-facing command families
 
 Rust CLI structure now also includes a `helper_cli` module plus shared `cli_support`
 helpers so the remaining control-plane command family no longer lives inline inside

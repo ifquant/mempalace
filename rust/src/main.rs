@@ -9,6 +9,10 @@ mod palace_cli_maintenance;
 mod palace_cli_read;
 mod palace_cli_support;
 mod project_cli;
+mod project_cli_bootstrap;
+mod project_cli_mining;
+mod project_cli_support;
+mod project_cli_transcript;
 mod registry_cli;
 mod root_cli;
 
