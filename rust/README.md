@@ -40,6 +40,10 @@ Rust library structure now also includes an `entity_detector` module mirroring P
 - `detect_entities()` for project-local people/project detection
 - `detect_entities_for_registry()` for registry/bootstrap callers
 - `scan_for_detection()` for reusable file discovery before detection
+- entity detector internals are now also split by concern:
+  - `entity_detector_scan` for detection-time file discovery and noise-directory filtering
+  - `entity_detector_score` for stopwords plus person/project scoring heuristics
+  - `entity_detector` itself now stays as the thin public facade around candidate extraction and final ranking
 
 Rust library structure now also includes a `room_detector` module mirroring Python
 `room_detector_local.py`:
