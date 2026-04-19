@@ -178,6 +178,12 @@ helpers so the remaining control-plane command family no longer lives inline ins
 - `handle_helper_command()` for `hook`, `instructions`, and `mcp`
 - `format_mcp_setup()` / `shell_quote()` plus shared `apply_cli_overrides()`, `palace_exists()`, and `print_no_palace()` for cross-module CLI support
 
+Rust CLI structure now also includes a `root_cli` module so the top-level clap
+schema no longer lives inline inside `main.rs`:
+
+- `Cli` and `Command` now live in one schema module shared by the binary entrypoint
+- `main.rs` is now reduced to parse + route, instead of also owning every top-level flag definition
+
 Current first-phase support:
 
 - `init`
