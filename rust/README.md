@@ -332,6 +332,14 @@ one file:
 - `project_cli_bootstrap_support` for shared app/bootstrap and JSON rendering helpers reused by those bootstrap handlers
 - `project_cli_bootstrap` itself now stays a thin facade that re-exports the bootstrap command family
 
+Rust project mining CLI is now also split one step further so `mine` and
+`search` do not keep their handlers, renderers, and mining helpers in one file:
+
+- `project_cli_mining_mine` for mine command handling plus mine-specific progress and human/json rendering
+- `project_cli_mining_search` for search command handling plus search-specific no-palace and human/json rendering
+- `project_cli_mining_support` for shared app/bootstrap and JSON rendering helpers reused by those mining handlers
+- `project_cli_mining` itself now stays a thin facade that re-exports the mining command family
+
 Rust CLI structure now also includes a `helper_cli` module plus shared `cli_support`
 helpers so the remaining control-plane command family no longer lives inline inside
 `main.rs`:
