@@ -159,6 +159,12 @@ surface no longer lives inline inside `main.rs`:
 - `handle_registry_command()` for the registry subcommand dispatch path
 - shared human-readable registry renderers kept next to the registry command wiring
 
+Rust CLI structure now also includes a `palace_cli` module so the palace-facing
+maintenance/read command family no longer lives inline inside `main.rs`:
+
+- `handle_palace_command()` for `compress`, `wake-up`, `recall`, `layers-status`, `migrate`, `repair`, `dedup`, `status`, `doctor`, and `prepare-embedding`
+- shared human-readable renderers and JSON error helpers for that command family
+
 Current first-phase support:
 
 - `init`
