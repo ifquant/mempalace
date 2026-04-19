@@ -661,6 +661,12 @@ fn cli_root_help_mentions_core_commands_and_examples() {
             "MemPalace — Give your AI a memory. No API key required.",
         ))
         .stdout(contains("project bootstrap"))
+        .stdout(contains("--palace <PALACE>"))
+        .stdout(contains("Where the palace lives"))
+        .stdout(contains("--hf-endpoint <HF_ENDPOINT>"))
+        .stdout(contains(
+            "Override the HuggingFace endpoint used by fastembed model downloads",
+        ))
         .stdout(contains("mempalace-rs mine ~/projects/my_app"))
         .stdout(contains(
             "mempalace-rs onboarding ~/projects/my_app --mode combo --scan",
@@ -762,7 +768,8 @@ fn cli_mcp_help_mentions_setup_and_serve_flags() {
         .stdout(contains("Print Python-style MCP setup instructions"))
         .stdout(contains(
             "Run the MCP server on stdio instead of printing setup help",
-        ));
+        ))
+        .stdout(contains("read-only MCP server"));
 }
 
 #[test]
