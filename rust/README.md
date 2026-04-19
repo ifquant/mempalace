@@ -76,6 +76,13 @@ catalog/protocol surface no longer lives inline inside `mcp.rs`:
 - `tools()` for the MCP tool catalog and input schemas
 - shared argument coercion / required-arg helpers for MCP tool calls
 
+Rust library structure now also includes an `mcp_runtime` module so the MCP
+tool execution surface no longer lives inline inside `mcp.rs`:
+
+- `call_tool()` for the full MCP tool dispatch/runtime path
+- shared tool-level `error + hint` formatting for MCP responses
+- shared best-effort palace-local WAL logging for write-side MCP tools
+
 Rust library structure now also includes a `dedup` module mirroring Python
 `dedup.py`:
 
