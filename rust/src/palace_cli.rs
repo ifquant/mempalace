@@ -11,7 +11,7 @@ use mempalace_rs::model::{
 use mempalace_rs::service::App;
 use serde_json::json;
 
-use crate::{apply_cli_overrides, palace_exists, print_no_palace};
+use crate::cli_support::{apply_cli_overrides, palace_exists, print_no_palace};
 
 pub enum PalaceCommand {
     Compress {

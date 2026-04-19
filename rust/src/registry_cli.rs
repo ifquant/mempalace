@@ -8,7 +8,7 @@ use mempalace_rs::model::{
 };
 use mempalace_rs::service::App;
 
-use crate::apply_cli_overrides;
+use crate::cli_support::apply_cli_overrides;
 
 #[derive(Subcommand)]
 pub enum RegistryCommand {

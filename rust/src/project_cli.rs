@@ -13,7 +13,7 @@ use mempalace_rs::service::App;
 use mempalace_rs::split;
 use serde_json::{Value, json};
 
-use crate::{apply_cli_overrides, palace_exists, print_no_palace};
+use crate::cli_support::{apply_cli_overrides, palace_exists, print_no_palace};
 
 pub enum ProjectCommand {
     Init {

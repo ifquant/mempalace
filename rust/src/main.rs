@@ -1,17 +1,14 @@
-use std::io::Write;
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
-use mempalace_rs::config::AppConfig;
-use mempalace_rs::hook;
-use mempalace_rs::instructions;
-use mempalace_rs::mcp;
-use serde_json::json;
 
+mod cli_support;
+mod helper_cli;
 mod palace_cli;
 mod project_cli;
 mod registry_cli;
 
+use helper_cli::{HelperCommand, HookCommand, handle_helper_command};
 use palace_cli::{PalaceCommand, RepairCommand, handle_palace_command};
 use project_cli::{ProjectCommand, handle_project_command};
 use registry_cli::{RegistryCommand, handle_registry_command};
@@ -289,17 +286,6 @@ enum Command {
     },
 }
 
-#[derive(Subcommand)]
-enum HookCommand {
-    #[command(about = "Execute a hook")]
-    Run {
-        #[arg(long, help = "Hook name to run")]
-        hook: String,
-        #[arg(long, help = "Harness type")]
-        harness: String,
-    },
-}
-
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let Cli {
@@ -550,85 +536,33 @@ async fn main() -> anyhow::Result<()> {
             .await?;
         }
         Command::Hook { action } => {
-            let mut config = AppConfig::resolve(palace.as_ref())?;
-            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
-            match action {
-                HookCommand::Run {
-                    hook: hook_name,
-                    harness,
-                } => {
-                    let output = hook::run_hook(&hook_name, &harness, &config)?;
-                    writeln!(
-                        std::io::stdout(),
-                        "{}",
-                        serde_json::to_string_pretty(&output)?
-                    )?;
-                }
-            }
+            handle_helper_command(
+                HelperCommand::Hook { action },
+                palace.as_ref(),
+                hf_endpoint.as_deref(),
+            )
+            .await?;
         }
         Command::Instructions { name } => {
-            let text = instructions::render(&name)?;
-            print!("{text}");
+            handle_helper_command(
+                HelperCommand::Instructions { name },
+                palace.as_ref(),
+                hf_endpoint.as_deref(),
+            )
+            .await?;
         }
         Command::Registry { action } => {
             handle_registry_command(action, palace.as_ref(), hf_endpoint.as_deref())?;
         }
         Command::Mcp { setup, serve } => {
-            let mut config = AppConfig::resolve(palace.as_ref())?;
-            apply_cli_overrides(&mut config, hf_endpoint.as_deref());
-            if setup || !serve {
-                print_mcp_setup(&config);
-            } else {
-                mcp::run_stdio(config).await?;
-            }
+            handle_helper_command(
+                HelperCommand::Mcp { setup, serve },
+                palace.as_ref(),
+                hf_endpoint.as_deref(),
+            )
+            .await?;
         }
     }
 
-    Ok(())
-}
-
-fn apply_cli_overrides(config: &mut AppConfig, hf_endpoint: Option<&str>) {
-    if let Some(endpoint) = hf_endpoint {
-        config.embedding.hf_endpoint = Some(endpoint.to_string());
-    }
-}
-
-fn print_mcp_setup(config: &AppConfig) {
-    let base_server_cmd = "mempalace-rs mcp --serve";
-    let current_server_cmd = format!(
-        "{base_server_cmd} --palace {}",
-        shell_quote(&config.palace_path.display().to_string())
-    );
-
-    println!("MemPalace MCP quick setup:");
-    println!("  claude mcp add mempalace -- {current_server_cmd}");
-    println!("\nRun the server directly:");
-    println!("  {current_server_cmd}");
-    println!("\nOptional custom palace:");
-    println!("  claude mcp add mempalace -- {base_server_cmd} --palace /path/to/palace");
-    println!("  {base_server_cmd} --palace /path/to/palace");
-}
-
-fn shell_quote(value: &str) -> String {
-    if value
-        .chars()
-        .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '/' | '.' | '-' | '_' | ':'))
-    {
-        return value.to_string();
-    }
-    format!("'{}'", value.replace('\'', "'\"'\"'"))
-}
-
-fn palace_exists(config: &AppConfig) -> bool {
-    config.sqlite_path().exists() || config.lance_path().exists()
-}
-
-fn print_no_palace(config: &AppConfig) -> anyhow::Result<()> {
-    let payload = json!({
-        "error": "No palace found",
-        "hint": "Run: mempalace init <dir> && mempalace mine <dir>",
-        "palace_path": config.palace_path.display().to_string(),
-    });
-    println!("{}", serde_json::to_string_pretty(&payload)?);
     Ok(())
 }

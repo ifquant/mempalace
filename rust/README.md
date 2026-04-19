@@ -171,6 +171,13 @@ command family no longer lives inline inside `main.rs`:
 - `handle_project_command()` for `init`, `onboarding`, `mine`, `search`, `split`, and `normalize`
 - shared progress wiring plus human-readable renderers and JSON error helpers for that command family
 
+Rust CLI structure now also includes a `helper_cli` module plus shared `cli_support`
+helpers so the remaining control-plane command family no longer lives inline inside
+`main.rs`:
+
+- `handle_helper_command()` for `hook`, `instructions`, and `mcp`
+- `format_mcp_setup()` / `shell_quote()` plus shared `apply_cli_overrides()`, `palace_exists()`, and `print_no_palace()` for cross-module CLI support
+
 Current first-phase support:
 
 - `init`
