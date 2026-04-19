@@ -14,6 +14,7 @@ pub mod hook;
 pub mod instructions;
 pub mod knowledge_graph;
 pub mod layers;
+pub mod maintenance_runtime;
 pub mod mcp;
 pub mod miner;
 pub mod model;

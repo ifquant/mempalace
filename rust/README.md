@@ -132,6 +132,13 @@ manual palace operations across diary, KG, and manual drawer surfaces:
 - `add_drawer()` / `delete_drawer()` for SQLite + LanceDB manual filing flows
 - `diary_write()` / `diary_read()` for palace-local diary persistence
 
+Rust library structure now also includes a `maintenance_runtime` module for
+palace migration, repair, rebuild, and dedup orchestration:
+
+- `migrate()` for schema/runtime upgrade flow
+- `repair()` / `repair_scan()` / `repair_prune()` / `repair_rebuild()` for maintenance and recovery flows
+- `dedup()` for SQLite + LanceDB duplicate-cleanup orchestration around the lower-level dedup planner
+
 Current first-phase support:
 
 - `init`
@@ -270,6 +277,7 @@ Current project-mining behavior:
 - read-side palace summary/search/layer orchestration now also lives in `palace_read` instead of staying embedded inside `service`
 - project-local registry load/save/learn/research orchestration now also lives in `registry_runtime` instead of staying embedded inside `service`
 - project-local KG/diary/manual-drawer ops now also live in `palace_ops` instead of staying embedded inside `service`
+- palace migrate/repair/dedup orchestration now also lives in `maintenance_runtime` instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring
