@@ -454,6 +454,11 @@ Current first-phase support:
   - `sqlite_drawers` keeps ingested-file state, drawer/compressed-drawer CRUD, and taxonomy/graph readouts
   - `sqlite_kg` keeps knowledge-graph and diary persistence
   - `sqlite` itself now stays as the thin public facade around `SqliteStore`
+- LanceDB storage internals are now also split by concern:
+  - `vector_schema` keeps table bootstrap, schema definition, and legacy metadata-column upgrades
+  - `vector_batch` keeps Arrow batch encoding/decoding for drawer rows
+  - `vector_query` keeps add/replace/search/delete flows plus hit decoding and filter SQL helpers
+  - `vector` itself now stays as the thin public facade around `VectorStore`
 - `migrate` exposes the current SQLite schema upgrade path as a CLI command
 - `repair` still provides the old non-destructive diagnostics view by default
 - `repair scan` now writes palace-local `corrupt_ids.txt` from SQLite/LanceDB drift and separates `missing_from_vector` from pruneable `orphaned_in_vector`
