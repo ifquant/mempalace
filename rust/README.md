@@ -195,7 +195,9 @@ Rust conversation ingestion internals are now also split by concern instead of
 keeping scan, exchange chunking, and general-memory extraction in one file:
 
 - `convo_scan` for filesystem scanning, include overrides, and conversation file filtering
-- `convo_exchange` for room detection plus exchange-oriented chunking heuristics
+- `convo_exchange_rooms` for exchange room buckets and room-detection keyword routing
+- `convo_exchange_chunking` for quote-line, speaker-turn, and paragraph-based exchange chunking
+- `convo_exchange` itself now stays focused on the thin exchange facade and public chunk extraction entrypoint
 - `convo_general` for prose extraction, marker scoring, sentiment/disambiguation, and general-memory extraction
 - `convo` itself now stays a thin facade over the public conversation API and shared `ConversationChunk` type
 
