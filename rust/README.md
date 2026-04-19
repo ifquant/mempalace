@@ -449,6 +449,11 @@ Current first-phase support:
   - `embed_runtime_env` keeps ORT / Hugging Face environment and cache helpers
   - `embed` itself stays as the thin public facade over the embedding surface
 - SQLite schema version tracking and a minimal migration path
+- SQLite storage internals are now also split by concern:
+  - `sqlite_schema` keeps schema bootstrap, migrations, and embedding-profile metadata checks
+  - `sqlite_drawers` keeps ingested-file state, drawer/compressed-drawer CRUD, and taxonomy/graph readouts
+  - `sqlite_kg` keeps knowledge-graph and diary persistence
+  - `sqlite` itself now stays as the thin public facade around `SqliteStore`
 - `migrate` exposes the current SQLite schema upgrade path as a CLI command
 - `repair` still provides the old non-destructive diagnostics view by default
 - `repair scan` now writes palace-local `corrupt_ids.txt` from SQLite/LanceDB drift and separates `missing_from_vector` from pruneable `orphaned_in_vector`
