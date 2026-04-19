@@ -1,5 +1,4 @@
 use std::collections::BTreeMap;
-use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -8,7 +7,7 @@ use crate::bootstrap::bootstrap_project;
 use crate::compress::{CompressSummaryContext, CompressionRun};
 use crate::config::AppConfig;
 use crate::dedup::{DedupSummaryContext, Deduplicator};
-use crate::dialect::{Dialect, count_tokens};
+use crate::dialect::Dialect;
 use crate::drawers::{build_manual_drawer, drawer_input_from_record, sanitize_name};
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::embedding_runtime::{
@@ -17,7 +16,6 @@ use crate::embedding_runtime::{
 use crate::entity_detector::detect_entities_for_registry;
 use crate::error::Result;
 use crate::knowledge_graph::KnowledgeGraph;
-use crate::layers::{read_identity_text, render_layer1, render_layer2};
 use crate::miner::mine_project_run;
 use crate::model::{
     CompressSummary, DedupSummary, DiaryReadResult, DiaryWriteResult, DoctorSummary,
@@ -27,17 +25,12 @@ use crate::model::{
     PrepareEmbeddingSummary, RecallSummary, RegistryConfirmResult, RegistryLearnResult,
     RegistryLookupResult, RegistryQueryResult, RegistryResearchResult, RegistrySummaryResult,
     RegistryWriteResult, RepairPruneSummary, RepairRebuildSummary, RepairScanSummary,
-    RepairSummary, Rooms, SearchFilters, SearchHit, SearchResults, Status, Taxonomy, TunnelRoom,
-    WakeUpSummary,
+    RepairSummary, Rooms, SearchResults, Status, Taxonomy, TunnelRoom, WakeUpSummary,
 };
 use crate::palace::ensure_vector_store;
-use crate::palace_graph::{
-    build_room_graph, find_tunnels as find_graph_tunnels, graph_stats as summarize_graph,
-    traverse_graph as traverse_room_graph,
-};
+use crate::palace_read::PalaceReadRuntime;
 use crate::registry::EntityRegistry;
 use crate::repair::{RepairContext, RepairDiagnostics, backup_sqlite_source, read_corrupt_ids};
-use crate::searcher::{normalize_search_hits, normalize_source_file};
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
 use crate::storage::vector::VectorStore;
 
@@ -125,21 +118,12 @@ impl App {
     }
 
     pub async fn status(&self) -> Result<Status> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        Ok(Status {
-            kind: "status".to_string(),
-            total_drawers: sqlite.total_drawers()?,
-            wings: sqlite.list_wings()?,
-            rooms: sqlite.list_rooms(None)?.rooms,
-            palace_path: self.config.palace_path.display().to_string(),
-            sqlite_path: self.config.sqlite_path().display().to_string(),
-            lance_path: self.config.lance_path().display().to_string(),
-            version: VERSION.to_string(),
-            schema_version: sqlite.schema_version()?.unwrap_or(CURRENT_SCHEMA_VERSION),
-        })
+        PalaceReadRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .status()
+        .await
     }
 
     pub async fn migrate(&self) -> Result<MigrateSummary> {
@@ -413,27 +397,30 @@ impl App {
     }
 
     pub async fn list_wings(&self) -> Result<BTreeMap<String, usize>> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        sqlite.list_wings()
+        PalaceReadRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .list_wings()
+        .await
     }
 
     pub async fn list_rooms(&self, wing: Option<&str>) -> Result<Rooms> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        sqlite.list_rooms(wing)
+        PalaceReadRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .list_rooms(wing)
+        .await
     }
 
     pub async fn taxonomy(&self) -> Result<Taxonomy> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        sqlite.taxonomy()
+        PalaceReadRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .taxonomy()
+        .await
     }
 
     pub async fn traverse_graph(
@@ -441,12 +428,12 @@ impl App {
         start_room: &str,
         max_hops: usize,
     ) -> Result<GraphTraversalResult> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        let graph = build_room_graph(&sqlite.graph_room_rows()?);
-        Ok(traverse_room_graph(&graph, start_room, max_hops))
+        PalaceReadRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .traverse_graph(start_room, max_hops)
+        .await
     }
 
     pub async fn find_tunnels(
@@ -454,21 +441,21 @@ impl App {
         wing_a: Option<&str>,
         wing_b: Option<&str>,
     ) -> Result<Vec<TunnelRoom>> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        let graph = build_room_graph(&sqlite.graph_room_rows()?);
-        Ok(find_graph_tunnels(&graph, wing_a, wing_b))
+        PalaceReadRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .find_tunnels(wing_a, wing_b)
+        .await
     }
 
     pub async fn graph_stats(&self) -> Result<GraphStats> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        let graph = build_room_graph(&sqlite.graph_room_rows()?);
-        Ok(summarize_graph(&graph))
+        PalaceReadRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .graph_stats()
+        .await
     }
 
     pub async fn search(
@@ -478,21 +465,12 @@ impl App {
         room: Option<&str>,
         limit: usize,
     ) -> Result<SearchResults> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        let vector = VectorStore::connect(&self.config.lance_path()).await?;
-        let embedding = self.embedder.embed_query(query)?;
-        let hits = normalize_search_hits(vector.search(&embedding, wing, room, limit).await?);
-        Ok(SearchResults {
-            query: query.to_string(),
-            filters: SearchFilters {
-                wing: wing.map(ToOwned::to_owned),
-                room: room.map(ToOwned::to_owned),
-            },
-            results: hits,
-        })
+        PalaceReadRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .search(query, wing, room, limit)
+        .await
     }
 
     pub async fn compress(&self, wing: Option<&str>, dry_run: bool) -> Result<CompressSummary> {
@@ -518,28 +496,12 @@ impl App {
     }
 
     pub async fn wake_up(&self, wing: Option<&str>) -> Result<WakeUpSummary> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        let identity_path = self.config.identity_path();
-        let identity = read_identity_text(&identity_path);
-
-        let recent = sqlite.recent_drawers(wing, 15)?;
-        let layer1 = render_layer1(&recent, wing);
-        let token_estimate = count_tokens(&identity) + count_tokens(&layer1);
-
-        Ok(WakeUpSummary {
-            kind: "wake_up".to_string(),
-            palace_path: self.config.palace_path.display().to_string(),
-            sqlite_path: self.config.sqlite_path().display().to_string(),
-            version: VERSION.to_string(),
-            wing: wing.map(ToOwned::to_owned),
-            identity_path: identity_path.display().to_string(),
-            identity,
-            layer1,
-            token_estimate,
-        })
+        PalaceReadRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .wake_up(wing)
+        .await
     }
 
     pub async fn recall(
@@ -548,86 +510,21 @@ impl App {
         room: Option<&str>,
         n_results: usize,
     ) -> Result<RecallSummary> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        let matches = sqlite.list_drawers(wing)?;
-        let mut hits = matches
-            .into_iter()
-            .filter(|record| room.map(|value| value == record.room).unwrap_or(true))
-            .map(|record| SearchHit {
-                id: record.id,
-                text: record.text,
-                wing: record.wing,
-                room: record.room,
-                source_file: normalize_source_file(&record.source_file, &record.source_path),
-                source_path: record.source_path,
-                source_mtime: record.source_mtime,
-                chunk_index: record.chunk_index,
-                added_by: Some(record.added_by),
-                filed_at: Some(record.filed_at),
-                similarity: None,
-                score: None,
-            })
-            .collect::<Vec<_>>();
-
-        hits.sort_by(|left, right| {
-            left.wing
-                .cmp(&right.wing)
-                .then_with(|| left.room.cmp(&right.room))
-                .then_with(|| left.source_file.cmp(&right.source_file))
-                .then_with(|| left.chunk_index.cmp(&right.chunk_index))
-        });
-
-        let total_matches = hits.len();
-        let n_results = n_results.max(1);
-        hits.truncate(n_results);
-        let text = render_layer2(&hits, wing, room);
-
-        Ok(RecallSummary {
-            kind: "recall".to_string(),
-            palace_path: self.config.palace_path.display().to_string(),
-            sqlite_path: self.config.sqlite_path().display().to_string(),
-            version: VERSION.to_string(),
-            wing: wing.map(ToOwned::to_owned),
-            room: room.map(ToOwned::to_owned),
-            n_results,
-            total_matches,
-            text,
-            results: hits,
-        })
+        PalaceReadRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .recall(wing, room, n_results)
+        .await
     }
 
     pub async fn layer_status(&self) -> Result<LayerStatusSummary> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        let identity_path = self.config.identity_path();
-        let identity_exists = identity_path.exists();
-        let identity_text = if identity_exists {
-            fs::read_to_string(&identity_path)
-                .map(|text| text.trim().to_string())
-                .unwrap_or_default()
-        } else {
-            String::new()
-        };
-
-        Ok(LayerStatusSummary {
-            kind: "layers_status".to_string(),
-            palace_path: self.config.palace_path.display().to_string(),
-            sqlite_path: self.config.sqlite_path().display().to_string(),
-            version: VERSION.to_string(),
-            identity_path: identity_path.display().to_string(),
-            identity_exists,
-            identity_tokens: count_tokens(&identity_text),
-            total_drawers: sqlite.total_drawers()?,
-            layer0_description: "Identity text loaded from palace-local identity.txt".to_string(),
-            layer1_description: "Essential story auto-generated from recent drawers".to_string(),
-            layer2_description: "On-demand wing/room recall from stored drawers".to_string(),
-            layer3_description: "Deep semantic search across the whole palace".to_string(),
-        })
+        PalaceReadRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .layer_status()
+        .await
     }
 
     pub fn registry_summary(&self, project_dir: &Path) -> Result<RegistrySummaryResult> {
@@ -965,6 +862,8 @@ mod tests {
     use super::*;
     use crate::miner::chunk_text;
     use crate::room_detector::detect_room;
+    use crate::model::SearchHit;
+    use crate::searcher::normalize_search_hits;
 
     #[test]
     fn chunk_text_splits_large_input() {

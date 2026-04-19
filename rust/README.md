@@ -111,6 +111,13 @@ Rust library structure now also includes a `miner` module mirroring the Python
 - `mine_conversations_run()` for convo/general ingest orchestration
 - shared file discovery, chunking, include-override, and conversation drawer assembly helpers
 
+Rust library structure now also includes a `palace_read` module for read-side
+palace surfacing across CLI, MCP, and library callers:
+
+- `status()` / `list_wings()` / `list_rooms()` / `taxonomy()` for palace summary reads
+- `traverse_graph()` / `find_tunnels()` / `graph_stats()` for graph-oriented read flows
+- `search()` / `wake_up()` / `recall()` / `layer_status()` for the higher-level read surfaces
+
 Current first-phase support:
 
 - `init`
@@ -246,6 +253,7 @@ Current project-mining behavior:
 - AAAK `CompressedDrawer` generation and compression summary assembly now also live in the `compress` module instead of staying embedded inside `service`
 - doctor path/version backfill and prepare-embedding warmup retry handling now also live in `embedding_runtime` instead of staying embedded inside `service`
 - project/convo mining orchestration plus shared discovery/chunking helpers now also live in `miner` instead of staying embedded inside `service`
+- read-side palace summary/search/layer orchestration now also lives in `palace_read` instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring

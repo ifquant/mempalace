@@ -21,6 +21,7 @@ pub mod normalize;
 pub mod onboarding;
 pub mod palace;
 pub mod palace_graph;
+pub mod palace_read;
 pub mod registry;
 pub mod repair;
 pub mod room_detector;
