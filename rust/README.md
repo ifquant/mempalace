@@ -170,6 +170,14 @@ types, heuristic lookup, and Wikipedia research in one giant file:
 - `registry_research` for Wikipedia lookup and classification heuristics
 - `registry` itself now stays focused on `EntityRegistry` behavior, disambiguation, and query/learn flows while re-exporting the public registry types
 
+Rust conversation ingestion internals are now also split by concern instead of
+keeping scan, exchange chunking, and general-memory extraction in one file:
+
+- `convo_scan` for filesystem scanning, include overrides, and conversation file filtering
+- `convo_exchange` for room detection plus exchange-oriented chunking heuristics
+- `convo_general` for prose extraction, marker scoring, sentiment/disambiguation, and general-memory extraction
+- `convo` itself now stays a thin facade over the public conversation API and shared `ConversationChunk` type
+
 Rust library structure now also includes a `palace_ops` module for project-local
 manual palace operations across diary, KG, and manual drawer surfaces:
 
