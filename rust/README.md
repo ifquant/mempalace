@@ -323,6 +323,15 @@ bootstrap, mining, and transcript prep in one file:
 - `project_cli_support` for shared config/app/bootstrap helpers used across those handlers
 - `project_cli` itself now stays a thin dispatcher over those project-facing command families
 
+Rust project bootstrap CLI is now also split one step further so `init` and
+`onboarding` do not keep their handlers, renderers, and bootstrap helpers in
+one file:
+
+- `project_cli_bootstrap_init` for init command handling plus init-specific human/json rendering
+- `project_cli_bootstrap_onboarding` for onboarding command handling plus onboarding-specific human/json rendering
+- `project_cli_bootstrap_support` for shared app/bootstrap and JSON rendering helpers reused by those bootstrap handlers
+- `project_cli_bootstrap` itself now stays a thin facade that re-exports the bootstrap command family
+
 Rust CLI structure now also includes a `helper_cli` module plus shared `cli_support`
 helpers so the remaining control-plane command family no longer lives inline inside
 `main.rs`:
