@@ -200,6 +200,14 @@ interactive prompts, request normalization, and auto-detection merge logic in on
 - `onboarding_support` for mode normalization, dedupe/merge helpers, and shared parse helpers
 - `onboarding` itself now stays focused on onboarding orchestration and summary assembly
 
+Rust registry internals are now also split one step further so lookup/query
+heuristics no longer live in the same file as persistence and mutation flows:
+
+- `registry_lookup` for ambiguous-name disambiguation, registry lookup, and query-side extraction helpers
+- `registry_research` for Wikipedia lookup and research classification heuristics
+- `registry_types` for registry data structures and shared constants
+- `registry` itself now stays focused on persistence, seed/bootstrap, learn/mutation, and summary assembly
+
 Rust model definitions are now also split by domain instead of keeping every
 DTO, summary payload, and request type in one giant `model.rs`:
 
