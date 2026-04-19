@@ -600,6 +600,9 @@ Useful verification command:
 - `cargo run -- registry confirm /path/to/project Riley --type person --relationship daughter --context personal --human`
 - `cargo run -- onboarding /path/to/project --mode combo --person "Riley,daughter,personal" --project Lantern --alias Ry=Riley --scan --auto-accept-detected --human`
 - `cargo run -- normalize /path/to/transcript.jsonl --human`
+- `cargo run -- --palace /tmp/mempalace recall --wing my_app --room decisions --human`
+- `cargo run -- --palace /tmp/mempalace layers-status --human`
+- `cargo run -- --palace /tmp/mempalace mcp --serve`
 - `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding`
 - `MEMPALACE_RS_TEST_HF_ENDPOINT=https://hf-mirror.com cargo test cli_fastembed_prepare_mine_search_smoke -- --ignored --nocapture`
 

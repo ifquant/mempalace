@@ -184,7 +184,9 @@ fn cli_onboarding_help_mentions_mode_people_and_scan() {
         .stdout(contains("--person"))
         .stdout(contains("--project"))
         .stdout(contains("--alias"))
-        .stdout(contains("--scan"));
+        .stdout(contains("--scan"))
+        .stdout(contains("--auto-accept-detected"))
+        .stdout(contains("--human"));
 }
 
 #[test]
@@ -739,7 +741,10 @@ fn cli_mcp_help_mentions_setup_and_serve_flags() {
         ))
         .stdout(contains("--setup"))
         .stdout(contains("--serve"))
-        .stdout(contains("Print Python-style MCP setup instructions"));
+        .stdout(contains("Print Python-style MCP setup instructions"))
+        .stdout(contains(
+            "Run the MCP server on stdio instead of printing setup help",
+        ));
 }
 
 #[test]
