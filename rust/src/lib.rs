@@ -40,6 +40,8 @@ pub mod miner_project;
 pub mod miner_support;
 pub mod model;
 pub mod normalize;
+pub mod normalize_json;
+pub mod normalize_transcript;
 pub mod onboarding;
 pub mod onboarding_prompt;
 pub mod onboarding_support;
