@@ -8,13 +8,12 @@ use crate::compress::{CompressSummaryContext, CompressionRun};
 use crate::config::AppConfig;
 use crate::dedup::{DedupSummaryContext, Deduplicator};
 use crate::dialect::Dialect;
-use crate::drawers::{build_manual_drawer, drawer_input_from_record, sanitize_name};
+use crate::drawers::drawer_input_from_record;
 use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::embedding_runtime::{
     EmbeddingRuntimeContext, finalize_doctor_summary, prepare_embedding_run,
 };
 use crate::error::Result;
-use crate::knowledge_graph::KnowledgeGraph;
 use crate::miner::mine_project_run;
 use crate::model::{
     CompressSummary, DedupSummary, DiaryReadResult, DiaryWriteResult, DoctorSummary,
@@ -27,6 +26,7 @@ use crate::model::{
     RepairSummary, Rooms, SearchResults, Status, Taxonomy, TunnelRoom, WakeUpSummary,
 };
 use crate::palace::ensure_vector_store;
+use crate::palace_ops::PalaceOpsRuntime;
 use crate::palace_read::PalaceReadRuntime;
 use crate::registry_runtime::RegistryRuntime;
 use crate::repair::{RepairContext, RepairDiagnostics, backup_sqlite_source, read_corrupt_ids};
@@ -620,14 +620,22 @@ impl App {
 
     pub async fn add_kg_triple(&self, triple: &KgTriple) -> Result<()> {
         self.init().await?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        KnowledgeGraph::new(&sqlite).add_triple(triple).map(|_| ())
+        PalaceOpsRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .add_kg_triple(triple)
+        .await
     }
 
     pub async fn query_kg(&self, subject: &str) -> Result<Vec<KgTriple>> {
         self.init().await?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        KnowledgeGraph::new(&sqlite).query_raw(subject)
+        PalaceOpsRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .query_kg_raw(subject)
+        .await
     }
 
     pub async fn kg_query(
@@ -637,20 +645,32 @@ impl App {
         direction: &str,
     ) -> Result<KgQueryResult> {
         self.init().await?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        KnowledgeGraph::new(&sqlite).query_entity(entity, as_of, direction)
+        PalaceOpsRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .kg_query(entity, as_of, direction)
+        .await
     }
 
     pub async fn kg_timeline(&self, entity: Option<&str>) -> Result<KgTimelineResult> {
         self.init().await?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        KnowledgeGraph::new(&sqlite).timeline(entity)
+        PalaceOpsRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .kg_timeline(entity)
+        .await
     }
 
     pub async fn kg_stats(&self) -> Result<KgStats> {
         self.init().await?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        KnowledgeGraph::new(&sqlite).stats()
+        PalaceOpsRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .kg_stats()
+        .await
     }
 
     pub async fn kg_add(
@@ -661,14 +681,12 @@ impl App {
         valid_from: Option<&str>,
     ) -> Result<KgWriteResult> {
         self.init().await?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        KnowledgeGraph::new(&sqlite).add_triple(&KgTriple {
-            subject: sanitize_name(subject, "subject")?,
-            predicate: sanitize_name(predicate, "predicate")?,
-            object: sanitize_name(object, "object")?,
-            valid_from: valid_from.map(ToOwned::to_owned),
-            valid_to: None,
-        })
+        PalaceOpsRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .kg_add(subject, predicate, object, valid_from)
+        .await
     }
 
     pub async fn kg_invalidate(
@@ -679,13 +697,12 @@ impl App {
         ended: Option<&str>,
     ) -> Result<KgInvalidateResult> {
         self.init().await?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        KnowledgeGraph::new(&sqlite).invalidate(
-            &sanitize_name(subject, "subject")?,
-            &sanitize_name(predicate, "predicate")?,
-            &sanitize_name(object, "object")?,
-            ended,
-        )
+        PalaceOpsRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .kg_invalidate(subject, predicate, object, ended)
+        .await
     }
 
     pub async fn add_drawer(
@@ -697,29 +714,22 @@ impl App {
         added_by: Option<&str>,
     ) -> Result<DrawerWriteResult> {
         self.init().await?;
-        let drawer = build_manual_drawer(wing, room, content, source_file, added_by)?;
-
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        let sqlite_result = sqlite.insert_drawer(&drawer)?;
-        if sqlite_result.reason.as_deref() == Some("already_exists") {
-            return Ok(sqlite_result);
+        PalaceOpsRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
         }
-
-        let embedding = self.embedder.embed_query(&drawer.text)?;
-        let vector = VectorStore::connect(&self.config.lance_path()).await?;
-        vector.add_drawers(&[drawer], &[embedding]).await?;
-        Ok(sqlite_result)
+        .add_drawer(wing, room, content, source_file, added_by)
+        .await
     }
 
     pub async fn delete_drawer(&self, drawer_id: &str) -> Result<DrawerDeleteResult> {
         self.init().await?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        let result = sqlite.delete_drawer(drawer_id)?;
-        let vector = VectorStore::connect(&self.config.lance_path()).await?;
-        vector
-            .delete_drawer(self.embedder.profile().dimension, drawer_id)
-            .await?;
-        Ok(result)
+        PalaceOpsRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .delete_drawer(drawer_id)
+        .await
     }
 
     pub async fn diary_write(
@@ -729,14 +739,22 @@ impl App {
         topic: &str,
     ) -> Result<DiaryWriteResult> {
         self.init().await?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.add_diary_entry(agent_name, topic, entry)
+        PalaceOpsRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .diary_write(agent_name, entry, topic)
+        .await
     }
 
     pub async fn diary_read(&self, agent_name: &str, last_n: usize) -> Result<DiaryReadResult> {
         self.init().await?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.read_diary_entries(agent_name, last_n)
+        PalaceOpsRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .diary_read(agent_name, last_n)
+        .await
     }
 }
 

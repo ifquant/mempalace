@@ -125,6 +125,13 @@ project-local entity registry orchestration:
 - `learn()` for re-running entity detection and persisting new registry entries
 - `add_person()` / `add_project()` / `add_alias()` / `research()` / `confirm_research()` for write-side project registry flows
 
+Rust library structure now also includes a `palace_ops` module for project-local
+manual palace operations across diary, KG, and manual drawer surfaces:
+
+- `kg_add()` / `kg_invalidate()` plus raw/timeline/stats query helpers
+- `add_drawer()` / `delete_drawer()` for SQLite + LanceDB manual filing flows
+- `diary_write()` / `diary_read()` for palace-local diary persistence
+
 Current first-phase support:
 
 - `init`
@@ -262,6 +269,7 @@ Current project-mining behavior:
 - project/convo mining orchestration plus shared discovery/chunking helpers now also live in `miner` instead of staying embedded inside `service`
 - read-side palace summary/search/layer orchestration now also lives in `palace_read` instead of staying embedded inside `service`
 - project-local registry load/save/learn/research orchestration now also lives in `registry_runtime` instead of staying embedded inside `service`
+- project-local KG/diary/manual-drawer ops now also live in `palace_ops` instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring
