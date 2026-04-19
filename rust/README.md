@@ -340,6 +340,14 @@ Rust project mining CLI is now also split one step further so `mine` and
 - `project_cli_mining_support` for shared app/bootstrap and JSON rendering helpers reused by those mining handlers
 - `project_cli_mining` itself now stays a thin facade that re-exports the mining command family
 
+Rust project transcript CLI is now also split one step further so `split` and
+`normalize` do not keep their handlers and transcript helpers in one file:
+
+- `project_cli_transcript_split` for split command handling
+- `project_cli_transcript_normalize` for normalize command handling plus normalize-specific human/json rendering
+- `project_cli_transcript_support` for shared JSON rendering helpers reused by those transcript handlers
+- `project_cli_transcript` itself now stays a thin facade that re-exports the transcript command family
+
 Rust CLI structure now also includes a `helper_cli` module plus shared `cli_support`
 helpers so the remaining control-plane command family no longer lives inline inside
 `main.rs`:
