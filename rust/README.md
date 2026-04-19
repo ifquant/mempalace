@@ -67,7 +67,9 @@ Rust normalize internals are now also split by concern instead of keeping quote
 transcript handling and all chat-export parsers in one file:
 
 - `normalize_transcript` for quote-line detection and transcript assembly/spellcheck helpers
-- `normalize_json` for ChatGPT, Claude, Codex, Slack, and flat JSON/JSONL chat-export parsing
+- `normalize_json_jsonl` for Claude Code / Codex-style JSONL exports
+- `normalize_json_exports` for ChatGPT / Claude / Slack / flat JSON export parsing plus shared content extraction
+- `normalize_json` itself now stays as the thin facade over JSON/JSONL export routing
 - `normalize` itself now stays focused on the public normalization entrypoints and top-level routing
 
 Rust library structure now also includes a `palace_graph` module mirroring Python
