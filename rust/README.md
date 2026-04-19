@@ -443,6 +443,11 @@ Current first-phase support:
 - MCP now also includes registry read/write/research tools against project-local `entity_registry.json`
 - MCP write tools now append a palace-local JSONL write-ahead log under `palace/wal/write_log.jsonl`
 - provider-based embedding layer with batch document embedding
+- embedding internals are now split by concern:
+  - `embed_hash` keeps the local hash provider and hashing logic
+  - `embed_fastembed` keeps fastembed initialization, warm-up, and doctor integration
+  - `embed_runtime_env` keeps ORT / Hugging Face environment and cache helpers
+  - `embed` itself stays as the thin public facade over the embedding surface
 - SQLite schema version tracking and a minimal migration path
 - `migrate` exposes the current SQLite schema upgrade path as a CLI command
 - `repair` still provides the old non-destructive diagnostics view by default
