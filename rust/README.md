@@ -91,6 +91,15 @@ tool execution branch in one giant match:
 - `mcp_runtime_project` for onboarding, normalize, split, instructions, and hook helpers
 - `mcp_runtime_registry` for project-local entity registry tools
 
+Rust MCP schema/catalog is now also split by tool family instead of keeping
+every tool schema in one giant list:
+
+- `mcp_schema_catalog_read` for palace read-side, graph, and KG read tool schemas
+- `mcp_schema_catalog_write` for write-side, maintenance, and diary write tool schemas
+- `mcp_schema_catalog_project` for onboarding, normalize, split, instructions, and hook schemas
+- `mcp_schema_catalog_registry` for project-local entity registry tool schemas
+- `mcp_schema_support` for protocol negotiation, no-palace policy, argument coercion, and shared MCP helper functions
+
 Rust library structure now also includes a `dedup` module mirroring Python
 `dedup.py`:
 
