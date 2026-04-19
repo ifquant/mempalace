@@ -10,7 +10,7 @@ use crate::registry_cli::RegistryCommand;
 #[command(name = "mempalace-rs")]
 #[command(
     about = "MemPalace — Give your AI a memory. No API key required.",
-    long_about = "MemPalace — Give your AI a memory. No API key required.\n\nCurrent Rust phase supports local-first mining, search, AAAK compression, wake-up context, migration, repair diagnostics, and MCP tools.\n\nExamples:\n  mempalace-rs init ~/projects/my_app\n  mempalace-rs mine ~/projects/my_app\n  mempalace-rs search \"why did we switch to GraphQL\"\n  mempalace-rs compress --wing my_app\n  mempalace-rs wake-up --wing my_app\n  mempalace-rs status"
+    long_about = "MemPalace — Give your AI a memory. No API key required.\n\nCurrent Rust phase supports local-first project bootstrap, mining/search, transcript normalization and splitting, AAAK compression, wake-up and recall layers, registry workflows, maintenance diagnostics, and MCP tools.\n\nExamples:\n  mempalace-rs init ~/projects/my_app\n  mempalace-rs onboarding ~/projects/my_app --mode combo --scan\n  mempalace-rs mine ~/projects/my_app\n  mempalace-rs normalize ~/exports/chat.jsonl --human\n  mempalace-rs search \"why did we switch to GraphQL\"\n  mempalace-rs recall --wing my_app --room decisions\n  mempalace-rs registry summary ~/projects/my_app\n  mempalace-rs status"
 )]
 pub struct Cli {
     #[arg(long)]

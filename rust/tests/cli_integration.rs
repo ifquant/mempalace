@@ -658,11 +658,25 @@ fn cli_root_help_mentions_core_commands_and_examples() {
         .stdout(contains(
             "MemPalace — Give your AI a memory. No API key required.",
         ))
+        .stdout(contains("project bootstrap"))
         .stdout(contains("mempalace-rs mine ~/projects/my_app"))
-        .stdout(contains("compress"))
+        .stdout(contains(
+            "mempalace-rs onboarding ~/projects/my_app --mode combo --scan",
+        ))
+        .stdout(contains(
+            "mempalace-rs normalize ~/exports/chat.jsonl --human",
+        ))
+        .stdout(contains(
+            "mempalace-rs recall --wing my_app --room decisions",
+        ))
+        .stdout(contains("mempalace-rs registry summary ~/projects/my_app"))
+        .stdout(contains("onboarding"))
+        .stdout(contains("normalize"))
+        .stdout(contains("recall"))
+        .stdout(contains("registry"))
         .stdout(contains("hook"))
         .stdout(contains("instructions"))
-        .stdout(contains("wake-up"))
+        .stdout(contains("mcp"))
         .stdout(contains("migrate"))
         .stdout(contains("repair"));
 }
