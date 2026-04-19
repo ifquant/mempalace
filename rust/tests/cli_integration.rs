@@ -979,7 +979,10 @@ fn cli_mine_help_mentions_human_output() {
         .args(["mine", "--help"])
         .assert()
         .success()
-        .stdout(contains("human-readable mine summary"));
+        .stdout(contains("human-readable mine summary"))
+        .stdout(contains("--include-ignored"))
+        .stdout(contains("--no-gitignore"))
+        .stdout(contains("--progress"));
 }
 
 #[test]
@@ -1003,8 +1006,11 @@ fn cli_repair_help_mentions_human_output() {
         .stdout(contains("Run repair diagnostics or repair subcommands"))
         .stdout(contains("human-readable repair diagnostics"))
         .stdout(contains("scan"))
+        .stdout(contains("write corrupt_ids.txt"))
         .stdout(contains("prune"))
-        .stdout(contains("rebuild"));
+        .stdout(contains("Delete IDs listed in corrupt_ids.txt"))
+        .stdout(contains("rebuild"))
+        .stdout(contains("Rebuild the vector store from SQLite drawers"));
 }
 
 #[test]
@@ -1040,6 +1046,7 @@ fn cli_search_help_mentions_filters_and_results() {
         .assert()
         .success()
         .stdout(contains("Find anything, exact words"))
+        .stdout(contains("What to search for"))
         .stdout(contains("Limit to one project/wing"))
         .stdout(contains("Number of results"))
         .stdout(contains("human-readable search output"));
