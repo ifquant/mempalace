@@ -47,6 +47,10 @@ Rust library structure now also includes a `room_detector` module mirroring Pyth
 - `detect_rooms()` for project-local room bootstrap from folder/file signals
 - `load_project_rooms()` for reading `mempalace.yaml` / `mempal.yaml`
 - `detect_room()` for shared project-mining room routing
+- room detector internals are now also split by concern:
+  - `room_detector_config` for project config loading and default-room fallback
+  - `room_detector_detect` for folder/file heuristics and content-based room routing
+  - `room_detector` itself now stays as the thin public facade around shared room types
 
 Rust library structure now also includes a `normalize` module mirroring Python
 `normalize.py`:
