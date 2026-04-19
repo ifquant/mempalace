@@ -1048,6 +1048,40 @@ fn cli_repair_help_mentions_human_output() {
 }
 
 #[test]
+fn cli_repair_scan_help_mentions_wing_filter() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["repair", "scan", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "Scan for vector/SQLite drift and write corrupt_ids.txt",
+        ))
+        .stdout(contains("Scan only this wing"));
+}
+
+#[test]
+fn cli_repair_prune_help_mentions_confirm_flag() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["repair", "prune", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Delete IDs listed in corrupt_ids.txt"))
+        .stdout(contains("Actually delete the queued IDs"));
+}
+
+#[test]
+fn cli_repair_rebuild_help_mentions_vector_rebuild() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["repair", "rebuild", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Rebuild the vector store from SQLite drawers"));
+}
+
+#[test]
 fn cli_dedup_help_mentions_threshold_and_stats() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
