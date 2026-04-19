@@ -2,6 +2,12 @@
 
 This directory holds the in-progress Rust rewrite of MemPalace.
 
+Current parity status:
+
+- the Rust rewrite now covers the current public Python CLI surface and the current public Python MCP tool surface
+- detailed Rust/Python parity tracking now lives in [`../docs/parity-ledger.md`](../docs/parity-ledger.md)
+- remaining work is mainly truth-in-docs, help/test consistency, and deeper non-CLI behavior audits rather than large missing user-facing commands
+
 Current dependency direction:
 
 - `chromadb` -> `lancedb` for the default local-first embedded vector store
@@ -646,7 +652,6 @@ Local runtime note:
 
 Intentionally not in this first Rust phase:
 
-- the remaining Python write MCP surface beyond drawer/KG/diary basics
 - direct compatibility with Python palace data
 
 Current repair scope:
