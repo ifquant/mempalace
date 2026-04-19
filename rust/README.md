@@ -196,6 +196,14 @@ maintenance/read command family no longer lives inline inside `main.rs`:
 - `handle_palace_command()` for `compress`, `wake-up`, `recall`, `layers-status`, `migrate`, `repair`, `dedup`, `status`, `doctor`, and `prepare-embedding`
 - shared human-readable renderers and JSON error helpers for that command family
 
+Rust palace CLI is now also split by command family instead of keeping every
+handler and renderer in one giant file:
+
+- `palace_cli_read` for `compress`, `wake-up`, `recall`, `layers-status`, and `status`
+- `palace_cli_maintenance` for `migrate`, `repair`, and `dedup`
+- `palace_cli_embedding` for `doctor` and `prepare-embedding`
+- `palace_cli_support` for shared config/app/bootstrap helpers used across those handlers
+
 Rust CLI structure now also includes a `project_cli` module so the project/bootstrap
 command family no longer lives inline inside `main.rs`:
 
