@@ -178,6 +178,13 @@ keeping scan, exchange chunking, and general-memory extraction in one file:
 - `convo_general` for prose extraction, marker scoring, sentiment/disambiguation, and general-memory extraction
 - `convo` itself now stays a thin facade over the public conversation API and shared `ConversationChunk` type
 
+Rust general-memory extraction internals are now also split by concern instead
+of keeping segmentation and scoring heuristics in one file:
+
+- `convo_general_segments` for transcript segmentation, paragraph fallback, turn grouping, and prose extraction
+- `convo_general_scoring` for marker scoring, confidence, sentiment, and resolution/disambiguation heuristics
+- `convo_general` itself now stays focused on the public extraction loop and `ConversationChunk` assembly
+
 Rust mining orchestration internals are now also split by concern instead of
 keeping project mining, convo mining, and shared file/chunk helpers in one file:
 
