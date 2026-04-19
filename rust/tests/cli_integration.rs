@@ -691,7 +691,20 @@ fn cli_hook_help_mentions_stdio_behavior() {
         .assert()
         .success()
         .stdout(contains("reads JSON from stdin, outputs JSON to stdout"))
-        .stdout(contains("run"));
+        .stdout(contains("run"))
+        .stdout(contains("Execute a hook"));
+}
+
+#[test]
+fn cli_hook_run_help_mentions_hook_name_and_harness() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["hook", "run", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Execute a hook"))
+        .stdout(contains("Hook name to run"))
+        .stdout(contains("Harness type"));
 }
 
 #[test]
@@ -712,10 +725,14 @@ fn cli_recall_help_mentions_wing_room_and_results() {
         .args(["recall", "--help"])
         .assert()
         .success()
+        .stdout(contains("Limit recall to one project/wing"))
         .stdout(contains("--wing"))
+        .stdout(contains("Limit recall to one room"))
         .stdout(contains("--room"))
+        .stdout(contains("Maximum number of drawers to return"))
         .stdout(contains("--results"))
-        .stdout(contains("Recall stored drawers by wing/room"));
+        .stdout(contains("Recall stored drawers by wing/room"))
+        .stdout(contains("human-readable recall output"));
 }
 
 #[test]
@@ -726,7 +743,8 @@ fn cli_layers_status_help_mentions_layer_stack() {
         .assert()
         .success()
         .stdout(contains("Show Layer 0-3 stack status"))
-        .stdout(contains("--human"));
+        .stdout(contains("--human"))
+        .stdout(contains("human-readable layer status"));
 }
 
 #[test]
