@@ -907,6 +907,10 @@ fn cli_registry_help_mentions_summary_lookup_learn_and_research() {
         .stdout(contains("summary"))
         .stdout(contains("lookup"))
         .stdout(contains("learn"))
+        .stdout(contains("add-person"))
+        .stdout(contains("add-project"))
+        .stdout(contains("add-alias"))
+        .stdout(contains("query"))
         .stdout(contains("research"))
         .stdout(contains("confirm"));
 }
@@ -1064,6 +1068,7 @@ fn cli_normalize_help_mentions_chat_export_normalization() {
         .stdout(contains(
             "Normalize one chat export into MemPalace transcript format",
         ))
+        .stdout(contains("Chat export or transcript file to normalize"))
         .stdout(contains("human-readable preview"));
 }
 
