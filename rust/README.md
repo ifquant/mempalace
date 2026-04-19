@@ -163,6 +163,13 @@ project-local entity registry orchestration:
 - `learn()` for re-running entity detection and persisting new registry entries
 - `add_person()` / `add_project()` / `add_alias()` / `research()` / `confirm_research()` for write-side project registry flows
 
+Rust registry internals are now also split by concern instead of keeping data
+types, heuristic lookup, and Wikipedia research in one giant file:
+
+- `registry_types` for registry data structures, seed types, and shared constants
+- `registry_research` for Wikipedia lookup and classification heuristics
+- `registry` itself now stays focused on `EntityRegistry` behavior, disambiguation, and query/learn flows while re-exporting the public registry types
+
 Rust library structure now also includes a `palace_ops` module for project-local
 manual palace operations across diary, KG, and manual drawer surfaces:
 

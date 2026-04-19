@@ -1,68 +1,15 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
-use std::time::Duration;
 
 use regex::Regex;
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 use crate::error::Result;
-
-pub const COMMON_ENGLISH_WORDS: &[&str] = &[
-    "ever",
-    "grace",
-    "will",
-    "bill",
-    "mark",
-    "april",
-    "may",
-    "june",
-    "joy",
-    "hope",
-    "faith",
-    "chance",
-    "chase",
-    "hunter",
-    "dash",
-    "flash",
-    "star",
-    "sky",
-    "river",
-    "brook",
-    "lane",
-    "art",
-    "clay",
-    "gil",
-    "nat",
-    "max",
-    "rex",
-    "ray",
-    "jay",
-    "rose",
-    "violet",
-    "lily",
-    "ivy",
-    "ash",
-    "reed",
-    "sage",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-    "sunday",
-    "january",
-    "february",
-    "march",
-    "july",
-    "august",
-    "september",
-    "october",
-    "november",
-    "december",
-];
+use crate::registry_research::wikipedia_lookup;
+pub use crate::registry_types::{
+    COMMON_ENGLISH_WORDS, EntityRegistry, RegistryLearnSummary, RegistryLearnSummaryFields,
+    RegistryLookupResult, RegistryPerson, RegistryResearchEntry, RegistrySummary, SeedPerson,
+};
 
 const PERSON_CONTEXT_PATTERNS: &[&str] = &[
     r"\b{name}\s+said\b",
@@ -98,120 +45,6 @@ const CONCEPT_CONTEXT_PATTERNS: &[&str] = &[
     r"\bcould\s+{name}\b",
     r"\bwill\s+{name}\b",
     r"(?:the\s+)?{name}\s+(?:of|in|at|for|to)\b",
-];
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct RegistryPerson {
-    pub source: String,
-    pub contexts: Vec<String>,
-    pub aliases: Vec<String>,
-    pub relationship: String,
-    pub confidence: f64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub canonical: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct RegistryResearchEntry {
-    pub word: String,
-    pub inferred_type: String,
-    pub confidence: f64,
-    pub wiki_summary: Option<String>,
-    pub wiki_title: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub note: Option<String>,
-    pub confirmed: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub confirmed_type: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct EntityRegistry {
-    pub version: u8,
-    pub mode: String,
-    pub people: BTreeMap<String, RegistryPerson>,
-    pub projects: Vec<String>,
-    pub ambiguous_flags: Vec<String>,
-    pub wiki_cache: BTreeMap<String, RegistryResearchEntry>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct RegistryLookupResult {
-    pub word: String,
-    pub r#type: String,
-    pub confidence: f64,
-    pub source: String,
-    pub name: String,
-    pub context: Vec<String>,
-    pub needs_disambiguation: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub disambiguated_by: Option<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct RegistrySummary {
-    pub kind: String,
-    pub registry_path: String,
-    pub mode: String,
-    pub people_count: usize,
-    pub project_count: usize,
-    pub ambiguous_flags: Vec<String>,
-    pub people: Vec<String>,
-    pub projects: Vec<String>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-pub struct RegistryLearnSummary {
-    pub kind: String,
-    pub project_path: String,
-    pub registry_path: String,
-    pub added_people: Vec<String>,
-    pub added_projects: Vec<String>,
-    pub total_people: usize,
-    pub total_projects: usize,
-}
-
-const NAME_INDICATOR_PHRASES: &[&str] = &[
-    "given name",
-    "personal name",
-    "first name",
-    "forename",
-    "masculine name",
-    "feminine name",
-    "boy's name",
-    "girl's name",
-    "male name",
-    "female name",
-    "irish name",
-    "welsh name",
-    "scottish name",
-    "gaelic name",
-    "hebrew name",
-    "arabic name",
-    "norse name",
-    "old english name",
-    "is a name",
-    "as a name",
-    "name meaning",
-    "name derived from",
-    "legendary irish",
-    "legendary welsh",
-    "legendary scottish",
-];
-
-const PLACE_INDICATOR_PHRASES: &[&str] = &[
-    "city in",
-    "town in",
-    "village in",
-    "municipality",
-    "capital of",
-    "district of",
-    "county",
-    "province",
-    "region of",
-    "island of",
-    "mountain in",
-    "river in",
 ];
 
 impl EntityRegistry {
@@ -672,167 +505,11 @@ impl EntityRegistry {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
-pub struct SeedPerson {
-    pub name: String,
-    pub relationship: String,
-    pub context: String,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct RegistryLearnSummaryFields {
-    pub added_people: Vec<String>,
-    pub added_projects: Vec<String>,
-    pub total_people: usize,
-    pub total_projects: usize,
-}
-
 fn regex_matches(pattern: &str, word_lower: &str, ctx_lower: &str) -> bool {
     let pattern = pattern.replace("{name}", &regex::escape(word_lower));
     Regex::new(&pattern)
         .map(|regex| regex.is_match(ctx_lower))
         .unwrap_or(false)
-}
-
-fn wikipedia_lookup(word: &str) -> Result<RegistryResearchEntry> {
-    let url = format!(
-        "https://en.wikipedia.org/api/rest_v1/page/summary/{}",
-        urlencoding(word)
-    );
-    let agent = ureq::AgentBuilder::new()
-        .timeout(Duration::from_secs(5))
-        .build();
-
-    match agent.get(&url).set("User-Agent", "MemPalace-RS/1.0").call() {
-        Ok(response) => {
-            let body: Value = response.into_json()?;
-            Ok(classify_wikipedia_summary(word, &body))
-        }
-        Err(ureq::Error::Status(404, _)) => Ok(RegistryResearchEntry {
-            word: word.to_string(),
-            inferred_type: "person".to_string(),
-            confidence: 0.7,
-            wiki_summary: None,
-            wiki_title: None,
-            note: Some("not found in Wikipedia - likely a proper noun or unusual name".to_string()),
-            confirmed: false,
-            confirmed_type: None,
-        }),
-        Err(err) => Err(anyhow::anyhow!("Wikipedia lookup failed for {word}: {err}").into()),
-    }
-}
-
-fn classify_wikipedia_summary(word: &str, body: &Value) -> RegistryResearchEntry {
-    let page_type = body
-        .get("type")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_string();
-    let extract = body
-        .get("extract")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-    let title = body
-        .get("title")
-        .and_then(Value::as_str)
-        .map(|value| value.to_string());
-    let description = body
-        .get("description")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_ascii_lowercase();
-
-    if page_type == "disambiguation" {
-        if description.contains("name") || description.contains("given name") {
-            return RegistryResearchEntry {
-                word: word.to_string(),
-                inferred_type: "person".to_string(),
-                confidence: 0.65,
-                wiki_summary: truncated_summary(&extract),
-                wiki_title: title,
-                note: Some("disambiguation page with name entries".to_string()),
-                confirmed: false,
-                confirmed_type: None,
-            };
-        }
-        return RegistryResearchEntry {
-            word: word.to_string(),
-            inferred_type: "ambiguous".to_string(),
-            confidence: 0.4,
-            wiki_summary: truncated_summary(&extract),
-            wiki_title: title,
-            note: None,
-            confirmed: false,
-            confirmed_type: None,
-        };
-    }
-
-    if NAME_INDICATOR_PHRASES
-        .iter()
-        .any(|phrase| extract.contains(phrase))
-    {
-        let exact_name_signal = extract.contains(&format!("{} is a", word.to_ascii_lowercase()))
-            || extract.contains(&format!("{} (name", word.to_ascii_lowercase()));
-        return RegistryResearchEntry {
-            word: word.to_string(),
-            inferred_type: "person".to_string(),
-            confidence: if exact_name_signal { 0.9 } else { 0.8 },
-            wiki_summary: truncated_summary(&extract),
-            wiki_title: title,
-            note: None,
-            confirmed: false,
-            confirmed_type: None,
-        };
-    }
-
-    if PLACE_INDICATOR_PHRASES
-        .iter()
-        .any(|phrase| extract.contains(phrase))
-    {
-        return RegistryResearchEntry {
-            word: word.to_string(),
-            inferred_type: "place".to_string(),
-            confidence: 0.8,
-            wiki_summary: truncated_summary(&extract),
-            wiki_title: title,
-            note: None,
-            confirmed: false,
-            confirmed_type: None,
-        };
-    }
-
-    RegistryResearchEntry {
-        word: word.to_string(),
-        inferred_type: "concept".to_string(),
-        confidence: if extract.is_empty() { 0.0 } else { 0.6 },
-        wiki_summary: truncated_summary(&extract),
-        wiki_title: title,
-        note: None,
-        confirmed: false,
-        confirmed_type: None,
-    }
-}
-
-fn truncated_summary(summary: &str) -> Option<String> {
-    if summary.is_empty() {
-        return None;
-    }
-    Some(summary.chars().take(200).collect())
-}
-
-fn urlencoding(word: &str) -> String {
-    word.chars()
-        .flat_map(|ch| match ch {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => vec![ch.to_string()],
-            _ => ch
-                .to_string()
-                .as_bytes()
-                .iter()
-                .map(|byte| format!("%{byte:02X}"))
-                .collect::<Vec<_>>(),
-        })
-        .collect::<String>()
 }
 
 #[cfg(test)]
@@ -904,31 +581,6 @@ mod tests {
         let unknown =
             registry.extract_unknown_candidates("Jordy said Atlas should ship with Riley.");
         assert_eq!(unknown, vec!["Riley".to_string()]);
-    }
-
-    #[test]
-    fn wikipedia_classifier_detects_names_and_places() {
-        let person = classify_wikipedia_summary(
-            "Riley",
-            &serde_json::json!({
-                "type": "standard",
-                "title": "Riley",
-                "extract": "Riley is a given name used in English."
-            }),
-        );
-        assert_eq!(person.inferred_type, "person");
-        assert!(person.confidence >= 0.8);
-
-        let place = classify_wikipedia_summary(
-            "Lanark",
-            &serde_json::json!({
-                "type": "standard",
-                "title": "Lanark",
-                "extract": "Lanark is a town in Scotland and a historic county seat."
-            }),
-        );
-        assert_eq!(place.inferred_type, "place");
-        assert!(place.confidence >= 0.8);
     }
 
     #[test]
