@@ -923,6 +923,8 @@ fn cli_compress_help_mentions_human_output() {
         .assert()
         .success()
         .stdout(contains("Compress drawers into AAAK summaries"))
+        .stdout(contains("Limit compression to one project/wing"))
+        .stdout(contains("Preview AAAK summaries without storing them"))
         .stdout(contains("human-readable compression summary"));
 }
 
@@ -934,6 +936,7 @@ fn cli_wake_up_help_mentions_human_output() {
         .assert()
         .success()
         .stdout(contains("Show L0 + L1 wake-up context"))
+        .stdout(contains("Show wake-up context for one project/wing"))
         .stdout(contains("human-readable wake-up context"));
 }
 
@@ -945,6 +948,8 @@ fn cli_init_help_mentions_human_output() {
         .assert()
         .success()
         .stdout(contains("Set up a palace directory for a project"))
+        .stdout(contains("Project directory to set up"))
+        .stdout(contains("Auto-accept detected bootstrap files"))
         .stdout(contains("human-readable init summary"));
 }
 
@@ -956,6 +961,7 @@ fn cli_doctor_help_mentions_human_output() {
         .assert()
         .success()
         .stdout(contains("Inspect embedding runtime health and cache state"))
+        .stdout(contains("Warm the embedding model during the doctor run"))
         .stdout(contains("human-readable doctor output"));
 }
 
