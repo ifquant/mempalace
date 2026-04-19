@@ -969,6 +969,8 @@ fn cli_prepare_embedding_help_mentions_human_output() {
         .stdout(contains(
             "Prepare the local embedding runtime and model cache",
         ))
+        .stdout(contains("How many warm-up attempts to make"))
+        .stdout(contains("Milliseconds to wait between attempts"))
         .stdout(contains("human-readable prepare summary"));
 }
 
@@ -993,6 +995,7 @@ fn cli_status_help_mentions_human_output() {
         .assert()
         .success()
         .stdout(contains("Show what has been filed in the palace"))
+        .stdout(contains("Usage: mempalace-rs status"))
         .stdout(contains("human-readable palace status"));
 }
 
@@ -1022,7 +1025,10 @@ fn cli_dedup_help_mentions_threshold_and_stats() {
         .success()
         .stdout(contains("Deduplicate near-identical drawers"))
         .stdout(contains("Cosine distance threshold"))
-        .stdout(contains("Show stats only"));
+        .stdout(contains("Preview without deleting"))
+        .stdout(contains("Show stats only"))
+        .stdout(contains("Scope dedup to one wing"))
+        .stdout(contains("Filter by source file pattern"));
 }
 
 #[test]
