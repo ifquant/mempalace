@@ -70,6 +70,10 @@ transcript handling and all chat-export parsers in one file:
 - `normalize_json_jsonl` for Claude Code / Codex-style JSONL exports
 - `normalize_json_exports` for ChatGPT / Claude / Slack / flat JSON export parsing plus shared content extraction
 - `normalize_json` itself now stays as the thin facade over JSON/JSONL export routing
+- spellcheck internals are now also split by concern:
+  - `spellcheck_dict` for common-typo maps, system dictionary loading, edit distance, and candidate ranking
+  - `spellcheck_rules` for token skip rules and regex-based technical/name/code guards
+  - `spellcheck` itself now stays focused on transcript/user-text entrypoints and nearby registry-name loading
 - `normalize` itself now stays focused on the public normalization entrypoints and top-level routing
 
 Rust library structure now also includes a `palace_graph` module mirroring Python
