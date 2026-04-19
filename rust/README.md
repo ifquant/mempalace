@@ -69,6 +69,13 @@ Rust library structure now also includes a `knowledge_graph` module mirroring Py
 - `KnowledgeGraph::query_entity()` / `timeline()` for read-side traversal
 - `KnowledgeGraph::stats()` for summary counts and relationship-type inspection
 
+Rust library structure now also includes an `mcp_schema` module so the MCP
+catalog/protocol surface no longer lives inline inside `mcp.rs`:
+
+- `SUPPORTED_PROTOCOL_VERSIONS` and `PALACE_PROTOCOL` for MCP handshake/protocol metadata
+- `tools()` for the MCP tool catalog and input schemas
+- shared argument coercion / required-arg helpers for MCP tool calls
+
 Rust library structure now also includes a `dedup` module mirroring Python
 `dedup.py`:
 
