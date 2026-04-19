@@ -153,6 +153,12 @@ bootstrap and project bootstrap orchestration:
 - `init()` for palace-local initialization summaries
 - `init_project()` for project bootstrap plus world-file summary assembly
 
+Rust CLI structure now also includes a `registry_cli` module so the registry command
+surface no longer lives inline inside `main.rs`:
+
+- `handle_registry_command()` for the registry subcommand dispatch path
+- shared human-readable registry renderers kept next to the registry command wiring
+
 Current first-phase support:
 
 - `init`
