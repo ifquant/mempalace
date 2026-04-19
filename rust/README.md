@@ -200,6 +200,16 @@ interactive prompts, request normalization, and auto-detection merge logic in on
 - `onboarding_support` for mode normalization, dedupe/merge helpers, and shared parse helpers
 - `onboarding` itself now stays focused on onboarding orchestration and summary assembly
 
+Rust model definitions are now also split by domain instead of keeping every
+DTO, summary payload, and request type in one giant `model.rs`:
+
+- `model_palace` for drawers, search, status, taxonomy, and graph-facing data types
+- `model_ops` for KG, diary, and manual drawer write/read payloads
+- `model_project` for mining, init, and onboarding request/summary types
+- `model_runtime` for migrate/repair/dedup/compress/embed/layer runtime summaries
+- `model_registry` for project-local entity registry result payloads
+- `model` itself now stays a thin facade that re-exports the public model surface
+
 Rust library structure now also includes a `palace_ops` module for project-local
 manual palace operations across diary, KG, and manual drawer surfaces:
 
