@@ -83,6 +83,14 @@ tool execution surface no longer lives inline inside `mcp.rs`:
 - shared tool-level `error + hint` formatting for MCP responses
 - shared best-effort palace-local WAL logging for write-side MCP tools
 
+Rust MCP runtime is now also split by tool family, instead of keeping every
+tool execution branch in one giant match:
+
+- `mcp_runtime_read` for palace read-side, graph, and KG read tools
+- `mcp_runtime_write` for write-side, maintenance, and diary write tools
+- `mcp_runtime_project` for onboarding, normalize, split, instructions, and hook helpers
+- `mcp_runtime_registry` for project-local entity registry tools
+
 Rust library structure now also includes a `dedup` module mirroring Python
 `dedup.py`:
 
