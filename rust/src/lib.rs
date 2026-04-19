@@ -41,6 +41,8 @@ pub mod miner_support;
 pub mod model;
 pub mod normalize;
 pub mod onboarding;
+pub mod onboarding_prompt;
+pub mod onboarding_support;
 pub mod palace;
 pub mod palace_graph;
 pub mod palace_ops;

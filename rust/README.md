@@ -193,6 +193,13 @@ parsing/writing and generated bootstrap docs in one file:
 - `bootstrap_docs` for `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` generation helpers
 - `bootstrap` itself now stays focused on bootstrap orchestration and result assembly
 
+Rust onboarding internals are now also split by concern instead of keeping
+interactive prompts, request normalization, and auto-detection merge logic in one file:
+
+- `onboarding_prompt` for interactive onboarding questions and terminal UI helpers
+- `onboarding_support` for mode normalization, dedupe/merge helpers, and shared parse helpers
+- `onboarding` itself now stays focused on onboarding orchestration and summary assembly
+
 Rust library structure now also includes a `palace_ops` module for project-local
 manual palace operations across diary, KG, and manual drawer surfaces:
 
