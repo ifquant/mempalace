@@ -139,6 +139,13 @@ palace migration, repair, rebuild, and dedup orchestration:
 - `repair()` / `repair_scan()` / `repair_prune()` / `repair_rebuild()` for maintenance and recovery flows
 - `dedup()` for SQLite + LanceDB duplicate-cleanup orchestration around the lower-level dedup planner
 
+Rust library structure now also includes an `init_runtime` module for palace
+bootstrap and project bootstrap orchestration:
+
+- `prepare_storage()` for the shared SQLite + vector bootstrap path
+- `init()` for palace-local initialization summaries
+- `init_project()` for project bootstrap plus world-file summary assembly
+
 Current first-phase support:
 
 - `init`
@@ -278,6 +285,7 @@ Current project-mining behavior:
 - project-local registry load/save/learn/research orchestration now also lives in `registry_runtime` instead of staying embedded inside `service`
 - project-local KG/diary/manual-drawer ops now also live in `palace_ops` instead of staying embedded inside `service`
 - palace migrate/repair/dedup orchestration now also lives in `maintenance_runtime` instead of staying embedded inside `service`
+- palace init/init_project bootstrap orchestration now also lives in `init_runtime` instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring

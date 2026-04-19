@@ -11,6 +11,7 @@ pub mod embedding_runtime;
 pub mod entity_detector;
 pub mod error;
 pub mod hook;
+pub mod init_runtime;
 pub mod instructions;
 pub mod knowledge_graph;
 pub mod layers;

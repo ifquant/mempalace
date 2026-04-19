@@ -3,7 +3,6 @@ use std::path::Path;
 use std::sync::Arc;
 
 use crate::VERSION;
-use crate::bootstrap::bootstrap_project;
 use crate::compress::{CompressSummaryContext, CompressionRun};
 use crate::config::AppConfig;
 use crate::dialect::Dialect;
@@ -12,6 +11,7 @@ use crate::embedding_runtime::{
     EmbeddingRuntimeContext, finalize_doctor_summary, prepare_embedding_run,
 };
 use crate::error::Result;
+use crate::init_runtime::InitRuntime;
 use crate::maintenance_runtime::MaintenanceRuntime;
 use crate::miner::mine_project_run;
 use crate::model::{
@@ -24,11 +24,10 @@ use crate::model::{
     RegistryWriteResult, RepairPruneSummary, RepairRebuildSummary, RepairScanSummary,
     RepairSummary, Rooms, SearchResults, Status, Taxonomy, TunnelRoom, WakeUpSummary,
 };
-use crate::palace::ensure_vector_store;
 use crate::palace_ops::PalaceOpsRuntime;
 use crate::palace_read::PalaceReadRuntime;
 use crate::registry_runtime::RegistryRuntime;
-use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
+use crate::storage::sqlite::SqliteStore;
 
 #[derive(Clone)]
 pub struct App {
@@ -47,70 +46,21 @@ impl App {
     }
 
     pub async fn init(&self) -> Result<InitSummary> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        let _vector = ensure_vector_store(&self.config, self.embedder.profile()).await?;
-        let schema_version = sqlite.schema_version()?.unwrap_or(CURRENT_SCHEMA_VERSION);
-
-        Ok(InitSummary {
-            kind: "init".to_string(),
-            project_path: self.config.palace_path.display().to_string(),
-            wing: "general".to_string(),
-            configured_rooms: vec!["general".to_string()],
-            detected_people: Vec::new(),
-            detected_projects: Vec::new(),
-            config_path: None,
-            config_written: false,
-            entities_path: None,
-            entities_written: false,
-            entity_registry_path: None,
-            entity_registry_written: false,
-            aaak_entities_path: None,
-            aaak_entities_written: false,
-            critical_facts_path: None,
-            critical_facts_written: false,
-            palace_path: self.config.palace_path.display().to_string(),
-            sqlite_path: self.config.sqlite_path().display().to_string(),
-            lance_path: self.config.lance_path().display().to_string(),
-            version: VERSION.to_string(),
-            schema_version,
-        })
+        InitRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .init()
+        .await
     }
 
     pub async fn init_project(&self, project_dir: &Path) -> Result<InitSummary> {
-        self.config.ensure_dirs()?;
-        let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        let _vector = ensure_vector_store(&self.config, self.embedder.profile()).await?;
-        let schema_version = sqlite.schema_version()?.unwrap_or(CURRENT_SCHEMA_VERSION);
-        let bootstrap = bootstrap_project(project_dir)?;
-
-        Ok(InitSummary {
-            kind: "init".to_string(),
-            project_path: project_dir.display().to_string(),
-            wing: bootstrap.wing,
-            configured_rooms: bootstrap.configured_rooms,
-            detected_people: bootstrap.detected_people,
-            detected_projects: bootstrap.detected_projects,
-            config_path: bootstrap.config_path,
-            config_written: bootstrap.config_written,
-            entities_path: bootstrap.entities_path,
-            entities_written: bootstrap.entities_written,
-            entity_registry_path: bootstrap.entity_registry_path,
-            entity_registry_written: bootstrap.entity_registry_written,
-            aaak_entities_path: bootstrap.aaak_entities_path,
-            aaak_entities_written: bootstrap.aaak_entities_written,
-            critical_facts_path: bootstrap.critical_facts_path,
-            critical_facts_written: bootstrap.critical_facts_written,
-            palace_path: self.config.palace_path.display().to_string(),
-            sqlite_path: self.config.sqlite_path().display().to_string(),
-            lance_path: self.config.lance_path().display().to_string(),
-            version: VERSION.to_string(),
-            schema_version,
-        })
+        InitRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
+        }
+        .init_project(project_dir)
+        .await
     }
 
     pub async fn status(&self) -> Result<Status> {
