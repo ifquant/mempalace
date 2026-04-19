@@ -286,6 +286,16 @@ file:
 - `palace_cli_maintenance_support` for shared config/app/bootstrap helpers reused by those maintenance handlers
 - `palace_cli_maintenance` itself now stays a thin facade that re-exports the maintenance command family
 
+Rust read-facing palace CLI is now also split one step further so
+`compress`, `wake-up`, `recall`, `layers-status`, and `status` do not grow back
+into one read-sized file:
+
+- `palace_cli_read_compress` for compression command handling plus compress-specific human/json rendering
+- `palace_cli_read_layers` for `wake-up`, `recall`, and `layers-status`
+- `palace_cli_read_status` for status command handling plus taxonomy-backed human rendering
+- `palace_cli_read_support` for shared config/app/bootstrap helpers reused by those read handlers
+- `palace_cli_read` itself now stays a thin facade that re-exports the read command family
+
 Rust project-facing CLI is now also split by command family instead of keeping
 bootstrap, mining, and transcript prep in one file:
 
