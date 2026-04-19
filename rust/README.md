@@ -218,9 +218,11 @@ Rust registry internals are now also split one step further so lookup/query
 heuristics no longer live in the same file as persistence and mutation flows:
 
 - `registry_lookup` for ambiguous-name disambiguation, registry lookup, and query-side extraction helpers
+- `registry_io` for load/save, summary, research cache access, and onboarding/bootstrap seeding
+- `registry_mutation` for learn/add/alias/confirm flows plus ambiguous-flag recomputation
 - `registry_research` for Wikipedia lookup and research classification heuristics
 - `registry_types` for registry data structures and shared constants
-- `registry` itself now stays focused on persistence, seed/bootstrap, learn/mutation, and summary assembly
+- `registry` itself now stays as the thin public facade and test anchor for the registry surface
 
 Rust model definitions are now also split by domain instead of keeping every
 DTO, summary payload, and request type in one giant `model.rs`:
