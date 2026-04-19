@@ -210,6 +210,16 @@ DTO, summary payload, and request type in one giant `model.rs`:
 - `model_registry` for project-local entity registry result payloads
 - `model` itself now stays a thin facade that re-exports the public model surface
 
+Rust service-layer orchestration is now also split by capability family instead
+of keeping every `App` method implementation inline in one file:
+
+- `service_project` for init, project bootstrap, mining, and compression entrypoints
+- `service_read` for palace read-side, graph, search, and layer-facing entrypoints
+- `service_ops` for KG, diary, and manual drawer operations
+- `service_registry` for project-local entity registry entrypoints
+- `service_maintenance` for migrate, repair, dedup, and embedding-runtime entrypoints
+- `service` itself now stays focused on `App` construction plus shared tests
+
 Rust library structure now also includes a `palace_ops` module for project-local
 manual palace operations across diary, KG, and manual drawer surfaces:
 
