@@ -184,6 +184,12 @@ schema no longer lives inline inside `main.rs`:
 - `Cli` and `Command` now live in one schema module shared by the binary entrypoint
 - `main.rs` is now reduced to parse + route, instead of also owning every top-level flag definition
 
+Rust CLI structure now also includes a `cli_runtime` module so the top-level
+binary route itself no longer lives inline inside `main.rs`:
+
+- `run_cli()` owns the root command dispatch across project, palace, helper, and registry surfaces
+- `main.rs` is now effectively just `Cli::parse()` plus one call into the binary runtime
+
 Current first-phase support:
 
 - `init`
