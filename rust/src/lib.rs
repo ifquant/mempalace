@@ -1,6 +1,7 @@
 pub mod audit;
 pub mod bootstrap;
 pub mod compress;
+pub mod compression_runtime;
 pub mod config;
 pub mod convo;
 pub mod dedup;

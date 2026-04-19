@@ -2,14 +2,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 
-use crate::VERSION;
-use crate::compress::{CompressSummaryContext, CompressionRun};
+use crate::compression_runtime::CompressionRuntime;
 use crate::config::AppConfig;
-use crate::dialect::Dialect;
 use crate::embed::{EmbeddingProvider, build_embedder};
-use crate::embedding_runtime::{
-    EmbeddingRuntimeContext, finalize_doctor_summary, prepare_embedding_run,
-};
+use crate::embedding_runtime::EmbeddingRuntime;
 use crate::error::Result;
 use crate::init_runtime::InitRuntime;
 use crate::maintenance_runtime::MaintenanceRuntime;
@@ -27,7 +23,6 @@ use crate::model::{
 use crate::palace_ops::PalaceOpsRuntime;
 use crate::palace_read::PalaceReadRuntime;
 use crate::registry_runtime::RegistryRuntime;
-use crate::storage::sqlite::SqliteStore;
 
 #[derive(Clone)]
 pub struct App {
@@ -142,17 +137,11 @@ impl App {
     }
 
     pub async fn doctor(&self, warm_embedding: bool) -> Result<DoctorSummary> {
-        self.config.ensure_dirs()?;
-        let context = EmbeddingRuntimeContext {
-            palace_path: self.config.palace_path.display().to_string(),
-            sqlite_path: self.config.sqlite_path().display().to_string(),
-            lance_path: self.config.lance_path().display().to_string(),
-            version: VERSION.to_string(),
-            provider: self.embedder.profile().provider.clone(),
-            model: self.embedder.profile().model.clone(),
-        };
-        let summary = self.embedder.doctor(&context.palace_path, warm_embedding);
-        Ok(finalize_doctor_summary(summary, &context))
+        EmbeddingRuntime {
+            config: self.config.clone(),
+            embedder: self.embedder.clone(),
+        }
+        .doctor(warm_embedding)
     }
 
     pub async fn prepare_embedding(
@@ -160,23 +149,12 @@ impl App {
         attempts: usize,
         wait_ms: u64,
     ) -> Result<PrepareEmbeddingSummary> {
-        self.config.ensure_dirs()?;
-        let context = EmbeddingRuntimeContext {
-            palace_path: self.config.palace_path.display().to_string(),
-            sqlite_path: self.config.sqlite_path().display().to_string(),
-            lance_path: self.config.lance_path().display().to_string(),
-            version: VERSION.to_string(),
-            provider: self.embedder.profile().provider.clone(),
-            model: self.embedder.profile().model.clone(),
-        };
-        let run = prepare_embedding_run(
-            self.embedder.clone(),
-            &context.palace_path,
-            attempts,
-            wait_ms,
-        )
-        .await?;
-        Ok(run.into_summary(&context))
+        EmbeddingRuntime {
+            config: self.config.clone(),
+            embedder: self.embedder.clone(),
+        }
+        .prepare_embedding(attempts, wait_ms)
+        .await
     }
 
     pub async fn list_wings(&self) -> Result<BTreeMap<String, usize>> {
@@ -257,25 +235,11 @@ impl App {
     }
 
     pub async fn compress(&self, wing: Option<&str>, dry_run: bool) -> Result<CompressSummary> {
-        self.config.ensure_dirs()?;
-        let dialect = Dialect;
-        let mut sqlite = SqliteStore::open(&self.config.sqlite_path())?;
-        sqlite.init_schema()?;
-        sqlite.ensure_embedding_profile(self.embedder.profile())?;
-        let drawers = sqlite.list_drawers(wing)?;
-        let run = CompressionRun::from_drawers(drawers, &dialect);
-
-        if !dry_run {
-            sqlite.replace_compressed_drawers(wing, &run.entries)?;
+        CompressionRuntime {
+            config: &self.config,
+            embedder: self.embedder.as_ref(),
         }
-
-        Ok(run.into_summary(CompressSummaryContext {
-            palace_path: self.config.palace_path.display().to_string(),
-            sqlite_path: self.config.sqlite_path().display().to_string(),
-            version: VERSION.to_string(),
-            wing: wing.map(ToOwned::to_owned),
-            dry_run,
-        }))
+        .compress(wing, dry_run)
     }
 
     pub async fn wake_up(&self, wing: Option<&str>) -> Result<WakeUpSummary> {

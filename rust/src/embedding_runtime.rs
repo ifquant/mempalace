@@ -1,9 +1,16 @@
+use crate::VERSION;
+use crate::config::AppConfig;
 use std::sync::Arc;
 use std::time::Duration;
 
 use crate::embed::EmbeddingProvider;
 use crate::error::Result;
 use crate::model::{DoctorSummary, PrepareEmbeddingSummary};
+
+pub struct EmbeddingRuntime {
+    pub config: AppConfig,
+    pub embedder: Arc<dyn EmbeddingProvider>,
+}
 
 pub struct EmbeddingRuntimeContext {
     pub palace_path: String,
@@ -22,6 +29,42 @@ pub fn finalize_doctor_summary(
     summary.lance_path = context.lance_path.clone();
     summary.version = context.version.clone();
     summary
+}
+
+impl EmbeddingRuntime {
+    fn context(&self) -> Result<EmbeddingRuntimeContext> {
+        self.config.ensure_dirs()?;
+        Ok(EmbeddingRuntimeContext {
+            palace_path: self.config.palace_path.display().to_string(),
+            sqlite_path: self.config.sqlite_path().display().to_string(),
+            lance_path: self.config.lance_path().display().to_string(),
+            version: VERSION.to_string(),
+            provider: self.embedder.profile().provider.clone(),
+            model: self.embedder.profile().model.clone(),
+        })
+    }
+
+    pub fn doctor(&self, warm_embedding: bool) -> Result<DoctorSummary> {
+        let context = self.context()?;
+        let summary = self.embedder.doctor(&context.palace_path, warm_embedding);
+        Ok(finalize_doctor_summary(summary, &context))
+    }
+
+    pub async fn prepare_embedding(
+        &self,
+        attempts: usize,
+        wait_ms: u64,
+    ) -> Result<PrepareEmbeddingSummary> {
+        let context = self.context()?;
+        let run = prepare_embedding_run(
+            self.embedder.clone(),
+            &context.palace_path,
+            attempts,
+            wait_ms,
+        )
+        .await?;
+        Ok(run.into_summary(&context))
+    }
 }
 
 pub struct PrepareEmbeddingRun {

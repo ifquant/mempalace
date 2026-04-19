@@ -97,9 +97,16 @@ planning shared by CLI and future library callers:
 - `CompressSummaryContext` for stable CLI/MCP summary assembly
 - shared conversion from `DrawerRecord` into persisted AAAK rows
 
+Rust library structure now also includes a `compression_runtime` module for
+AAAK compression orchestration around SQLite persistence:
+
+- `CompressionRuntime::compress()` for the read-drawers -> build-plan -> optional-persist flow
+- shared SQLite/bootstrap handling so `service` no longer owns the compression path directly
+
 Rust library structure now also includes an `embedding_runtime` module for reusable
 doctor/prepare-embedding orchestration around the embedder:
 
+- `EmbeddingRuntime::doctor()` and `EmbeddingRuntime::prepare_embedding()` as the facade used by `service`
 - `finalize_doctor_summary()` for filling stable path/version fields
 - `prepare_embedding_run()` for warmup retry flow and result capture
 - `EmbeddingRuntimeContext` for stable doctor/prepare summary assembly
