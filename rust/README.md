@@ -178,6 +178,14 @@ keeping scan, exchange chunking, and general-memory extraction in one file:
 - `convo_general` for prose extraction, marker scoring, sentiment/disambiguation, and general-memory extraction
 - `convo` itself now stays a thin facade over the public conversation API and shared `ConversationChunk` type
 
+Rust mining orchestration internals are now also split by concern instead of
+keeping project mining, convo mining, and shared file/chunk helpers in one file:
+
+- `miner_project` for project/code/document mining execution
+- `miner_convo` for conversation/chat-export mining execution
+- `miner_support` for shared discovery, chunking, slugging, and conversation drawer assembly helpers
+- `miner` itself now stays a thin facade over the public mining entrypoints
+
 Rust library structure now also includes a `palace_ops` module for project-local
 manual palace operations across diary, KG, and manual drawer surfaces:
 

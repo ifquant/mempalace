@@ -509,7 +509,7 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::miner::chunk_text;
+    use crate::miner_support::chunk_text;
     use crate::model::SearchHit;
     use crate::room_detector::detect_room;
     use crate::searcher::normalize_search_hits;
