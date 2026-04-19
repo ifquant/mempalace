@@ -118,6 +118,13 @@ palace surfacing across CLI, MCP, and library callers:
 - `traverse_graph()` / `find_tunnels()` / `graph_stats()` for graph-oriented read flows
 - `search()` / `wake_up()` / `recall()` / `layer_status()` for the higher-level read surfaces
 
+Rust library structure now also includes a `registry_runtime` module for
+project-local entity registry orchestration:
+
+- `summary()` / `lookup()` / `query()` for project-bound registry reads
+- `learn()` for re-running entity detection and persisting new registry entries
+- `add_person()` / `add_project()` / `add_alias()` / `research()` / `confirm_research()` for write-side project registry flows
+
 Current first-phase support:
 
 - `init`
@@ -254,6 +261,7 @@ Current project-mining behavior:
 - doctor path/version backfill and prepare-embedding warmup retry handling now also live in `embedding_runtime` instead of staying embedded inside `service`
 - project/convo mining orchestration plus shared discovery/chunking helpers now also live in `miner` instead of staying embedded inside `service`
 - read-side palace summary/search/layer orchestration now also lives in `palace_read` instead of staying embedded inside `service`
+- project-local registry load/save/learn/research orchestration now also lives in `registry_runtime` instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring

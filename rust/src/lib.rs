@@ -23,6 +23,7 @@ pub mod palace;
 pub mod palace_graph;
 pub mod palace_read;
 pub mod registry;
+pub mod registry_runtime;
 pub mod repair;
 pub mod room_detector;
 pub mod searcher;
