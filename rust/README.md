@@ -104,6 +104,13 @@ doctor/prepare-embedding orchestration around the embedder:
 - `prepare_embedding_run()` for warmup retry flow and result capture
 - `EmbeddingRuntimeContext` for stable doctor/prepare summary assembly
 
+Rust library structure now also includes a `miner` module mirroring the Python
+`miner.py` orchestration boundary:
+
+- `mine_project_run()` for project-file ingest orchestration
+- `mine_conversations_run()` for convo/general ingest orchestration
+- shared file discovery, chunking, include-override, and conversation drawer assembly helpers
+
 Current first-phase support:
 
 - `init`
@@ -238,6 +245,7 @@ Current project-mining behavior:
 - manual drawer construction plus SQLite-row-to-input conversion now also live in the `drawers` module instead of staying embedded inside `service`
 - AAAK `CompressedDrawer` generation and compression summary assembly now also live in the `compress` module instead of staying embedded inside `service`
 - doctor path/version backfill and prepare-embedding warmup retry handling now also live in `embedding_runtime` instead of staying embedded inside `service`
+- project/convo mining orchestration plus shared discovery/chunking helpers now also live in `miner` instead of staying embedded inside `service`
 - uses config-defined `wing` and `rooms`
 - skips init-generated bootstrap artifacts such as `entities.json`, `entity_registry.json`, `aaak_entities.md`, and `critical_facts.md` during normal project mining
 - routes files to rooms using path, filename, and keyword scoring

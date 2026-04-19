@@ -15,6 +15,7 @@ pub mod instructions;
 pub mod knowledge_graph;
 pub mod layers;
 pub mod mcp;
+pub mod miner;
 pub mod model;
 pub mod normalize;
 pub mod onboarding;
