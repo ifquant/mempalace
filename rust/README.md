@@ -165,6 +165,12 @@ maintenance/read command family no longer lives inline inside `main.rs`:
 - `handle_palace_command()` for `compress`, `wake-up`, `recall`, `layers-status`, `migrate`, `repair`, `dedup`, `status`, `doctor`, and `prepare-embedding`
 - shared human-readable renderers and JSON error helpers for that command family
 
+Rust CLI structure now also includes a `project_cli` module so the project/bootstrap
+command family no longer lives inline inside `main.rs`:
+
+- `handle_project_command()` for `init`, `onboarding`, `mine`, `search`, `split`, and `normalize`
+- shared progress wiring plus human-readable renderers and JSON error helpers for that command family
+
 Current first-phase support:
 
 - `init`
