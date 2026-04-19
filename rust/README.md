@@ -276,6 +276,16 @@ handler and renderer in one giant file:
 - `palace_cli_embedding` for `doctor` and `prepare-embedding`
 - `palace_cli_support` for shared config/app/bootstrap helpers used across those handlers
 
+Rust maintenance-facing palace CLI is now also split one step further so
+`migrate`, `repair`, and `dedup` do not grow back into one maintenance-sized
+file:
+
+- `palace_cli_migrate` for migration command handling plus migrate-specific human/json rendering
+- `palace_cli_repair` for `repair`, `repair scan`, `repair prune`, and `repair rebuild`
+- `palace_cli_dedup` for duplicate-planning and result rendering
+- `palace_cli_maintenance_support` for shared config/app/bootstrap helpers reused by those maintenance handlers
+- `palace_cli_maintenance` itself now stays a thin facade that re-exports the maintenance command family
+
 Rust project-facing CLI is now also split by command family instead of keeping
 bootstrap, mining, and transcript prep in one file:
 
