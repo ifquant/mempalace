@@ -180,10 +180,18 @@ fn cli_onboarding_help_mentions_mode_people_and_scan() {
         .args(["onboarding", "--help"])
         .assert()
         .success()
+        .stdout(contains(
+            "Guide first-run registry and AAAK bootstrap for a project",
+        ))
+        .stdout(contains("Project directory to seed"))
+        .stdout(contains("Usage mode: work, personal, or combo"))
         .stdout(contains("--mode"))
         .stdout(contains("--person"))
         .stdout(contains("--project"))
         .stdout(contains("--alias"))
+        .stdout(contains(
+            "Comma-separated wing list; defaults follow the selected mode",
+        ))
         .stdout(contains("--scan"))
         .stdout(contains("--auto-accept-detected"))
         .stdout(contains("--human"));
@@ -1247,7 +1255,10 @@ fn cli_split_help_mentions_transcript_megafiles() {
         .stdout(contains(
             "Split concatenated transcript mega-files into per-session files",
         ))
-        .stdout(contains("Only split files containing at least N sessions"));
+        .stdout(contains("Directory containing transcript files"))
+        .stdout(contains("Write split files here"))
+        .stdout(contains("Only split files containing at least N sessions"))
+        .stdout(contains("Show what would be split without writing files"));
 }
 
 #[test]
@@ -1261,6 +1272,7 @@ fn cli_normalize_help_mentions_chat_export_normalization() {
             "Normalize one chat export into MemPalace transcript format",
         ))
         .stdout(contains("Chat export or transcript file to normalize"))
+        .stdout(contains("Print human-readable preview instead of JSON"))
         .stdout(contains("human-readable preview"));
 }
 
