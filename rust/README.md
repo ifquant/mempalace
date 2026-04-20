@@ -585,11 +585,14 @@ Useful verification command:
 - `cargo run -- --palace /tmp/mempalace doctor --warm-embedding`
 - `cargo run -- --palace /tmp/mempalace prepare-embedding`
 - `cargo run -- --palace /tmp/mempalace migrate`
+- `cargo run -- --palace /tmp/mempalace status --human`
 - `cargo run -- --palace /tmp/mempalace repair`
 - `cargo run -- --palace /tmp/mempalace repair scan`
 - `cargo run -- --palace /tmp/mempalace repair prune --confirm`
 - `cargo run -- --palace /tmp/mempalace repair rebuild`
 - `cargo run -- --palace /tmp/mempalace dedup --dry-run`
+- `cargo run -- --palace /tmp/mempalace wake-up --human`
+- `cargo run -- --palace /tmp/mempalace search "why did we switch to GraphQL" --human`
 - `cargo run -- registry summary /path/to/project`
 - `cargo run -- registry lookup /path/to/project Riley --context "Riley said the deploy was fixed"`
 - `cargo run -- registry learn /path/to/project`
@@ -600,9 +603,11 @@ Useful verification command:
 - `cargo run -- registry research /path/to/project Riley --human`
 - `cargo run -- registry confirm /path/to/project Riley --type person --relationship daughter --context personal --human`
 - `cargo run -- onboarding /path/to/project --mode combo --person "Riley,daughter,personal" --project Lantern --alias Ry=Riley --scan --auto-accept-detected --human`
+- `cargo run -- split /path/to/chats --dry-run`
 - `cargo run -- normalize /path/to/transcript.jsonl --human`
 - `cargo run -- --palace /tmp/mempalace recall --wing my_app --room decisions --human`
 - `cargo run -- --palace /tmp/mempalace layers-status --human`
+- `cargo run -- --palace /tmp/mempalace mcp --setup`
 - `cargo run -- --palace /tmp/mempalace mcp --serve`
 - `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding`
 - `MEMPALACE_RS_TEST_HF_ENDPOINT=https://hf-mirror.com cargo test cli_fastembed_prepare_mine_search_smoke -- --ignored --nocapture`
