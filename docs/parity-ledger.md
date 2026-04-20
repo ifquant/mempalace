@@ -16,6 +16,7 @@ It is **not** a tracker for internal module splits or general refactor progress.
 - Python CLI public surface is currently a subset of the Rust CLI surface.
 - Python MCP public tool surface is currently a subset of the Rust MCP surface.
 - Rust adds several local-first extension surfaces that Python does not currently expose.
+- Rust CLI help coverage is now broadly locked by integration tests across root/global flags, helper/read flows, maintenance, registry, and project-facing commands.
 - Direct compatibility with existing Python palace data is **not** part of the current Rust phase.
 
 ## Python CLI Surface
@@ -100,6 +101,6 @@ The following are confirmed follow-up areas, not confirmed missing headline feat
 
 | Area | Verdict | Notes |
 | --- | --- | --- |
-| README/help/test consistency audit | `remaining` | Keep README, help text, and integration assertions aligned as the Rust surface stabilizes. |
+| README/example consistency audit | `remaining` | CLI help contracts are now broadly locked; remaining truth-in-docs work is mostly README/example drift as the Rust surface stabilizes. |
 | Deeper non-CLI behavior audit | `remaining` | Continue checking behavior-level parity beyond command and MCP presence, especially edge-case semantics. |
 | Future residual parity batches | `remaining` | If a real user-visible gap is found later, add it here first before implementing it. |

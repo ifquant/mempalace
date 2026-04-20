@@ -6,8 +6,9 @@ Current parity status:
 
 - the Rust rewrite now covers the current public Python CLI surface and the current public Python MCP tool surface
 - the top-level Rust CLI help now reflects the broader current surface: bootstrap, transcript prep, recall layers, registry workflows, maintenance, and MCP
+- the CLI integration suite now locks most command-help contracts across root/global flags, helper/read flows, maintenance, registry, and project-facing commands
 - detailed Rust/Python parity tracking now lives in [`../docs/parity-ledger.md`](../docs/parity-ledger.md)
-- remaining work is mainly truth-in-docs, help/test consistency, and deeper non-CLI behavior audits rather than large missing user-facing commands
+- remaining work is now mainly README/example truth-in-docs and deeper non-CLI behavior audits rather than large missing user-facing commands
 
 Current dependency direction:
 
