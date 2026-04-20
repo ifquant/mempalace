@@ -629,8 +629,10 @@ Fastembed smoke test note:
 - run it explicitly when you want a true local `prepare-embedding -> mine -> search` pass
 - set `MEMPALACE_RS_TEST_HF_ENDPOINT` if your environment needs a HuggingFace mirror
 
-Current MCP compatibility notes:
+Current MCP parity and extension notes:
 
+- the current public Python MCP tool surface is a subset of the Rust MCP surface
+- the notes below focus on notable parity matches, Rust-only MCP extensions, and local-first behavior differences
 - read-only MCP tool names match the Python server
 - `tools/list` now exposes Python-style input schemas for read tools
 - `mempalace_status` includes `protocol` and `aaak_dialect`
