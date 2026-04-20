@@ -941,6 +941,120 @@ fn cli_registry_help_mentions_summary_lookup_learn_and_research() {
 }
 
 #[test]
+fn cli_registry_read_subcommands_help_cover_paths_and_human_output() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "summary", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Show a summary of entity_registry.json"))
+        .stdout(contains(
+            "Project directory containing entity_registry.json",
+        ))
+        .stdout(contains("human-readable registry summary"));
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "lookup", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Look up one word in entity_registry.json"))
+        .stdout(contains("Word to look up"))
+        .stdout(contains(
+            "Context sentence used for ambiguous-name disambiguation",
+        ))
+        .stdout(contains("human-readable lookup output"));
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "learn", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "Learn new people/projects from local files into entity_registry.json",
+        ))
+        .stdout(contains("Project directory to scan and update"))
+        .stdout(contains("human-readable learn summary"));
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "query", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "Extract known people and unknown capitalized candidates from a query",
+        ))
+        .stdout(contains("Query text to inspect"))
+        .stdout(contains("human-readable query summary"));
+}
+
+#[test]
+fn cli_registry_write_subcommands_help_cover_entity_fields() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "add-person", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Add one person to entity_registry.json"))
+        .stdout(contains("Person name to add"))
+        .stdout(contains("Relationship or role"))
+        .stdout(contains("Context bucket: work or personal"))
+        .stdout(contains("human-readable write summary"));
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "add-project", "--help"])
+        .assert()
+        .success()
+        .stdout(contains("Add one project to entity_registry.json"))
+        .stdout(contains("Project name to add"))
+        .stdout(contains("human-readable write summary"));
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "add-alias", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "Add an alias for an existing person in entity_registry.json",
+        ))
+        .stdout(contains("Existing canonical person name"))
+        .stdout(contains("Alias or nickname to add"))
+        .stdout(contains("human-readable write summary"));
+}
+
+#[test]
+fn cli_registry_research_subcommands_help_cover_confirmation_fields() {
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "research", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "Research one unknown word into the registry wiki cache",
+        ))
+        .stdout(contains("Word to research via Wikipedia"))
+        .stdout(contains(
+            "Mark the researched result as confirmed immediately",
+        ))
+        .stdout(contains("human-readable research summary"));
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["registry", "confirm", "--help"])
+        .assert()
+        .success()
+        .stdout(contains(
+            "Confirm one researched word and promote it into the registry",
+        ))
+        .stdout(contains("Word already present in the wiki cache"))
+        .stdout(contains("Confirmed entity type, usually person"))
+        .stdout(contains("Relationship or role if confirming a person"))
+        .stdout(contains("Context bucket: work or personal"))
+        .stdout(contains("human-readable confirm summary"));
+}
+
+#[test]
 fn cli_compress_help_mentions_human_output() {
     Command::cargo_bin("mempalace-rs")
         .unwrap()
