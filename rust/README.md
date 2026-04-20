@@ -591,6 +591,7 @@ Useful verification command:
 - `cargo run -- --palace /tmp/mempalace repair prune --confirm`
 - `cargo run -- --palace /tmp/mempalace repair rebuild`
 - `cargo run -- --palace /tmp/mempalace dedup --dry-run`
+- `cargo run -- --palace /tmp/mempalace compress --dry-run`
 - `cargo run -- --palace /tmp/mempalace wake-up --human`
 - `cargo run -- --palace /tmp/mempalace search "why did we switch to GraphQL" --human`
 - `cargo run -- registry summary /path/to/project`
@@ -607,6 +608,8 @@ Useful verification command:
 - `cargo run -- normalize /path/to/transcript.jsonl --human`
 - `cargo run -- --palace /tmp/mempalace recall --wing my_app --room decisions --human`
 - `cargo run -- --palace /tmp/mempalace layers-status --human`
+- `cargo run -- instructions help`
+- `printf '{"session_id":"demo"}' | cargo run -- --palace /tmp/mempalace hook run --hook session-start --harness codex`
 - `cargo run -- --palace /tmp/mempalace mcp --setup`
 - `cargo run -- --palace /tmp/mempalace mcp --serve`
 - `cargo run -- --palace /tmp/mempalace --hf-endpoint https://hf-mirror.com prepare-embedding`
