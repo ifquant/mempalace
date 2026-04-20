@@ -403,7 +403,7 @@ binary route itself no longer lives inline inside `main.rs`:
 - `run_cli()` owns the root command dispatch across project, palace, helper, and registry surfaces
 - `main.rs` is now effectively just `Cli::parse()` plus one call into the binary runtime
 
-Current first-phase support:
+Current user-visible support:
 
 - `init`
 - `init` now bootstraps project-local `mempalace.yaml` room config and writes `entities.json` when it can confidently detect people/projects from local prose files
@@ -663,7 +663,7 @@ Local runtime note:
 - on macOS with Homebrew, install `onnxruntime`
 - the code will auto-detect `/opt/homebrew/opt/onnxruntime/lib/libonnxruntime.dylib` and `/usr/local/opt/onnxruntime/lib/libonnxruntime.dylib`
 
-Intentionally not in this first Rust phase:
+Still intentionally out of scope for the current Rust phase:
 
 - direct compatibility with Python palace data
 
