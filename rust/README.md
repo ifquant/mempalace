@@ -581,6 +581,8 @@ Useful env vars:
 
 Useful verification command:
 
+- `cargo run -- --palace /tmp/mempalace init /path/to/project --human`
+- `cargo run -- --palace /tmp/mempalace mine /path/to/project --progress`
 - `cargo run -- --palace /tmp/mempalace doctor`
 - `cargo run -- --palace /tmp/mempalace doctor --warm-embedding`
 - `cargo run -- --palace /tmp/mempalace prepare-embedding`
