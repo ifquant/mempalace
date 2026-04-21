@@ -56,6 +56,36 @@ pub fn score_person(name: &str, text: &str, lines: &[String]) -> usize {
     score
 }
 
+pub fn person_signal_category_count(name: &str, text: &str, lines: &[String]) -> usize {
+    let mut categories = Vec::new();
+    let lower = name.to_ascii_lowercase();
+    let lowered_text = text.to_ascii_lowercase();
+    if PERSON_VERBS
+        .iter()
+        .any(|verb| lowered_text.contains(&format!("{lower} {verb}")))
+    {
+        categories.push("action");
+    }
+    if lines.iter().any(|line| {
+        let line_lower = line.to_ascii_lowercase();
+        line_lower.starts_with(&format!("{lower}:"))
+            || line_lower.starts_with(&format!("> {lower}:"))
+    }) {
+        categories.push("dialogue");
+    }
+    if lines.iter().any(|line| {
+        let line_lower = line.to_ascii_lowercase();
+        line_lower.contains(&format!("hey {lower}"))
+            || line_lower.contains(&format!("thanks {lower}"))
+            || line_lower.contains(&format!("hi {lower}"))
+    }) {
+        categories.push("addressed");
+    }
+    categories.sort_unstable();
+    categories.dedup();
+    categories.len()
+}
+
 pub fn score_project(name: &str, text: &str, lines: &[String]) -> usize {
     let mut score = 0usize;
     let lower = name.to_ascii_lowercase();

@@ -156,7 +156,7 @@ mod tests {
         fs::create_dir_all(project.join("frontend")).unwrap();
         fs::write(
             project.join("notes.md"),
-            "Jordan said the Atlas service should launch next week.\nJordan wrote the Atlas architecture guide.\nJordan pushed the Atlas repo.",
+            "Jordan said the Atlas service should launch next week.\nJordan wrote the Atlas architecture guide.\nJordan pushed the Atlas repo.\nhey Jordan, should Atlas ship?",
         )
         .unwrap();
 
