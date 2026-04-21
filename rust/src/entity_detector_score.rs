@@ -332,8 +332,11 @@ pub fn score_person(name: &str, text: &str, lines: &[String]) -> usize {
     }
     for line in lines {
         let line_lower = line.to_ascii_lowercase();
-        if is_dialogue_marker(&line_lower, &lower) || is_direct_address(&line_lower, &lower) {
-            score += 1;
+        if is_dialogue_marker(&line_lower, &lower) {
+            score += 3;
+        }
+        if is_direct_address(&line_lower, &lower) {
+            score += 4;
         }
     }
     score += pronoun_proximity_hits(&lower, lines) * 2;
