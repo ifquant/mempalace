@@ -154,6 +154,29 @@ mod tests {
     }
 
     #[test]
+    fn scan_for_detection_treats_json_as_readable_fallback_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(project.join("docs").join("a.md"), "alpha").unwrap();
+        fs::write(project.join("docs").join("b.txt"), "beta").unwrap();
+        fs::write(project.join("docs").join("c.csv"), "gamma").unwrap();
+        fs::write(
+            project.join("docs").join("export.json"),
+            r#"{"name":"Atlas"}"#,
+        )
+        .unwrap();
+
+        let files = scan_for_detection(&project).unwrap();
+
+        assert_eq!(files.len(), 3);
+        assert!(files.iter().any(|path| path.ends_with("a.md")));
+        assert!(files.iter().any(|path| path.ends_with("b.txt")));
+        assert!(files.iter().any(|path| path.ends_with("c.csv")));
+        assert!(!files.iter().any(|path| path.ends_with("export.json")));
+    }
+
+    #[test]
     fn entity_detector_requires_python_candidate_frequency() {
         let tmp = tempdir().unwrap();
         let project = tmp.path().join("project");

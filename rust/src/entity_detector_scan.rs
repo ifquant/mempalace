@@ -30,9 +30,10 @@ const SKIP_DIRS: &[&str] = &[
     "target",
 ];
 
-const PROSE_EXTENSIONS: &[&str] = &[".txt", ".md", ".rst", ".csv", ".json", ".jsonl"];
+const PROSE_EXTENSIONS: &[&str] = &[".txt", ".md", ".rst", ".csv"];
 const READABLE_EXTENSIONS: &[&str] = &[
-    ".txt", ".md", ".rst", ".csv", ".json", ".jsonl", ".yaml", ".yml", ".toml",
+    ".txt", ".md", ".py", ".js", ".ts", ".json", ".yaml", ".yml", ".csv", ".rst", ".toml", ".sh",
+    ".rb", ".go", ".rs",
 ];
 
 pub fn scan_for_detection(project_dir: &Path) -> Result<Vec<PathBuf>> {
