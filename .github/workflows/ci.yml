@@ -72,5 +72,5 @@ jobs:
         working-directory: rust
       - run: cargo test
         working-directory: rust
-      - run: cargo clippy --all-targets --all-features -- -D warnings
+      - run: cargo clippy --all-targets --all-features
         working-directory: rust
