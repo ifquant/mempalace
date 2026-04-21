@@ -18,6 +18,7 @@ It is **not** a tracker for internal module splits or general refactor progress.
 - Rust adds several local-first extension surfaces that Python does not currently expose.
 - Rust CLI help coverage is now broadly locked by integration tests across root/global flags, helper/read flows, maintenance, registry, and project-facing commands.
 - Rust README verification examples now cover the main project, palace, registry, helper, MCP, and embedding flows.
+- Rust transcript split behavior has completed a focused Python parity pass covering CLI entrypoints, source defaults, lossy transcript reads, output naming, people detection, and `known_names.json`.
 - Direct compatibility with existing Python palace data is **not** part of the current Rust phase.
 
 ## Python CLI Surface
@@ -29,7 +30,7 @@ It is **not** a tracker for internal module splits or general refactor progress.
 | `search` | Present | `aligned` | Rust also has structured JSON and human renderers. |
 | `compress` | Present | `aligned` | Rust persists compressed drawers in SQLite. |
 | `wake-up` | Present | `aligned` | Rust keeps Layer 0 + Layer 1 wake-up context. |
-| `split` | Present | `aligned` | Rust follows the Python mega-file split flow. |
+| `split` | Present | `aligned` | Rust follows the Python mega-file split flow, including `--source`, `--file`, `MEMPALACE_SOURCE_DIR` defaulting, lossy text reads, Python-style output naming, fallback people detection, and `~/.mempalace/known_names.json`. |
 | `hook run` | Present | `aligned` | Rust supports `session-start`, `stop`, and `precompact`. |
 | `instructions` | Present | `aligned` | Rust ships the same built-in instruction names. |
 | `repair` | Present | `rust superset` | Rust keeps diagnostics and adds `scan`, `prune`, and `rebuild`. |
@@ -96,11 +97,19 @@ These are not parity gaps. They are intentional Rust extension surfaces.
 | On-disk locality | `intentional divergence` | Rust keeps WAL, hook state, and related state under the active palace root instead of Python's home-level global paths. |
 | Repair model | `intentional divergence` | Rust keeps Python's repair spirit but extends it into explicit `scan`, `prune`, and `rebuild` subflows. |
 
+## Completed Behavior Audits
+
+These behavior-level parity passes have already been completed and should not be re-opened as generic remaining work without a new concrete gap.
+
+| Area | Verdict | Notes |
+| --- | --- | --- |
+| Transcript mega-file split | `aligned` | Rust now matches Python for true session boundary filtering, minimum session scanning, `--source`, `--file`, default source directory, dry-run/non-dry-run write behavior, `.mega_backup` rename behavior, lossy UTF-8 reads, timestamp fallback, source stem cleanup/truncation, subject cleanup/truncation, final filename sanitizing, fallback known people, list/object `known_names.json`, and `username_map`. |
+
 ## Remaining Work
 
 The following are confirmed follow-up areas, not confirmed missing headline features:
 
 | Area | Verdict | Notes |
 | --- | --- | --- |
-| Deeper non-CLI behavior audit | `remaining` | Continue checking behavior-level parity beyond command and MCP presence, especially edge-case semantics. |
+| Deeper non-CLI behavior audit | `remaining` | Continue checking behavior-level parity beyond command and MCP presence, especially edge-case semantics outside the completed transcript split pass. |
 | Future residual parity batches | `remaining` | If a real user-visible gap is found later, add it here first before implementing it. |
