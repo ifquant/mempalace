@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::error::Result;
 
 const MAX_SCAN_SIZE: u64 = 500 * 1024 * 1024;
+const FALLBACK_KNOWN_PEOPLE: [&str; 7] = ["Alice", "Ben", "Riley", "Max", "Sam", "Devon", "Jordan"];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SplitFileResult {
@@ -103,7 +104,7 @@ fn split_file(
         let people_part = if people.is_empty() {
             "unknown".to_string()
         } else {
-            people.join("-")
+            people.iter().take(3).cloned().collect::<Vec<_>>().join("-")
         };
         let subject = extract_subject(chunk);
         let src_stem = sanitize_filename(
@@ -197,17 +198,14 @@ fn extract_timestamp(lines: &[String]) -> Option<String> {
 
 fn extract_people(lines: &[String]) -> Vec<String> {
     let text = lines.iter().take(100).cloned().collect::<String>();
-    let pattern = Regex::new(r"\b([A-Z][a-z]+)\b").unwrap();
     let mut people = Vec::new();
-    for caps in pattern.captures_iter(&text) {
-        let name = caps.get(1).unwrap().as_str().to_string();
-        if !people.iter().any(|existing| existing == &name) {
-            people.push(name);
-        }
-        if people.len() >= 3 {
-            break;
+    for person in FALLBACK_KNOWN_PEOPLE {
+        let pattern = Regex::new(&format!(r"(?i)\b{}\b", regex::escape(person))).unwrap();
+        if pattern.is_match(&text) {
+            people.push(person.to_string());
         }
     }
+    people.sort();
     people
 }
 
@@ -237,5 +235,17 @@ mod tests {
             "fresh session\n".to_string(),
         ];
         assert_eq!(find_session_boundaries(&lines), vec![2]);
+    }
+
+    #[test]
+    fn people_detection_uses_python_fallback_names() {
+        let lines = vec![
+            "Claude Code v1\n".to_string(),
+            "⏺ 9:30 AM Monday, April 1, 2026\n".to_string(),
+            "> Riley and Ben reviewed the Lantern design\n".to_string(),
+            "Project text mentions Claude, Code, Monday, and April.\n".to_string(),
+        ];
+
+        assert_eq!(extract_people(&lines), vec!["Ben", "Riley"]);
     }
 }
