@@ -65,7 +65,9 @@ pub(crate) fn try_codex_jsonl(content: &str, known_names: &HashSet<String>) -> O
         if entry_type != "event_msg" {
             continue;
         }
-        let payload = entry.get("payload")?;
+        let Some(payload) = entry.get("payload").and_then(Value::as_object) else {
+            continue;
+        };
         let payload_type = payload
             .get("type")
             .and_then(Value::as_str)
@@ -115,6 +117,22 @@ not-json
             r#"{"type":"session_meta","payload":{"id":"demo"}}
 {"type":"event_msg","payload":{"type":"user_message","message":"knoe the plan"}}
 not-json
+{"type":"event_msg","payload":{"type":"agent_message","message":"Plan noted."}}
+"#,
+            &HashSet::new(),
+        )
+        .unwrap();
+
+        assert!(normalized.contains("> know the plan"));
+        assert!(normalized.contains("Plan noted."));
+    }
+
+    #[test]
+    fn codex_jsonl_skips_event_msg_without_payload_like_python() {
+        let normalized = try_codex_jsonl(
+            r#"{"type":"session_meta","payload":{"id":"demo"}}
+{"type":"event_msg","payload":{"type":"user_message","message":"knoe the plan"}}
+{"type":"event_msg"}
 {"type":"event_msg","payload":{"type":"agent_message","message":"Plan noted."}}
 "#,
             &HashSet::new(),
