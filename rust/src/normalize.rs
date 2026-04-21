@@ -10,10 +10,7 @@ use crate::spellcheck::known_names_for_path;
 pub fn normalize_conversation_file(path: &Path) -> Result<Option<String>> {
     let known_names = known_names_for_path(path);
     let raw = match fs::read(path) {
-        Ok(bytes) => match String::from_utf8(bytes) {
-            Ok(text) => text,
-            Err(_) => return Ok(None),
-        },
+        Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
         Err(err) => return Err(err.into()),
     };
     normalize_conversation(path, &raw, &known_names)
@@ -56,9 +53,12 @@ pub fn normalize_conversation(
 #[cfg(test)]
 mod tests {
     use std::collections::HashSet;
+    use std::fs;
     use std::path::Path;
 
-    use super::normalize_conversation;
+    use tempfile::tempdir;
+
+    use super::{normalize_conversation, normalize_conversation_file};
 
     #[test]
     fn normalize_json_transcript_spellchecks_user_turns() {
@@ -97,5 +97,27 @@ mod tests {
 
         assert!(normalized.contains("> How do we ship this?"));
         assert!(normalized.contains("Run tests first."));
+    }
+
+    #[test]
+    fn normalize_file_tolerates_invalid_utf8_like_python() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("notes.txt");
+        fs::write(
+            &path,
+            [
+                b"plain transcript before bad byte\n".as_slice(),
+                b"\xff\n".as_slice(),
+                b"plain transcript after bad byte\n".as_slice(),
+            ]
+            .concat(),
+        )
+        .unwrap();
+
+        let normalized = normalize_conversation_file(&path).unwrap().unwrap();
+
+        assert!(normalized.contains("plain transcript before bad byte"));
+        assert!(normalized.contains('\u{fffd}'));
+        assert!(normalized.contains("plain transcript after bad byte"));
     }
 }
