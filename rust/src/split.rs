@@ -44,7 +44,7 @@ pub fn split_directory(
         if metadata.len() > MAX_SCAN_SIZE {
             continue;
         }
-        let contents = fs::read_to_string(&path)?;
+        let contents = read_text_lossy(&path)?;
         let lines = contents
             .lines()
             .map(|line| format!("{line}\n"))
@@ -80,7 +80,7 @@ fn split_file(
     detected_sessions: usize,
     dry_run: bool,
 ) -> Result<SplitFileResult> {
-    let contents = fs::read_to_string(path)?;
+    let contents = read_text_lossy(path)?;
     let lines = contents
         .lines()
         .map(|line| format!("{line}\n"))
@@ -132,6 +132,11 @@ fn split_file(
         output_files,
         renamed_backup,
     })
+}
+
+fn read_text_lossy(path: &Path) -> Result<String> {
+    let bytes = fs::read(path)?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 fn sanitize_filename(value: &str) -> String {
@@ -251,6 +256,7 @@ fn subject_part(prompt: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use tempfile::tempdir;
 
     #[test]
     fn true_session_start_ignores_context_restore_headers() {
@@ -299,5 +305,30 @@ mod tests {
             sanitize_filename("source__2026-04-01_930AM_Ben-Riley_Review split.txt"),
             "source_2026-04-01_930AM_Ben-Riley_Review_split.txt"
         );
+    }
+
+    #[test]
+    fn split_directory_tolerates_invalid_utf8_like_python() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("mega.txt");
+        fs::write(
+            &path,
+            [
+                b"Claude Code v1\n".as_slice(),
+                b"\xff\n".as_slice(),
+                b"> first prompt about lossy read\n".as_slice(),
+                b"line1\nline2\nline3\nline4\nline5\nline6\nline7\n".as_slice(),
+                b"Claude Code v1\n".as_slice(),
+                b"> second prompt about lossy read\n".as_slice(),
+                b"line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n".as_slice(),
+            ]
+            .concat(),
+        )
+        .unwrap();
+
+        let summary = split_directory(tmp.path(), None, 2, true).unwrap();
+
+        assert_eq!(summary.mega_files, 1);
+        assert_eq!(summary.files_created, 2);
     }
 }
