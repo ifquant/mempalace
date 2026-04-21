@@ -387,9 +387,7 @@ pub fn score_project(name: &str, text: &str, lines: &[String]) -> usize {
     }
     for line in lines {
         let line_lower = line.to_ascii_lowercase();
-        if is_project_marker(&line_lower, &lower) {
-            score += 1;
-        }
+        score += project_marker_score(&line_lower, &lower);
     }
     score
 }
@@ -430,8 +428,9 @@ fn is_direct_address(line_lower: &str, name_lower: &str) -> bool {
         || line_lower.contains(&format!("hi {name_lower}"))
 }
 
-fn is_project_marker(line_lower: &str, name_lower: &str) -> bool {
-    line_lower.contains(&format!("building {name_lower}"))
+fn project_marker_score(line_lower: &str, name_lower: &str) -> usize {
+    let mut score = 0usize;
+    if line_lower.contains(&format!("building {name_lower}"))
         || line_lower.contains(&format!("built {name_lower}"))
         || line_lower.contains(&format!("shipping {name_lower}"))
         || line_lower.contains(&format!("shipped {name_lower}"))
@@ -450,7 +449,16 @@ fn is_project_marker(line_lower: &str, name_lower: &str) -> bool {
         || line_lower.contains(&format!("{name_lower} v"))
         || line_lower.contains(&format!("{name_lower}-core"))
         || line_lower.contains(&format!("{name_lower}-local"))
-        || has_code_reference(line_lower, name_lower)
+    {
+        score += 2;
+    }
+    if line_lower.contains(&format!("{name_lower}-")) {
+        score += 3;
+    }
+    if has_code_reference(line_lower, name_lower) {
+        score += 3;
+    }
+    score
 }
 
 fn has_code_reference(line_lower: &str, name_lower: &str) -> bool {

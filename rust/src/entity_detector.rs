@@ -270,6 +270,23 @@ mod tests {
     }
 
     #[test]
+    fn entity_detector_accepts_code_ref_project_weight_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "Atlas.py stores the CLI shim.\nAtlas.js handles the panel.\nAtlas.ts defines the types.\nAtlas said cleanup can wait.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(detected.projects.iter().any(|name| name == "Atlas"));
+        assert!(!detected.people.iter().any(|name| name == "Atlas"));
+    }
+
+    #[test]
     fn entity_detector_requires_python_candidate_frequency() {
         let tmp = tempdir().unwrap();
         let project = tmp.path().join("project");
