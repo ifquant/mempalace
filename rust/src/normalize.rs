@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::error::Result;
 use crate::normalize_json::try_normalize_json;
-use crate::normalize_transcript::{count_quote_lines, normalize_quote_transcript};
+use crate::normalize_transcript::count_quote_lines;
 use crate::spellcheck::known_names_for_path;
 
 pub fn normalize_conversation_file(path: &Path) -> Result<Option<String>> {
@@ -27,7 +27,7 @@ pub fn normalize_conversation(
     }
 
     if count_quote_lines(content) >= 3 {
-        return Ok(Some(normalize_quote_transcript(raw, known_names)));
+        return Ok(Some(raw.to_string()));
     }
 
     let ext = path
@@ -127,6 +127,18 @@ mod tests {
         let raw = " \n\t\n";
 
         let normalized = normalize_conversation(Path::new("blank.txt"), raw, &known_names)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(normalized, raw);
+    }
+
+    #[test]
+    fn normalize_existing_quote_transcript_passes_through_like_python() {
+        let known_names = HashSet::new();
+        let raw = "> knoe one\nAssistant one\n> befor two\nAssistant two\n> alredy three\n";
+
+        let normalized = normalize_conversation(Path::new("quoted.txt"), raw, &known_names)
             .unwrap()
             .unwrap();
 

@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use crate::spellcheck::{spellcheck_transcript, spellcheck_user_text};
+use crate::spellcheck::spellcheck_user_text;
 
 pub(crate) fn count_quote_lines(text: &str) -> usize {
     text.lines()
@@ -34,8 +34,4 @@ pub(crate) fn messages_to_transcript(
         index += 1;
     }
     lines.join("\n")
-}
-
-pub(crate) fn normalize_quote_transcript(raw: &str, known_names: &HashSet<String>) -> String {
-    spellcheck_transcript(raw, known_names)
 }
