@@ -252,4 +252,36 @@ mod tests {
 
         assert!(!detected.people.iter().any(|name| name == "Morgan"));
     }
+
+    #[test]
+    fn entity_detector_accepts_action_plus_pronoun_person_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "Riley said the plan changed.\nShe documented the decision.\nRiley wrote careful notes.\nHer follow-up was clear.\nRiley joined the review.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(detected.people.iter().any(|name| name == "Riley"));
+    }
+
+    #[test]
+    fn entity_detector_does_not_accept_pronoun_only_people_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "Riley joined review.\nShe shared context.\nRiley joined pairing.\nHer notes were useful.\nRiley joined retro.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(!detected.people.iter().any(|name| name == "Riley"));
+    }
 }

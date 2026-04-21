@@ -11,6 +11,10 @@ const PERSON_VERBS: &[&str] = &[
     "wrote",
 ];
 
+const PRONOUNS: &[&str] = &[
+    "she", "her", "hers", "he", "him", "his", "they", "them", "their",
+];
+
 const PROJECT_HINTS: &[&str] = &[
     "repo",
     "system",
@@ -53,6 +57,7 @@ pub fn score_person(name: &str, text: &str, lines: &[String]) -> usize {
             score += 1;
         }
     }
+    score += pronoun_proximity_hits(&lower, lines) * 2;
     score
 }
 
@@ -80,6 +85,9 @@ pub fn person_signal_category_count(name: &str, text: &str, lines: &[String]) ->
             || line_lower.contains(&format!("hi {lower}"))
     }) {
         categories.push("addressed");
+    }
+    if pronoun_proximity_hits(&lower, lines) > 0 {
+        categories.push("pronoun");
     }
     categories.sort_unstable();
     categories.dedup();
@@ -110,4 +118,25 @@ pub fn score_project(name: &str, text: &str, lines: &[String]) -> usize {
         }
     }
     score
+}
+
+fn pronoun_proximity_hits(name_lower: &str, lines: &[String]) -> usize {
+    let mut hits = 0usize;
+    for (index, line) in lines.iter().enumerate() {
+        if !line.to_ascii_lowercase().contains(name_lower) {
+            continue;
+        }
+        let start = index.saturating_sub(2);
+        let end = (index + 3).min(lines.len());
+        let window = lines[start..end].join(" ").to_ascii_lowercase();
+        if contains_pronoun(&window) {
+            hits += 1;
+        }
+    }
+    hits
+}
+
+fn contains_pronoun(text: &str) -> bool {
+    text.split(|ch: char| !ch.is_ascii_alphabetic())
+        .any(|word| PRONOUNS.contains(&word))
 }
