@@ -23,7 +23,7 @@ pub fn normalize_conversation(
 ) -> Result<Option<String>> {
     let content = raw.trim();
     if content.is_empty() {
-        return Ok(None);
+        return Ok(Some(raw.to_string()));
     }
 
     if count_quote_lines(content) >= 3 {
@@ -119,5 +119,17 @@ mod tests {
         assert!(normalized.contains("plain transcript before bad byte"));
         assert!(normalized.contains('\u{fffd}'));
         assert!(normalized.contains("plain transcript after bad byte"));
+    }
+
+    #[test]
+    fn normalize_blank_content_passes_through_like_python() {
+        let known_names = HashSet::new();
+        let raw = " \n\t\n";
+
+        let normalized = normalize_conversation(Path::new("blank.txt"), raw, &known_names)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(normalized, raw);
     }
 }
