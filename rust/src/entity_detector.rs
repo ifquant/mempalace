@@ -75,9 +75,10 @@ pub fn detect_entities(project_dir: &Path) -> Result<DetectedEntities> {
             score::person_signal_category_count(&name, &all_text, &all_lines);
         let total_score = person_score + project_score;
         let has_person_ratio = total_score > 0 && person_score * 10 >= total_score * 7;
+        let has_project_ratio = total_score > 0 && person_score * 10 <= total_score * 3;
         if person_score >= 5 && person_signal_categories >= 2 && has_person_ratio {
             people.push((name, person_score, frequency));
-        } else if project_score >= 2 {
+        } else if project_score >= 2 && has_project_ratio {
             projects.push((name, project_score, frequency));
         }
     }
@@ -315,6 +316,23 @@ mod tests {
         let detected = detect_entities(&project).unwrap();
 
         assert!(!detected.people.iter().any(|name| name == "Morgan"));
+    }
+
+    #[test]
+    fn entity_detector_does_not_accept_mixed_ratio_project_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "Taylor said Taylor repo needs cleanup.\nTaylor wrote Taylor architecture notes.\nTaylor v2 launched today.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(!detected.projects.iter().any(|name| name == "Taylor"));
+        assert!(!detected.people.iter().any(|name| name == "Taylor"));
     }
 
     #[test]
