@@ -206,6 +206,38 @@ mod tests {
     }
 
     #[test]
+    fn entity_detector_accepts_the_project_context_markers_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "the Atlas architecture changed.\nthe Atlas repo moved.\nthe Atlas system stayed local.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(detected.projects.iter().any(|name| name == "Atlas"));
+    }
+
+    #[test]
+    fn entity_detector_rejects_bare_project_hints_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "Atlas architecture changed.\nAtlas repo moved.\nAtlas system stayed local.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(!detected.projects.iter().any(|name| name == "Atlas"));
+    }
+
+    #[test]
     fn entity_detector_filters_python_stopwords() {
         let tmp = tempdir().unwrap();
         let project = tmp.path().join("project");
@@ -326,7 +358,7 @@ mod tests {
         fs::create_dir_all(project.join("docs")).unwrap();
         fs::write(
             project.join("docs").join("notes.md"),
-            "Morgan said Morgan service should launch soon.\nMorgan wrote Morgan architecture notes.\nhey Morgan, should Morgan repo ship?",
+            "Morgan said the Morgan repo needs cleanup.\nMorgan wrote the Morgan architecture notes.\nhey Morgan, should the Morgan system ship?",
         )
         .unwrap();
 

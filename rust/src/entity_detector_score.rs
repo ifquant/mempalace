@@ -296,22 +296,6 @@ const PRONOUNS: &[&str] = &[
     "she", "her", "hers", "he", "him", "his", "they", "them", "their",
 ];
 
-const PROJECT_HINTS: &[&str] = &[
-    "repo",
-    "system",
-    "service",
-    "app",
-    "architecture",
-    "pipeline",
-    "deploy",
-    "deployment",
-    "launch",
-    "shipping",
-    "shipped",
-    "building",
-    "built",
-];
-
 pub fn is_stopword(name: &str) -> bool {
     STOPWORDS.iter().any(|word| word.eq_ignore_ascii_case(name))
 }
@@ -374,17 +358,9 @@ pub fn person_signal_category_count(name: &str, text: &str, lines: &[String]) ->
     categories.len()
 }
 
-pub fn score_project(name: &str, text: &str, lines: &[String]) -> usize {
+pub fn score_project(name: &str, _text: &str, lines: &[String]) -> usize {
     let mut score = 0usize;
     let lower = name.to_ascii_lowercase();
-    let lowered_text = text.to_ascii_lowercase();
-    for hint in PROJECT_HINTS {
-        if lowered_text.contains(&format!("{lower} {hint}"))
-            || lowered_text.contains(&format!("{hint} {lower}"))
-        {
-            score += 2;
-        }
-    }
     for line in lines {
         let line_lower = line.to_ascii_lowercase();
         score += project_marker_score(&line_lower, &lower);
@@ -444,6 +420,10 @@ fn project_marker_score(line_lower: &str, name_lower: &str) -> usize {
         || line_lower.contains(&format!("installing {name_lower}"))
         || line_lower.contains(&format!("installed {name_lower}"))
         || line_lower.contains(&format!("install {name_lower}"))
+        || line_lower.contains(&format!("the {name_lower} architecture"))
+        || line_lower.contains(&format!("the {name_lower} pipeline"))
+        || line_lower.contains(&format!("the {name_lower} system"))
+        || line_lower.contains(&format!("the {name_lower} repo"))
         || line_lower.contains(&format!("import {name_lower}"))
         || line_lower.contains(&format!("pip install {name_lower}"))
         || line_lower.contains(&format!("{name_lower} v"))
