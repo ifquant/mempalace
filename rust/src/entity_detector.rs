@@ -195,13 +195,45 @@ mod tests {
         fs::create_dir_all(project.join("docs")).unwrap();
         fs::write(
             project.join("docs").join("notes.md"),
+            "building Atlas Core will help recall.\nAtlas Core architecture is local-first.\nAtlas Core repo should launch soon.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(detected.projects.iter().any(|name| name == "Atlas Core"));
+    }
+
+    #[test]
+    fn entity_detector_filters_python_stopwords() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "Click said the plan changed.\nShe documented the decision.\nClick wrote careful notes.\nHer follow-up was clear.\nClick asked for review.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(!detected.people.iter().any(|name| name == "Click"));
+    }
+
+    #[test]
+    fn entity_detector_filters_multi_word_phrases_with_python_stopwords() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
             "building Memory Palace will help recall.\nMemory Palace architecture is local-first.\nMemory Palace repo should launch soon.",
         )
         .unwrap();
 
         let detected = detect_entities(&project).unwrap();
 
-        assert!(detected.projects.iter().any(|name| name == "Memory Palace"));
+        assert!(!detected.projects.iter().any(|name| name == "Memory Palace"));
     }
 
     #[test]
