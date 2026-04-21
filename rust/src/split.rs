@@ -224,11 +224,24 @@ fn extract_subject(lines: &[String]) -> String {
         if let Some(prompt) = line.strip_prefix("> ") {
             let prompt = prompt.trim();
             if prompt.len() > 5 && !skip.is_match(prompt) {
-                return sanitize_filename(prompt).chars().take(60).collect();
+                return subject_part(prompt);
             }
         }
     }
     "session".to_string()
+}
+
+fn subject_part(prompt: &str) -> String {
+    let without_punctuation = Regex::new(r"[^\w\s-]")
+        .unwrap()
+        .replace_all(prompt, "")
+        .to_string();
+    Regex::new(r"\s+")
+        .unwrap()
+        .replace_all(without_punctuation.trim(), "-")
+        .chars()
+        .take(60)
+        .collect()
 }
 
 #[cfg(test)]
@@ -265,6 +278,14 @@ mod tests {
         assert_eq!(
             source_stem_part(path),
             "very_long_source_name_with_punctuation__"
+        );
+    }
+
+    #[test]
+    fn subject_part_matches_python_split_prompt_cleanup() {
+        assert_eq!(
+            subject_part("Review: split naming, punctuation & spacing now"),
+            "Review-split-naming-punctuation-spacing-now"
         );
     }
 }
