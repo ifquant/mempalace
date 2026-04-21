@@ -135,9 +135,13 @@ fn split_file(
 }
 
 fn sanitize_filename(value: &str) -> String {
-    Regex::new(r"[^\w\.-]+")
+    let sanitized = Regex::new(r"[^\w\.-]")
         .unwrap()
         .replace_all(value, "_")
+        .to_string();
+    Regex::new(r"_+")
+        .unwrap()
+        .replace_all(&sanitized, "_")
         .to_string()
 }
 
@@ -286,6 +290,14 @@ mod tests {
         assert_eq!(
             subject_part("Review: split naming, punctuation & spacing now"),
             "Review-split-naming-punctuation-spacing-now"
+        );
+    }
+
+    #[test]
+    fn sanitize_filename_collapses_underscores_like_python_split() {
+        assert_eq!(
+            sanitize_filename("source__2026-04-01_930AM_Ben-Riley_Review split.txt"),
+            "source_2026-04-01_930AM_Ben-Riley_Review_split.txt"
         );
     }
 }
