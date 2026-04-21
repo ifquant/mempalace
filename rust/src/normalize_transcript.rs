@@ -4,7 +4,7 @@ use crate::spellcheck::spellcheck_user_text;
 
 pub(crate) fn count_quote_lines(text: &str) -> usize {
     text.lines()
-        .filter(|line| line.trim_start().starts_with("> "))
+        .filter(|line| line.trim_start().starts_with('>'))
         .count()
 }
 

@@ -181,4 +181,16 @@ mod tests {
 
         assert_eq!(normalized, raw);
     }
+
+    #[test]
+    fn normalize_quote_markers_without_space_count_like_python() {
+        let known_names = HashSet::new();
+        let raw = ">knoe one\nAssistant one\n>befor two\nAssistant two\n>alredy three\n";
+
+        let normalized = normalize_conversation(Path::new("already.txt"), raw, &known_names)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(normalized, raw);
+    }
 }
