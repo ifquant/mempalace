@@ -26,10 +26,12 @@ pub(crate) fn try_flat_messages_json(
 }
 
 pub(crate) fn try_claude_ai_json(data: &Value, known_names: &HashSet<String>) -> Option<String> {
-    let list = if let Some(messages) = data.get("messages").and_then(Value::as_array) {
-        messages.clone()
-    } else if let Some(messages) = data.get("chat_messages").and_then(Value::as_array) {
-        messages.clone()
+    let list = if let Some(object) = data.as_object() {
+        if let Some(messages) = object.get("messages") {
+            messages.as_array()?.clone()
+        } else {
+            object.get("chat_messages")?.as_array()?.clone()
+        }
     } else {
         data.as_array()?.clone()
     };
@@ -292,5 +294,20 @@ mod tests {
         assert!(normalized.contains("Run tests"));
         assert!(!normalized.contains("Ship  today"));
         assert!(!normalized.contains("Run  tests"));
+    }
+
+    #[test]
+    fn claude_ai_json_does_not_fallback_when_messages_key_is_invalid_like_python() {
+        let data = json!({
+            "messages": "not-a-list",
+            "chat_messages": [
+                {"role": "user", "content": "Ship it"},
+                {"role": "assistant", "content": "Run tests first."}
+            ]
+        });
+
+        let normalized = super::try_claude_ai_json(&data, &HashSet::new());
+
+        assert_eq!(normalized, None);
     }
 }
