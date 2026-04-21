@@ -107,11 +107,7 @@ fn split_file(
             people.iter().take(3).cloned().collect::<Vec<_>>().join("-")
         };
         let subject = extract_subject(chunk);
-        let src_stem = sanitize_filename(
-            path.file_stem()
-                .and_then(|value| value.to_str())
-                .unwrap_or("session"),
-        );
+        let src_stem = source_stem_part(path);
         let file_name = sanitize_filename(&format!(
             "{src_stem}__{timestamp}_{people_part}_{subject}.txt"
         ));
@@ -143,6 +139,19 @@ fn sanitize_filename(value: &str) -> String {
         .unwrap()
         .replace_all(value, "_")
         .to_string()
+}
+
+fn source_stem_part(path: &Path) -> String {
+    let stem = path
+        .file_stem()
+        .and_then(|value| value.to_str())
+        .unwrap_or("session");
+    Regex::new(r"[^\w-]")
+        .unwrap()
+        .replace_all(stem, "_")
+        .chars()
+        .take(40)
+        .collect()
 }
 
 fn is_true_session_start(lines: &[String], idx: usize) -> bool {
@@ -247,5 +256,15 @@ mod tests {
         ];
 
         assert_eq!(extract_people(&lines), vec!["Ben", "Riley"]);
+    }
+
+    #[test]
+    fn source_stem_part_matches_python_split_prefix() {
+        let path = Path::new("very.long source name with punctuation!! and extra suffix.txt");
+
+        assert_eq!(
+            source_stem_part(path),
+            "very_long_source_name_with_punctuation__"
+        );
     }
 }
