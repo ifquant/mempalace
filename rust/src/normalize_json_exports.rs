@@ -98,7 +98,9 @@ pub(crate) fn try_chatgpt_json(data: &Value, known_names: &HashSet<String>) -> O
     let mut messages = Vec::new();
     let mut visited = HashSet::new();
     while visited.insert(current.clone()) {
-        let node = mapping.get(&current)?;
+        let Some(node) = mapping.get(&current) else {
+            break;
+        };
         if let Some(message) = node.get("message") {
             let role = message
                 .get("author")
@@ -239,5 +241,29 @@ mod tests {
         assert!(normalized.contains("first from C"));
         assert!(normalized.contains("second from C"));
         assert!(!normalized.contains("> second from C"));
+    }
+
+    #[test]
+    fn chatgpt_json_keeps_messages_before_missing_child_like_python() {
+        let data = json!({
+            "mapping": {
+                "root": {"parent": null, "message": null, "children": ["u1"]},
+                "u1": {
+                    "parent": "root",
+                    "message": {"author": {"role": "user"}, "content": {"parts": ["How do we ship this?"]}},
+                    "children": ["a1"]
+                },
+                "a1": {
+                    "parent": "u1",
+                    "message": {"author": {"role": "assistant"}, "content": {"parts": ["Run tests first."]}},
+                    "children": ["missing-node"]
+                }
+            }
+        });
+
+        let normalized = super::try_chatgpt_json(&data, &HashSet::new()).unwrap();
+
+        assert!(normalized.contains("> How do we ship this?"));
+        assert!(normalized.contains("Run tests first."));
     }
 }
