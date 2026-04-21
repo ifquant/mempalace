@@ -1,5 +1,6 @@
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -8,6 +9,16 @@ use crate::error::Result;
 
 const MAX_SCAN_SIZE: u64 = 500 * 1024 * 1024;
 const FALLBACK_KNOWN_PEOPLE: [&str; 7] = ["Alice", "Ben", "Riley", "Max", "Sam", "Devon", "Jordan"];
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(untagged)]
+enum KnownNamesConfig {
+    Names(Vec<String>),
+    Object {
+        names: Option<Vec<String>>,
+        username_map: Option<BTreeMap<String, String>>,
+    },
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct SplitFileResult {
@@ -252,15 +263,58 @@ fn extract_timestamp(lines: &[String]) -> Option<String> {
 
 fn extract_people(lines: &[String]) -> Vec<String> {
     let text = lines.iter().take(100).cloned().collect::<String>();
-    let mut people = Vec::new();
-    for person in FALLBACK_KNOWN_PEOPLE {
+    let config = load_known_names_config();
+    extract_people_with_config(&text, config.as_ref())
+}
+
+fn extract_people_with_config(text: &str, config: Option<&KnownNamesConfig>) -> Vec<String> {
+    let (known_people, username_map) = known_people_and_username_map(config);
+    let mut people = BTreeSet::new();
+    for person in known_people {
         let pattern = Regex::new(&format!(r"(?i)\b{}\b", regex::escape(person))).unwrap();
-        if pattern.is_match(&text) {
-            people.push(person.to_string());
+        if pattern.is_match(text) {
+            people.insert(person.to_string());
         }
     }
-    people.sort();
-    people
+
+    if let Some(caps) = Regex::new(r"/Users/(\w+)/").unwrap().captures(text)
+        && let Some(name) = username_map.get(caps.get(1).unwrap().as_str())
+    {
+        people.insert(name.clone());
+    }
+
+    people.into_iter().collect()
+}
+
+fn known_people_and_username_map(
+    config: Option<&KnownNamesConfig>,
+) -> (Vec<&str>, BTreeMap<String, String>) {
+    match config {
+        Some(KnownNamesConfig::Names(names)) => {
+            (names.iter().map(String::as_str).collect(), BTreeMap::new())
+        }
+        Some(KnownNamesConfig::Object {
+            names,
+            username_map,
+        }) => (
+            names
+                .as_ref()
+                .map(|names| names.iter().map(String::as_str).collect())
+                .unwrap_or_default(),
+            username_map.clone().unwrap_or_default(),
+        ),
+        None => (FALLBACK_KNOWN_PEOPLE.to_vec(), BTreeMap::new()),
+    }
+}
+
+fn load_known_names_config() -> Option<KnownNamesConfig> {
+    let path = known_names_path()?;
+    let contents = fs::read_to_string(path).ok()?;
+    serde_json::from_str(&contents).ok()
+}
+
+fn known_names_path() -> Option<PathBuf> {
+    dirs::home_dir().map(|home| home.join(".mempalace/known_names.json"))
 }
 
 fn extract_subject(lines: &[String]) -> String {
@@ -315,6 +369,45 @@ mod tests {
         ];
 
         assert_eq!(extract_people(&lines), vec!["Ben", "Riley"]);
+    }
+
+    #[test]
+    fn people_detection_uses_known_names_list_config() {
+        let config = KnownNamesConfig::Names(vec!["Morgan".to_string(), "Riley".to_string()]);
+
+        assert_eq!(
+            extract_people_with_config("Morgan mentioned Alice and Riley.", Some(&config)),
+            vec!["Morgan", "Riley"]
+        );
+    }
+
+    #[test]
+    fn people_detection_uses_known_names_object_and_username_map() {
+        let config = KnownNamesConfig::Object {
+            names: Some(vec!["Morgan".to_string()]),
+            username_map: Some(BTreeMap::from([(
+                "devuser".to_string(),
+                "Devon".to_string(),
+            )])),
+        };
+
+        assert_eq!(
+            extract_people_with_config(
+                "cwd: /Users/devuser/project\nMorgan joined.",
+                Some(&config)
+            ),
+            vec!["Devon", "Morgan"]
+        );
+    }
+
+    #[test]
+    fn people_detection_object_without_names_matches_python_empty_names() {
+        let config = KnownNamesConfig::Object {
+            names: None,
+            username_map: None,
+        };
+
+        assert!(extract_people_with_config("Alice and Riley joined.", Some(&config)).is_empty());
     }
 
     #[test]
