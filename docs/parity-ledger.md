@@ -19,6 +19,7 @@ It is **not** a tracker for internal module splits or general refactor progress.
 - Rust CLI help coverage is now broadly locked by integration tests across root/global flags, helper/read flows, maintenance, registry, and project-facing commands.
 - Rust README verification examples now cover the main project, palace, registry, helper, MCP, and embedding flows.
 - Rust transcript split behavior has completed a focused Python parity pass covering CLI entrypoints, source defaults, lossy transcript reads, output naming, people detection, and `known_names.json`.
+- Rust transcript normalize behavior has completed a focused Python parity pass covering file guards, lossy reads, pass-through rules, JSONL bad-entry tolerance, Claude.ai, ChatGPT, and Slack export parsing.
 - Direct compatibility with existing Python palace data is **not** part of the current Rust phase.
 
 ## Python CLI Surface
@@ -104,6 +105,7 @@ These behavior-level parity passes have already been completed and should not be
 | Area | Verdict | Notes |
 | --- | --- | --- |
 | Transcript mega-file split | `aligned` | Rust now matches Python for true session boundary filtering, minimum session scanning, `--source`, `--file`, default source directory, dry-run/non-dry-run write behavior, `.mega_backup` rename behavior, lossy UTF-8 reads, timestamp fallback, source stem cleanup/truncation, subject cleanup/truncation, final filename sanitizing, fallback known people, list/object `known_names.json`, and `username_map`. |
+| Transcript normalize | `aligned` | Rust now matches Python for 500MB file guard behavior, lossy UTF-8 reads, blank-content pass-through, existing quote-transcript pass-through, `>` marker detection, Claude Code/Codex JSONL malformed-line tolerance, Codex missing-payload tolerance, Slack role assignment, ChatGPT missing-child traversal, ChatGPT empty-part filtering, and Claude.ai `messages`/`chat_messages` key priority. Rust additionally keeps the CLI/MCP `normalize` entrypoints and flat JSON message-array parsing as extension surface. |
 
 ## Remaining Work
 
@@ -111,5 +113,5 @@ The following are confirmed follow-up areas, not confirmed missing headline feat
 
 | Area | Verdict | Notes |
 | --- | --- | --- |
-| Deeper non-CLI behavior audit | `remaining` | Continue checking behavior-level parity beyond command and MCP presence, especially edge-case semantics outside the completed transcript split pass. |
+| Deeper non-CLI behavior audit | `remaining` | Continue checking behavior-level parity beyond command and MCP presence, especially edge-case semantics outside the completed transcript split and normalize passes. |
 | Future residual parity batches | `remaining` | If a real user-visible gap is found later, add it here first before implementing it. |
