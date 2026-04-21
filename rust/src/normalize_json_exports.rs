@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 use serde_json::Value;
 
@@ -145,8 +145,8 @@ pub(crate) fn try_chatgpt_json(data: &Value, known_names: &HashSet<String>) -> O
 pub(crate) fn try_slack_json(data: &Value, known_names: &HashSet<String>) -> Option<String> {
     let items = data.as_array()?;
     let mut messages = Vec::new();
-    let mut seen_users = Vec::<String>::new();
-    let mut last_role = "assistant";
+    let mut seen_users = BTreeMap::<String, &'static str>::new();
+    let mut last_role: Option<&'static str> = None;
 
     for item in items {
         if item.get("type").and_then(Value::as_str) != Some("message") {
@@ -166,17 +166,19 @@ pub(crate) fn try_slack_json(data: &Value, known_names: &HashSet<String>) -> Opt
             continue;
         }
 
-        let role = if let Some(index) = seen_users.iter().position(|user| user == user_id) {
-            if index % 2 == 0 { "user" } else { "assistant" }
+        let role = if let Some(role) = seen_users.get(user_id) {
+            *role
+        } else if seen_users.is_empty() {
+            seen_users.insert(user_id.to_string(), "user");
+            "user"
+        } else if last_role == Some("user") {
+            seen_users.insert(user_id.to_string(), "assistant");
+            "assistant"
         } else {
-            seen_users.push(user_id.to_string());
-            if last_role == "user" {
-                "assistant"
-            } else {
-                "user"
-            }
+            seen_users.insert(user_id.to_string(), "user");
+            "user"
         };
-        last_role = role;
+        last_role = Some(role);
         messages.push((role, text.to_string()));
     }
 
@@ -208,5 +210,34 @@ pub(crate) fn extract_content(value: &Value) -> String {
             .unwrap_or_default()
             .to_string(),
         _ => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use serde_json::json;
+
+    use super::try_slack_json;
+
+    #[test]
+    fn slack_json_preserves_assigned_role_for_returning_third_user() {
+        let data = json!([
+            {"type":"message", "user":"A", "text":"first from A"},
+            {"type":"message", "user":"B", "text":"first from B"},
+            {"type":"message", "user":"A", "text":"second from A"},
+            {"type":"message", "user":"C", "text":"first from C"},
+            {"type":"message", "user":"C", "text":"second from C"}
+        ]);
+
+        let normalized = try_slack_json(&data, &HashSet::new()).unwrap();
+
+        assert!(normalized.contains("> first from A"));
+        assert!(normalized.contains("first from B"));
+        assert!(normalized.contains("> second from A"));
+        assert!(normalized.contains("first from C"));
+        assert!(normalized.contains("second from C"));
+        assert!(!normalized.contains("> second from C"));
     }
 }
