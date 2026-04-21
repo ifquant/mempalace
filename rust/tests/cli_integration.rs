@@ -1256,6 +1256,8 @@ fn cli_split_help_mentions_transcript_megafiles() {
             "Split concatenated transcript mega-files into per-session files",
         ))
         .stdout(contains("Directory containing transcript files"))
+        .stdout(contains("Source directory"))
+        .stdout(contains("MEMPALACE_SOURCE_DIR"))
         .stdout(contains(
             "Split a single specific file instead of scanning a directory",
         ))
@@ -1466,6 +1468,69 @@ fn cli_split_file_mode_limits_scan_to_requested_file() {
         summary["files"][0]["source_file"],
         target.display().to_string()
     );
+}
+
+#[test]
+fn cli_split_source_flag_matches_python_source_option() {
+    let tmp = tempdir().unwrap();
+    let source = tmp.path().join("transcripts");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("mega.txt"),
+        concat!(
+            "Claude Code v1\n",
+            "> first prompt about source flag\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+            "Claude Code v1\n",
+            "> second prompt about source flag\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+        ),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["split", "--source", source.to_str().unwrap(), "--dry-run"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let summary: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(summary["source_dir"], source.display().to_string());
+    assert_eq!(summary["files_created"], 2);
+}
+
+#[test]
+fn cli_split_defaults_to_mempalace_source_dir_env() {
+    let tmp = tempdir().unwrap();
+    let source = tmp.path().join("env-transcripts");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(
+        source.join("mega.txt"),
+        concat!(
+            "Claude Code v1\n",
+            "> first prompt about default source\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+            "Claude Code v1\n",
+            "> second prompt about default source\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+        ),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("MEMPALACE_SOURCE_DIR", &source)
+        .args(["split", "--dry-run"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let summary: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(summary["source_dir"], source.display().to_string());
+    assert_eq!(summary["files_created"], 2);
 }
 
 #[test]

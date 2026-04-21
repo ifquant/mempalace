@@ -44,6 +44,7 @@ pub enum ProjectCommand {
     },
     Split {
         dir: Option<PathBuf>,
+        source: Option<PathBuf>,
         file: Option<PathBuf>,
         output_dir: Option<PathBuf>,
         min_sessions: usize,
@@ -125,12 +126,14 @@ pub async fn handle_project_command(
         } => handle_search(palace, hf_endpoint, query, wing, room, results, human).await,
         ProjectCommand::Split {
             dir,
+            source,
             file,
             output_dir,
             min_sessions,
             dry_run,
         } => handle_split(
             dir.as_deref(),
+            source.as_deref(),
             file.as_deref(),
             output_dir.as_deref(),
             min_sessions,

@@ -129,9 +129,13 @@ pub enum Command {
     },
     #[command(about = "Split concatenated transcript mega-files into per-session files")]
     Split {
-        #[arg(required_unless_present = "file")]
-        #[arg(help = "Directory containing transcript files")]
+        #[arg(
+            help = "Directory containing transcript files (default: MEMPALACE_SOURCE_DIR or ~/Desktop/transcripts)"
+        )]
         dir: Option<PathBuf>,
+        #[arg(long)]
+        #[arg(help = "Source directory (default: MEMPALACE_SOURCE_DIR or ~/Desktop/transcripts)")]
+        source: Option<PathBuf>,
         #[arg(long)]
         #[arg(help = "Split a single specific file instead of scanning a directory")]
         file: Option<PathBuf>,
