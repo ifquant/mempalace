@@ -45,7 +45,7 @@ pub fn detect_entities(project_dir: &Path) -> Result<DetectedEntities> {
         all_text.push('\n');
     }
 
-    let candidate_re = Regex::new(r"\b[A-Z][a-z]{2,}\b").unwrap();
+    let candidate_re = Regex::new(r"\b[A-Z][a-z]{1,19}\b").unwrap();
     let mut counts = BTreeMap::<String, usize>::new();
     for cap in candidate_re.captures_iter(&all_text) {
         let name = cap.get(0).unwrap().as_str();
@@ -283,5 +283,42 @@ mod tests {
         let detected = detect_entities(&project).unwrap();
 
         assert!(!detected.people.iter().any(|name| name == "Riley"));
+    }
+
+    #[test]
+    fn entity_detector_accepts_two_letter_names_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "Jo said the plan changed.\nShe documented the decision.\nJo wrote careful notes.\nHer follow-up was clear.\nJo asked for review.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(detected.people.iter().any(|name| name == "Jo"));
+    }
+
+    #[test]
+    fn entity_detector_ignores_overlong_single_word_candidates_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "Supercalifragilisticexpialidocious said the plan changed.\nShe documented the decision.\nSupercalifragilisticexpialidocious wrote careful notes.\nHer follow-up was clear.\nSupercalifragilisticexpialidocious asked for review.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(
+            !detected
+                .people
+                .iter()
+                .any(|name| name == "Supercalifragilisticexpialidocious")
+        );
     }
 }
