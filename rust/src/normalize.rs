@@ -2,18 +2,42 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
-use crate::error::Result;
+use crate::error::{MempalaceError, Result};
 use crate::normalize_json::try_normalize_json;
 use crate::normalize_transcript::count_quote_lines;
 use crate::spellcheck::known_names_for_path;
 
+const MAX_NORMALIZE_SIZE: u64 = 500 * 1024 * 1024;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct NormalizeFileOutput {
+    pub raw: String,
+    pub normalized: Option<String>,
+}
+
 pub fn normalize_conversation_file(path: &Path) -> Result<Option<String>> {
+    Ok(normalize_conversation_file_with_raw(path)?.normalized)
+}
+
+pub fn normalize_conversation_file_with_raw(path: &Path) -> Result<NormalizeFileOutput> {
     let known_names = known_names_for_path(path);
-    let raw = match fs::read(path) {
-        Ok(bytes) => String::from_utf8_lossy(&bytes).into_owned(),
-        Err(err) => return Err(err.into()),
-    };
-    normalize_conversation(path, &raw, &known_names)
+    let raw = read_normalize_text(path)?;
+    let normalized = normalize_conversation(path, &raw, &known_names)?;
+    Ok(NormalizeFileOutput { raw, normalized })
+}
+
+fn read_normalize_text(path: &Path) -> Result<String> {
+    let metadata = fs::metadata(path)?;
+    if metadata.len() > MAX_NORMALIZE_SIZE {
+        return Err(MempalaceError::InvalidArgument(format!(
+            "File too large ({} MB): {}",
+            metadata.len() / (1024 * 1024),
+            path.display()
+        )));
+    }
+
+    let bytes = fs::read(path)?;
+    Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
 pub fn normalize_conversation(
@@ -119,6 +143,19 @@ mod tests {
         assert!(normalized.contains("plain transcript before bad byte"));
         assert!(normalized.contains('\u{fffd}'));
         assert!(normalized.contains("plain transcript after bad byte"));
+    }
+
+    #[test]
+    fn normalize_file_rejects_files_over_python_size_limit() {
+        let tmp = tempdir().unwrap();
+        let path = tmp.path().join("huge.txt");
+        let file = fs::File::create(&path).unwrap();
+        file.set_len(500 * 1024 * 1024 + 1).unwrap();
+
+        let err = normalize_conversation_file(&path).unwrap_err().to_string();
+
+        assert!(err.contains("File too large"));
+        assert!(err.contains("huge.txt"));
     }
 
     #[test]

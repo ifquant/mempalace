@@ -1334,6 +1334,36 @@ fn cli_normalize_json_reports_changed_transcript() {
 }
 
 #[test]
+fn cli_normalize_tolerates_invalid_utf8_like_python() {
+    let tmp = tempdir().unwrap();
+    let source = tmp.path().join("notes.txt");
+    fs::write(
+        &source,
+        [
+            b"plain transcript before bad byte\n".as_slice(),
+            b"\xff\n".as_slice(),
+            b"plain transcript after bad byte\n".as_slice(),
+        ]
+        .concat(),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["normalize", source.to_str().unwrap()])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let summary: Value = serde_json::from_slice(&output).unwrap();
+    let normalized = summary["normalized"].as_str().unwrap();
+    assert!(normalized.contains("plain transcript before bad byte"));
+    assert!(normalized.contains('\u{fffd}'));
+    assert!(normalized.contains("plain transcript after bad byte"));
+}
+
+#[test]
 fn cli_normalize_human_prints_preview() {
     let tmp = tempdir().unwrap();
     let source = tmp.path().join("already.txt");

@@ -1,15 +1,14 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use anyhow::Result;
-use mempalace_rs::normalize::normalize_conversation_file;
+use mempalace_rs::normalize::normalize_conversation_file_with_raw;
 use serde_json::{Value, json};
 
 use crate::project_cli_transcript_support::print_transcript_json;
 
-pub fn handle_normalize(file: &PathBuf, human: bool) -> Result<()> {
-    let raw = std::fs::read_to_string(file)?;
-    let normalized = normalize_conversation_file(file)?;
-    let Some(normalized) = normalized else {
+pub fn handle_normalize(file: &Path, human: bool) -> Result<()> {
+    let output = normalize_conversation_file_with_raw(file)?;
+    let Some(normalized) = output.normalized else {
         if human {
             print_normalize_error_human("Unsupported or unreadable conversation file.");
         } else {
@@ -19,6 +18,7 @@ pub fn handle_normalize(file: &PathBuf, human: bool) -> Result<()> {
         }
         std::process::exit(1);
     };
+    let raw = output.raw;
     let summary = json!({
         "kind": "normalize",
         "file_path": file.display().to_string(),
