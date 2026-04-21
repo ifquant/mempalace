@@ -380,13 +380,7 @@ pub fn score_project(name: &str, text: &str, lines: &[String]) -> usize {
     }
     for line in lines {
         let line_lower = line.to_ascii_lowercase();
-        if line_lower.contains(&format!("building {lower}"))
-            || line_lower.contains(&format!("built {lower}"))
-            || line_lower.contains(&format!("deploy {lower}"))
-            || line_lower.contains(&format!("launch {lower}"))
-            || line_lower.contains(&format!("{lower}.py"))
-            || line_lower.contains(&format!("{lower}-core"))
-        {
+        if is_project_marker(&line_lower, &lower) {
             score += 1;
         }
     }
@@ -428,4 +422,33 @@ fn is_direct_address(line_lower: &str, name_lower: &str) -> bool {
         || line_lower.contains(&format!("thank {name_lower}"))
         || line_lower.contains(&format!("hi {name_lower}"))
         || line_lower.contains(&format!("dear {name_lower}"))
+}
+
+fn is_project_marker(line_lower: &str, name_lower: &str) -> bool {
+    line_lower.contains(&format!("building {name_lower}"))
+        || line_lower.contains(&format!("built {name_lower}"))
+        || line_lower.contains(&format!("shipping {name_lower}"))
+        || line_lower.contains(&format!("shipped {name_lower}"))
+        || line_lower.contains(&format!("ship {name_lower}"))
+        || line_lower.contains(&format!("launching {name_lower}"))
+        || line_lower.contains(&format!("launched {name_lower}"))
+        || line_lower.contains(&format!("launch {name_lower}"))
+        || line_lower.contains(&format!("deploying {name_lower}"))
+        || line_lower.contains(&format!("deployed {name_lower}"))
+        || line_lower.contains(&format!("deploy {name_lower}"))
+        || line_lower.contains(&format!("installing {name_lower}"))
+        || line_lower.contains(&format!("installed {name_lower}"))
+        || line_lower.contains(&format!("install {name_lower}"))
+        || line_lower.contains(&format!("import {name_lower}"))
+        || line_lower.contains(&format!("pip install {name_lower}"))
+        || line_lower.contains(&format!("{name_lower} v"))
+        || line_lower.contains(&format!("{name_lower}-core"))
+        || line_lower.contains(&format!("{name_lower}-local"))
+        || has_code_reference(line_lower, name_lower)
+}
+
+fn has_code_reference(line_lower: &str, name_lower: &str) -> bool {
+    [".py", ".js", ".ts", ".yaml", ".yml", ".json", ".sh"]
+        .iter()
+        .any(|suffix| line_lower.contains(&format!("{name_lower}{suffix}")))
 }

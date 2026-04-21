@@ -237,6 +237,38 @@ mod tests {
     }
 
     #[test]
+    fn entity_detector_detects_project_install_and_import_markers_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "pip install Atlas for local setup.\nimport Atlas in the harness.\nAtlas.py stores the CLI shim.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(detected.projects.iter().any(|name| name == "Atlas"));
+    }
+
+    #[test]
+    fn entity_detector_detects_project_version_and_local_markers_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "Atlas v2 changed the runtime.\nAtlas-local keeps offline data.\nWe shipped Atlas yesterday.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(detected.projects.iter().any(|name| name == "Atlas"));
+    }
+
+    #[test]
     fn entity_detector_requires_python_candidate_frequency() {
         let tmp = tempdir().unwrap();
         let project = tmp.path().join("project");
