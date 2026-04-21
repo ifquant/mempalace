@@ -329,12 +329,7 @@ pub fn score_person(name: &str, text: &str, lines: &[String]) -> usize {
     }
     for line in lines {
         let line_lower = line.to_ascii_lowercase();
-        if line_lower.starts_with(&format!("{lower}:"))
-            || line_lower.starts_with(&format!("> {lower}:"))
-            || line_lower.contains(&format!("hey {lower}"))
-            || line_lower.contains(&format!("thanks {lower}"))
-            || line_lower.contains(&format!("hi {lower}"))
-        {
+        if is_dialogue_marker(&line_lower, &lower) || is_direct_address(&line_lower, &lower) {
             score += 1;
         }
     }
@@ -354,16 +349,13 @@ pub fn person_signal_category_count(name: &str, text: &str, lines: &[String]) ->
     }
     if lines.iter().any(|line| {
         let line_lower = line.to_ascii_lowercase();
-        line_lower.starts_with(&format!("{lower}:"))
-            || line_lower.starts_with(&format!("> {lower}:"))
+        is_dialogue_marker(&line_lower, &lower)
     }) {
         categories.push("dialogue");
     }
     if lines.iter().any(|line| {
         let line_lower = line.to_ascii_lowercase();
-        line_lower.contains(&format!("hey {lower}"))
-            || line_lower.contains(&format!("thanks {lower}"))
-            || line_lower.contains(&format!("hi {lower}"))
+        is_direct_address(&line_lower, &lower)
     }) {
         categories.push("addressed");
     }
@@ -420,4 +412,20 @@ fn pronoun_proximity_hits(name_lower: &str, lines: &[String]) -> usize {
 fn contains_pronoun(text: &str) -> bool {
     text.split(|ch: char| !ch.is_ascii_alphabetic())
         .any(|word| PRONOUNS.contains(&word))
+}
+
+fn is_dialogue_marker(line_lower: &str, name_lower: &str) -> bool {
+    line_lower.starts_with(&format!("{name_lower}:"))
+        || line_lower.starts_with(&format!("> {name_lower}:"))
+        || line_lower.starts_with(&format!("> {name_lower} "))
+        || line_lower.starts_with(&format!("[{name_lower}]"))
+        || line_lower.contains(&format!("\"{name_lower} said"))
+}
+
+fn is_direct_address(line_lower: &str, name_lower: &str) -> bool {
+    line_lower.contains(&format!("hey {name_lower}"))
+        || line_lower.contains(&format!("thanks {name_lower}"))
+        || line_lower.contains(&format!("thank {name_lower}"))
+        || line_lower.contains(&format!("hi {name_lower}"))
+        || line_lower.contains(&format!("dear {name_lower}"))
 }

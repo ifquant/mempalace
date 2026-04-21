@@ -318,6 +318,54 @@ mod tests {
     }
 
     #[test]
+    fn entity_detector_accepts_dear_direct_address_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "Dear Avery, please review this.\nAvery said the plan changed.\nAvery wrote careful notes.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(detected.people.iter().any(|name| name == "Avery"));
+    }
+
+    #[test]
+    fn entity_detector_accepts_bracket_dialogue_marker_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "[Avery] Please review this.\nAvery said the plan changed.\nAvery wrote careful notes.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(detected.people.iter().any(|name| name == "Avery"));
+    }
+
+    #[test]
+    fn entity_detector_accepts_quoted_said_dialogue_marker_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "\"Avery said the plan changed,\" the note says.\nAvery wrote careful notes.\nAvery asked for review.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(detected.people.iter().any(|name| name == "Avery"));
+    }
+
+    #[test]
     fn entity_detector_accepts_two_letter_names_like_python() {
         let tmp = tempdir().unwrap();
         let project = tmp.path().join("project");
