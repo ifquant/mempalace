@@ -16,7 +16,9 @@ pub(crate) fn try_claude_code_jsonl(
         .map(str::trim)
         .filter(|line| !line.is_empty())
     {
-        let entry: Value = serde_json::from_str(line).ok()?;
+        let Ok(entry) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
         let msg_type = entry
             .get("type")
             .and_then(Value::as_str)
@@ -49,7 +51,9 @@ pub(crate) fn try_codex_jsonl(content: &str, known_names: &HashSet<String>) -> O
         .map(str::trim)
         .filter(|line| !line.is_empty())
     {
-        let entry: Value = serde_json::from_str(line).ok()?;
+        let Ok(entry) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
         let entry_type = entry
             .get("type")
             .and_then(Value::as_str)
@@ -82,4 +86,42 @@ pub(crate) fn try_codex_jsonl(content: &str, known_names: &HashSet<String>) -> O
     }
     (messages.len() >= 2 && has_session_meta)
         .then(|| messages_to_transcript(&messages, known_names))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashSet;
+
+    use super::{try_claude_code_jsonl, try_codex_jsonl};
+
+    #[test]
+    fn claude_code_jsonl_skips_malformed_lines_like_python() {
+        let normalized = try_claude_code_jsonl(
+            r#"{"type":"human","message":{"content":"ship the fix"}}
+not-json
+{"type":"assistant","message":{"content":"Run tests."}}
+"#,
+            &HashSet::new(),
+        )
+        .unwrap();
+
+        assert!(normalized.contains("> ship the fix"));
+        assert!(normalized.contains("Run tests."));
+    }
+
+    #[test]
+    fn codex_jsonl_skips_malformed_lines_like_python() {
+        let normalized = try_codex_jsonl(
+            r#"{"type":"session_meta","payload":{"id":"demo"}}
+{"type":"event_msg","payload":{"type":"user_message","message":"knoe the plan"}}
+not-json
+{"type":"event_msg","payload":{"type":"agent_message","message":"Plan noted."}}
+"#,
+            &HashSet::new(),
+        )
+        .unwrap();
+
+        assert!(normalized.contains("> know the plan"));
+        assert!(normalized.contains("Plan noted."));
+    }
 }
