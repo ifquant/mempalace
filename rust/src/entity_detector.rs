@@ -58,7 +58,7 @@ pub fn detect_entities(project_dir: &Path) -> Result<DetectedEntities> {
     let mut people = Vec::new();
     let mut projects = Vec::new();
     for (name, frequency) in counts {
-        if frequency < 2 {
+        if frequency < 3 {
             continue;
         }
         let person_score = score::score_person(&name, &all_text, &all_lines);
@@ -151,5 +151,22 @@ mod tests {
         let files = scan_for_detection(&project).unwrap();
         assert_eq!(files.len(), 1);
         assert!(files[0].ends_with("real.md"));
+    }
+
+    #[test]
+    fn entity_detector_requires_python_candidate_frequency() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "Jordan said the Atlas service should launch next week.\nJordan wrote the Atlas architecture guide.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(!detected.people.iter().any(|name| name == "Jordan"));
+        assert!(!detected.projects.iter().any(|name| name == "Atlas"));
     }
 }

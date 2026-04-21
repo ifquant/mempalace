@@ -290,7 +290,7 @@ async fn mcp_project_bootstrap_tools_work() {
     std::fs::create_dir_all(&project).unwrap();
     std::fs::write(
         project.join("notes.md"),
-        "Ever said Lantern should launch soon.\nEver wrote the Lantern architecture notes.",
+        "Ever said Lantern should launch soon.\nEver wrote the Lantern architecture notes.\nEver pushed the Lantern repo.",
     )
     .unwrap();
     let convo = tmp.path().join("session.jsonl");
@@ -1146,7 +1146,7 @@ async fn mcp_registry_tools_work() {
     std::fs::create_dir_all(&project).unwrap();
     std::fs::write(
         project.join("notes.md"),
-        "Ever said Atlas should launch soon.\nEver wrote the Atlas architecture notes.\n",
+        "Ever said Atlas should launch soon.\nEver wrote the Atlas architecture notes.\nEver pushed the Atlas repo.\n",
     )
     .unwrap();
 

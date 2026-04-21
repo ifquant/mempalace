@@ -60,7 +60,7 @@ async fn init_project_bootstraps_rooms_and_entities() {
     std::fs::create_dir_all(project.join("frontend")).unwrap();
     std::fs::write(
         project.join("journal.md"),
-        "Jordan said Atlas should launch soon.\nJordan wrote the Atlas system notes.",
+        "Jordan said Atlas should launch soon.\nJordan wrote the Atlas system notes.\nJordan pushed the Atlas repo.",
     )
     .unwrap();
 
@@ -106,7 +106,7 @@ async fn registry_summary_lookup_and_learn_work() {
     std::fs::create_dir_all(&project).unwrap();
     std::fs::write(
         project.join("notes.md"),
-        "Ever said Atlas should launch next week.\nEver wrote the Atlas architecture guide.\n",
+        "Ever said Atlas should launch next week.\nEver wrote the Atlas architecture guide.\nEver pushed the Atlas repo.\n",
     )
     .unwrap();
 
@@ -134,7 +134,7 @@ async fn registry_summary_lookup_and_learn_work() {
 
     std::fs::write(
         project.join("more_notes.md"),
-        "Riley said Lantern shipped.\nRiley wrote the Lantern deploy notes.\n",
+        "Riley said Lantern shipped.\nRiley wrote the Lantern deploy notes.\nRiley pushed the Lantern repo.\n",
     )
     .unwrap();
     let learned = app.registry_learn(&project).unwrap();

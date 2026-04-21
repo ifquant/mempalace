@@ -143,7 +143,7 @@ fn cli_init_writes_entities_json_when_detection_finds_names() {
     fs::create_dir_all(project.join("notes")).unwrap();
     fs::write(
         project.join("notes").join("people.md"),
-        "Jordan said Atlas should launch soon.\nJordan wrote the Atlas system notes.",
+        "Jordan said Atlas should launch soon.\nJordan wrote the Atlas system notes.\nJordan pushed the Atlas repo.",
     )
     .unwrap();
 
@@ -204,7 +204,7 @@ fn cli_onboarding_json_bootstraps_local_world_files() {
     fs::create_dir_all(&project).unwrap();
     fs::write(
         project.join("notes.md"),
-        "Ever said Lantern should launch soon.\nEver wrote the Lantern architecture notes.",
+        "Ever said Lantern should launch soon.\nEver wrote the Lantern architecture notes.\nEver pushed the Lantern repo.",
     )
     .unwrap();
 
@@ -297,7 +297,7 @@ fn cli_registry_summary_lookup_learn_and_research_work() {
     fs::create_dir_all(&project).unwrap();
     fs::write(
         project.join("notes.md"),
-        "Ever said Atlas should launch soon.\nEver wrote the Atlas architecture notes.",
+        "Ever said Atlas should launch soon.\nEver wrote the Atlas architecture notes.\nEver pushed the Atlas repo.",
     )
     .unwrap();
     let palace = tmp.path().join("palace");
@@ -340,7 +340,7 @@ fn cli_registry_summary_lookup_learn_and_research_work() {
 
     fs::write(
         project.join("more.md"),
-        "Riley said Lantern shipped.\nRiley wrote the Lantern deploy notes.",
+        "Riley said Lantern shipped.\nRiley wrote the Lantern deploy notes.\nRiley pushed the Lantern repo.",
     )
     .unwrap();
 
