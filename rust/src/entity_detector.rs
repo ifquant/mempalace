@@ -54,6 +54,14 @@ pub fn detect_entities(project_dir: &Path) -> Result<DetectedEntities> {
         }
         *counts.entry(name.to_string()).or_insert(0) += 1;
     }
+    let multi_candidate_re = Regex::new(r"\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b").unwrap();
+    for cap in multi_candidate_re.captures_iter(&all_text) {
+        let phrase = cap.get(0).unwrap().as_str();
+        if phrase.split_whitespace().any(score::is_stopword) {
+            continue;
+        }
+        *counts.entry(phrase.to_string()).or_insert(0) += 1;
+    }
 
     let mut people = Vec::new();
     let mut projects = Vec::new();
@@ -174,6 +182,22 @@ mod tests {
         assert!(files.iter().any(|path| path.ends_with("b.txt")));
         assert!(files.iter().any(|path| path.ends_with("c.csv")));
         assert!(!files.iter().any(|path| path.ends_with("export.json")));
+    }
+
+    #[test]
+    fn entity_detector_extracts_multi_word_projects_like_python() {
+        let tmp = tempdir().unwrap();
+        let project = tmp.path().join("project");
+        fs::create_dir_all(project.join("docs")).unwrap();
+        fs::write(
+            project.join("docs").join("notes.md"),
+            "building Memory Palace will help recall.\nMemory Palace architecture is local-first.\nMemory Palace repo should launch soon.",
+        )
+        .unwrap();
+
+        let detected = detect_entities(&project).unwrap();
+
+        assert!(detected.projects.iter().any(|name| name == "Memory Palace"));
     }
 
     #[test]
