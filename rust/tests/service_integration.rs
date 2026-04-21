@@ -6,6 +6,8 @@ use lancedb::connect;
 use lancedb::query::{ExecutableQuery, QueryBase, Select};
 use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::convo::{detect_convo_room, extract_general_memories};
+use mempalace_rs::embed::{EmbeddingProfile, EmbeddingProvider};
+use mempalace_rs::error::{MempalaceError, Result};
 use mempalace_rs::model::{DrawerInput, KgTriple, MineRequest};
 use mempalace_rs::registry::EntityRegistry;
 use mempalace_rs::service::App;
@@ -13,6 +15,59 @@ use mempalace_rs::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
 use mempalace_rs::storage::vector::VectorStore;
 use rusqlite::Connection;
 use tempfile::tempdir;
+
+struct FailingEmbedder {
+    profile: EmbeddingProfile,
+}
+
+impl FailingEmbedder {
+    fn new() -> Self {
+        Self {
+            profile: EmbeddingProfile::legacy_hash(),
+        }
+    }
+}
+
+impl EmbeddingProvider for FailingEmbedder {
+    fn profile(&self) -> &EmbeddingProfile {
+        &self.profile
+    }
+
+    fn embed_documents(&self, _documents: &[String]) -> Result<Vec<Vec<f32>>> {
+        Err(MempalaceError::InvalidArgument(
+            "forced embedding failure".to_string(),
+        ))
+    }
+
+    fn embed_query(&self, _query: &str) -> Result<Vec<f32>> {
+        Err(MempalaceError::InvalidArgument(
+            "forced embedding failure".to_string(),
+        ))
+    }
+
+    fn doctor(&self, palace_path: &str, warmup: bool) -> mempalace_rs::model::DoctorSummary {
+        mempalace_rs::model::DoctorSummary {
+            kind: "doctor".to_string(),
+            palace_path: palace_path.to_string(),
+            sqlite_path: String::new(),
+            lance_path: String::new(),
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            provider: self.profile.provider.clone(),
+            model: self.profile.model.clone(),
+            dimension: self.profile.dimension,
+            cache_dir: None,
+            model_cache_dir: None,
+            model_cache_present: false,
+            expected_model_file: None,
+            expected_model_file_present: false,
+            hf_endpoint: None,
+            ort_dylib_path: None,
+            warmup_attempted: warmup,
+            warmup_ok: false,
+            warmup_error: Some("forced embedding failure".to_string()),
+        }
+    }
+}
 
 #[tokio::test]
 async fn init_is_idempotent_and_status_starts_empty() {
@@ -51,6 +106,30 @@ async fn init_is_idempotent_and_status_starts_empty() {
     assert_eq!(prepare.version, env!("CARGO_PKG_VERSION"));
     assert!(prepare.sqlite_path.ends_with("palace.sqlite3"));
     assert!(prepare.lance_path.ends_with("lance"));
+}
+
+#[tokio::test]
+async fn manual_add_does_not_insert_sqlite_when_embedding_fails() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::with_embedder(config.clone(), Arc::new(FailingEmbedder::new()));
+    app.init().await.unwrap();
+
+    let error = app
+        .add_drawer(
+            "project",
+            "general",
+            "This drawer should not survive a forced embedding failure.",
+            Some("failed-add.txt"),
+            Some("codex"),
+        )
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("forced embedding failure"));
+
+    let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    assert_eq!(sqlite.total_drawers().unwrap(), 0);
 }
 
 #[tokio::test]

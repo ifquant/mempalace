@@ -153,7 +153,7 @@ pub async fn call_write_tool(
             let dry_run = arguments
                 .get("dry_run")
                 .and_then(Value::as_bool)
-                .unwrap_or(false);
+                .unwrap_or(true);
             let stats_only = arguments
                 .get("stats_only")
                 .and_then(Value::as_bool)

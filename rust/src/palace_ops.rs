@@ -1,5 +1,5 @@
 use crate::config::AppConfig;
-use crate::drawers::{build_manual_drawer, sanitize_name};
+use crate::drawers::{build_manual_drawer, drawer_input_from_record, sanitize_name};
 use crate::embed::EmbeddingProvider;
 use crate::error::Result;
 use crate::knowledge_graph::KnowledgeGraph;
@@ -98,25 +98,49 @@ impl<'a> PalaceOpsRuntime<'a> {
         let drawer = build_manual_drawer(wing, room, content, source_file, added_by)?;
 
         let sqlite = self.open_sqlite()?;
-        let sqlite_result = sqlite.insert_drawer(&drawer)?;
-        if sqlite_result.reason.as_deref() == Some("already_exists") {
-            return Ok(sqlite_result);
+        if sqlite.drawer_exists(&drawer.id)? {
+            return Ok(DrawerWriteResult {
+                success: true,
+                drawer_id: drawer.id,
+                wing: drawer.wing,
+                room: drawer.room,
+                reason: Some("already_exists".to_string()),
+            });
         }
 
         let embedding = self.embedder.embed_query(&drawer.text)?;
         let vector = VectorStore::connect(&self.config.lance_path()).await?;
-        vector.add_drawers(&[drawer], &[embedding]).await?;
-        Ok(sqlite_result)
+        vector
+            .add_drawers(std::slice::from_ref(&drawer), &[embedding])
+            .await?;
+        match sqlite.insert_drawer(&drawer) {
+            Ok(result) => Ok(result),
+            Err(err) => {
+                let _ = vector
+                    .delete_drawer(self.embedder.profile().dimension, &drawer.id)
+                    .await;
+                Err(err)
+            }
+        }
     }
 
     pub async fn delete_drawer(&self, drawer_id: &str) -> Result<DrawerDeleteResult> {
         let sqlite = self.open_sqlite()?;
-        let result = sqlite.delete_drawer(drawer_id)?;
         let vector = VectorStore::connect(&self.config.lance_path()).await?;
+        let drawer = sqlite.get_drawer(drawer_id)?;
         vector
             .delete_drawer(self.embedder.profile().dimension, drawer_id)
             .await?;
-        Ok(result)
+        match sqlite.delete_drawer(drawer_id) {
+            Ok(result) => Ok(result),
+            Err(err) => {
+                let drawer_input = drawer_input_from_record(&drawer);
+                if let Ok(embedding) = self.embedder.embed_query(&drawer_input.text) {
+                    let _ = vector.add_drawers(&[drawer_input], &[embedding]).await;
+                }
+                Err(err)
+            }
+        }
     }
 
     pub async fn diary_write(

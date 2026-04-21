@@ -87,6 +87,22 @@ impl SqliteStore {
         Ok(exists.is_some())
     }
 
+    pub fn get_drawer(&self, drawer_id: &str) -> Result<DrawerRecord> {
+        let drawer = self
+            .conn
+            .query_row(
+                "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, text
+                 FROM drawers
+                 WHERE id = ?1",
+                [drawer_id],
+                map_drawer_record,
+            )
+            .optional()?;
+        drawer.ok_or_else(|| {
+            MempalaceError::InvalidArgument(format!("Drawer not found: {drawer_id}"))
+        })
+    }
+
     pub fn insert_drawer(&self, drawer: &DrawerInput) -> Result<DrawerWriteResult> {
         if self.drawer_exists(&drawer.id)? {
             return Ok(DrawerWriteResult {

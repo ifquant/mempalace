@@ -284,6 +284,38 @@ async fn mcp_read_tools_work() {
 }
 
 #[tokio::test]
+async fn mcp_dedup_defaults_to_dry_run() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    for idx in 0..5 {
+        app.add_drawer(
+            "project",
+            "backend",
+            &format!("Near duplicate MCP default safety note about GraphQL rollout copy {idx}"),
+            Some("mcp-dedup-default.txt"),
+            Some("mcp-test"),
+        )
+        .await
+        .unwrap();
+    }
+
+    let dedup = handle_request(
+        json!({"method":"tools/call","id":101,"params":{"name":"mempalace_dedup","arguments":{"threshold":"0.15","min_count":"5","source":"mcp-dedup-default"}}}),
+        &config,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let dedup_text = dedup["result"]["content"][0]["text"].as_str().unwrap();
+    assert!(dedup_text.contains("\"kind\": \"dedup\""));
+    assert!(dedup_text.contains("\"dry_run\": true"));
+}
+
+#[tokio::test]
 async fn mcp_project_bootstrap_tools_work() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("world");

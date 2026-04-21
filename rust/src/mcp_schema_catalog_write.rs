@@ -78,7 +78,7 @@ pub fn tools() -> Vec<Value> {
                 "type": "object",
                 "properties": {
                     "threshold": {"type":"number","description":"Cosine distance threshold (default 0.15)"},
-                    "dry_run": {"type":"boolean","description":"Preview without deleting"},
+                    "dry_run": {"type":"boolean","description":"Preview without deleting (default true for MCP safety)"},
                     "stats_only": {"type":"boolean","description":"Show stats without deleting"},
                     "wing": {"type":"string","description":"Optional wing filter"},
                     "source": {"type":"string","description":"Optional source_file substring filter"},
