@@ -74,6 +74,42 @@ pub fn split_directory(
     })
 }
 
+pub fn split_single_file(
+    path: &Path,
+    output_dir: Option<&Path>,
+    min_sessions: usize,
+    dry_run: bool,
+) -> Result<SplitSummary> {
+    let mut files = Vec::new();
+    let mut files_created = 0usize;
+    let source_dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let output_dir = output_dir.unwrap_or(source_dir);
+
+    if path.metadata()?.len() <= MAX_SCAN_SIZE {
+        let contents = read_text_lossy(path)?;
+        let lines = contents
+            .lines()
+            .map(|line| format!("{line}\n"))
+            .collect::<Vec<_>>();
+        let boundaries = find_session_boundaries(&lines);
+        if boundaries.len() >= min_sessions {
+            let result = split_file(path, Some(output_dir), boundaries.len(), dry_run)?;
+            files_created += result.output_files.len();
+            files.push(result);
+        }
+    }
+
+    Ok(SplitSummary {
+        kind: "split".to_string(),
+        source_dir: source_dir.display().to_string(),
+        output_dir: output_dir.display().to_string(),
+        dry_run,
+        mega_files: files.len(),
+        files_created,
+        files,
+    })
+}
+
 fn split_file(
     path: &Path,
     output_dir: Option<&Path>,
@@ -330,5 +366,44 @@ mod tests {
 
         assert_eq!(summary.mega_files, 1);
         assert_eq!(summary.files_created, 2);
+    }
+
+    #[test]
+    fn split_single_file_limits_scan_to_requested_file() {
+        let tmp = tempdir().unwrap();
+        let source = tmp.path().join("source");
+        fs::create_dir_all(&source).unwrap();
+        let mega = source.join("target.txt");
+        fs::write(
+            &mega,
+            concat!(
+                "Claude Code v1\n",
+                "> first prompt about file mode\n",
+                "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+                "Claude Code v1\n",
+                "> second prompt about file mode\n",
+                "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+            ),
+        )
+        .unwrap();
+        fs::write(
+            source.join("ignored.txt"),
+            concat!(
+                "Claude Code v1\n",
+                "> ignored first session\n",
+                "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+                "Claude Code v1\n",
+                "> ignored second session\n",
+                "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+            ),
+        )
+        .unwrap();
+
+        let summary = split_single_file(&mega, None, 2, true).unwrap();
+
+        assert_eq!(summary.source_dir, source.display().to_string());
+        assert_eq!(summary.mega_files, 1);
+        assert_eq!(summary.files_created, 2);
+        assert_eq!(summary.files[0].source_file, mega.display().to_string());
     }
 }

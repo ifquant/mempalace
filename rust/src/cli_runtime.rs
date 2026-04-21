@@ -104,6 +104,7 @@ pub async fn run_cli(cli: Cli) -> Result<()> {
         }
         Command::Split {
             dir,
+            file,
             output_dir,
             min_sessions,
             dry_run,
@@ -111,6 +112,7 @@ pub async fn run_cli(cli: Cli) -> Result<()> {
             handle_project_command(
                 ProjectCommand::Split {
                     dir,
+                    file,
                     output_dir,
                     min_sessions,
                     dry_run,

@@ -1256,6 +1256,9 @@ fn cli_split_help_mentions_transcript_megafiles() {
             "Split concatenated transcript mega-files into per-session files",
         ))
         .stdout(contains("Directory containing transcript files"))
+        .stdout(contains(
+            "Split a single specific file instead of scanning a directory",
+        ))
         .stdout(contains("Write split files here"))
         .stdout(contains("Only split files containing at least N sessions"))
         .stdout(contains("Show what would be split without writing files"));
@@ -1413,6 +1416,56 @@ fn cli_split_writes_files_and_renames_backup() {
     assert_eq!(summary["files_created"], 2);
     assert!(source.join("mega.mega_backup").exists());
     assert!(!source.join("mega.txt").exists());
+}
+
+#[test]
+fn cli_split_file_mode_limits_scan_to_requested_file() {
+    let tmp = tempdir().unwrap();
+    let source = tmp.path().join("transcripts");
+    fs::create_dir_all(&source).unwrap();
+    let target = source.join("target.txt");
+    fs::write(
+        &target,
+        concat!(
+            "Claude Code v1\n",
+            "⏺ 9:30 AM Monday, March 30, 2026\n",
+            "> first prompt about file split\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+            "Claude Code v1\n",
+            "⏺ 10:45 AM Monday, March 30, 2026\n",
+            "> second prompt about file split\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+        ),
+    )
+    .unwrap();
+    fs::write(
+        source.join("ignored.txt"),
+        concat!(
+            "Claude Code v1\n",
+            "> ignored first prompt\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+            "Claude Code v1\n",
+            "> ignored second prompt\n",
+            "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\n",
+        ),
+    )
+    .unwrap();
+
+    let output = Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .args(["split", "--file", target.to_str().unwrap(), "--dry-run"])
+        .assert()
+        .success()
+        .get_output()
+        .stdout
+        .clone();
+    let summary: Value = serde_json::from_slice(&output).unwrap();
+    assert_eq!(summary["mega_files"], 1);
+    assert_eq!(summary["files_created"], 2);
+    assert_eq!(
+        summary["files"][0]["source_file"],
+        target.display().to_string()
+    );
 }
 
 #[test]
