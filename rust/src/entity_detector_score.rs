@@ -327,6 +327,9 @@ pub fn score_person(name: &str, text: &str, lines: &[String]) -> usize {
             score += 2;
         }
     }
+    if text.to_ascii_lowercase().contains(&format!("dear {lower}")) {
+        score += 2;
+    }
     for line in lines {
         let line_lower = line.to_ascii_lowercase();
         if is_dialogue_marker(&line_lower, &lower) || is_direct_address(&line_lower, &lower) {
@@ -344,6 +347,7 @@ pub fn person_signal_category_count(name: &str, text: &str, lines: &[String]) ->
     if PERSON_VERBS
         .iter()
         .any(|verb| lowered_text.contains(&format!("{lower} {verb}")))
+        || lowered_text.contains(&format!("dear {lower}"))
     {
         categories.push("action");
     }
@@ -421,7 +425,6 @@ fn is_direct_address(line_lower: &str, name_lower: &str) -> bool {
         || line_lower.contains(&format!("thanks {name_lower}"))
         || line_lower.contains(&format!("thank {name_lower}"))
         || line_lower.contains(&format!("hi {name_lower}"))
-        || line_lower.contains(&format!("dear {name_lower}"))
 }
 
 fn is_project_marker(line_lower: &str, name_lower: &str) -> bool {

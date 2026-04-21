@@ -350,7 +350,7 @@ mod tests {
     }
 
     #[test]
-    fn entity_detector_accepts_dear_direct_address_like_python() {
+    fn entity_detector_does_not_accept_dear_action_only_people_like_python() {
         let tmp = tempdir().unwrap();
         let project = tmp.path().join("project");
         fs::create_dir_all(project.join("docs")).unwrap();
@@ -362,7 +362,7 @@ mod tests {
 
         let detected = detect_entities(&project).unwrap();
 
-        assert!(detected.people.iter().any(|name| name == "Avery"));
+        assert!(!detected.people.iter().any(|name| name == "Avery"));
     }
 
     #[test]

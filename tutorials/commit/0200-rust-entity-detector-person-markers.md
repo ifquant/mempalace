@@ -4,11 +4,12 @@
 
 继续对齐 Python `entity_detector.py` 的 person signal patterns 时，发现 Rust 还少几类 Python 已支持的 person marker：
 
-- `dear NAME` direct address
 - `[NAME]` dialogue marker
 - `"NAME said` quoted dialogue marker
 
 这些 marker 本身不应该绕过 0196 的保守 person gate，但应当作为 person signal category 参与分类。
+
+注意：本提交最初把 `dear NAME` 归入 direct/addressed，这是与 Python 不一致的。Python 将 `dear NAME` 放在 `PERSON_VERB_PATTERNS`，分类时属于 action category；该偏差已在 0202 中纠正。
 
 ## 主要目标
 
@@ -20,9 +21,8 @@
 
 - 更新 `rust/src/entity_detector_score.rs`。
 - 新增 `is_dialogue_marker()`，覆盖 `NAME:`、`> NAME:`、`> NAME `、`[NAME]`、`"NAME said`。
-- 新增 `is_direct_address()`，覆盖 `hey NAME`、`thank(s) NAME`、`hi NAME`、`dear NAME`。
+- 新增 `is_direct_address()`，覆盖 `hey NAME`、`thank(s) NAME`、`hi NAME`。
 - 更新 `rust/src/entity_detector.rs`。
-- 新增 `entity_detector_accepts_dear_direct_address_like_python`。
 - 新增 `entity_detector_accepts_bracket_dialogue_marker_like_python`。
 - 新增 `entity_detector_accepts_quoted_said_dialogue_marker_like_python`。
 
