@@ -115,6 +115,7 @@ pub(crate) fn try_chatgpt_json(data: &Value, known_names: &HashSet<String>) -> O
                     parts
                         .iter()
                         .filter_map(Value::as_str)
+                        .filter(|text| !text.is_empty())
                         .collect::<Vec<_>>()
                         .join(" ")
                         .trim()
@@ -265,5 +266,31 @@ mod tests {
 
         assert!(normalized.contains("> How do we ship this?"));
         assert!(normalized.contains("Run tests first."));
+    }
+
+    #[test]
+    fn chatgpt_json_ignores_empty_parts_like_python() {
+        let data = json!({
+            "mapping": {
+                "root": {"parent": null, "message": null, "children": ["u1"]},
+                "u1": {
+                    "parent": "root",
+                    "message": {"author": {"role": "user"}, "content": {"parts": ["Ship", "", "today"]}},
+                    "children": ["a1"]
+                },
+                "a1": {
+                    "parent": "u1",
+                    "message": {"author": {"role": "assistant"}, "content": {"parts": ["Run", "", "tests"]}},
+                    "children": []
+                }
+            }
+        });
+
+        let normalized = super::try_chatgpt_json(&data, &HashSet::new()).unwrap();
+
+        assert!(normalized.contains("> Ship today"));
+        assert!(normalized.contains("Run tests"));
+        assert!(!normalized.contains("Ship  today"));
+        assert!(!normalized.contains("Run  tests"));
     }
 }
