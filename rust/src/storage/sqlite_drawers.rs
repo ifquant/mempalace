@@ -43,8 +43,8 @@ impl SqliteStore {
         let now = Utc::now().to_rfc3339();
         {
             let mut stmt = tx.prepare(
-                "INSERT INTO drawers (id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, text, created_at)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+                "INSERT INTO drawers (id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, importance, text, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             )?;
             for drawer in drawers {
                 stmt.execute(params![
@@ -60,6 +60,7 @@ impl SqliteStore {
                     &drawer.filed_at,
                     &drawer.ingest_mode,
                     &drawer.extract_mode,
+                    drawer.importance,
                     &drawer.text,
                     &now,
                 ])?;
@@ -91,7 +92,7 @@ impl SqliteStore {
         let drawer = self
             .conn
             .query_row(
-                "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, text
+                "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, importance, text
                  FROM drawers
                  WHERE id = ?1",
                 [drawer_id],
@@ -115,8 +116,8 @@ impl SqliteStore {
         }
 
         self.conn.execute(
-            "INSERT INTO drawers (id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, text, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+            "INSERT INTO drawers (id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, importance, text, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 &drawer.id,
                 &drawer.wing,
@@ -130,6 +131,7 @@ impl SqliteStore {
                 &drawer.filed_at,
                 &drawer.ingest_mode,
                 &drawer.extract_mode,
+                drawer.importance,
                 &drawer.text,
                 Utc::now().to_rfc3339(),
             ],
@@ -253,7 +255,7 @@ impl SqliteStore {
 
     pub fn list_drawers(&self, wing: Option<&str>) -> Result<Vec<DrawerRecord>> {
         let mut query = String::from(
-            "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, text
+            "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, importance, text
              FROM drawers",
         );
         let mut records = Vec::new();
@@ -283,7 +285,7 @@ impl SqliteStore {
         let mut records = Vec::new();
         if let Some(wing_name) = wing {
             let mut stmt = self.conn.prepare(
-                "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, text
+                "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, importance, text
                  FROM drawers
                  WHERE wing = ?1
                  ORDER BY filed_at DESC, chunk_index ASC
@@ -295,7 +297,7 @@ impl SqliteStore {
             }
         } else {
             let mut stmt = self.conn.prepare(
-                "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, text
+                "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, importance, text
                  FROM drawers
                  ORDER BY filed_at DESC, chunk_index ASC
                  LIMIT ?1",
@@ -409,7 +411,8 @@ fn map_drawer_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<DrawerRecord> 
         filed_at: row.get(9)?,
         ingest_mode: row.get(10)?,
         extract_mode: row.get(11)?,
-        text: row.get(12)?,
+        importance: row.get(12)?,
+        text: row.get(13)?,
     })
 }
 

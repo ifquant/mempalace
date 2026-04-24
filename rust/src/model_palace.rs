@@ -16,6 +16,7 @@ pub struct DrawerInput {
     pub filed_at: String,
     pub ingest_mode: String,
     pub extract_mode: String,
+    pub importance: Option<f64>,
     pub text: String,
 }
 

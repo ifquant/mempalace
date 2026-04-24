@@ -2981,6 +2981,7 @@ fn cli_repair_scan_and_rebuild_cover_vector_drift() {
                     filed_at: "2026-04-18T00:00:00Z".to_string(),
                     ingest_mode: "mcp".to_string(),
                     extract_mode: "manual".to_string(),
+                    importance: None,
                     text: "orphan drawer".to_string(),
                 }],
                 &[vec![1.0; 64]],
@@ -3050,6 +3051,7 @@ fn cli_dedup_human_prints_summary() {
             filed_at: "2026-04-18T00:00:00Z".to_string(),
             ingest_mode: "projects".to_string(),
             extract_mode: "exchange".to_string(),
+            importance: None,
             text: "The deployment fix was to update the server config and rerun tests.".to_string(),
         };
         let drawer_b = DrawerInput {

@@ -191,6 +191,7 @@ mod tests {
             filed_at: "2026-04-18T00:00:00Z".to_string(),
             ingest_mode: "projects".to_string(),
             extract_mode: "exchange".to_string(),
+            importance: None,
             text: text.to_string(),
         }
     }

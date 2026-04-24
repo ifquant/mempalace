@@ -50,6 +50,7 @@ async fn dedup_dry_run_marks_short_docs_without_deleting_anything() {
         filed_at: "2026-04-18T00:00:00Z".to_string(),
         ingest_mode: "projects".to_string(),
         extract_mode: "exchange".to_string(),
+        importance: None,
         text: "long enough document to keep in the palace".to_string(),
     };
     let short = DrawerInput {
@@ -129,4 +130,104 @@ async fn repair_prune_preview_reports_queue_without_mutating_palace() {
         fs::read_to_string(config.palace_path.join("corrupt_ids.txt")).unwrap(),
         "orphan_a\n\n orphan_b \n"
     );
+}
+
+#[test]
+fn layer1_stops_at_python_style_global_char_cap() {
+    use mempalace_rs::layers::render_layer1;
+    use mempalace_rs::storage::sqlite::DrawerRecord;
+
+    let drawers = (0..30)
+        .map(|i| {
+            let source_file = format!("f{i}-{}.txt", "x".repeat(120));
+            DrawerRecord {
+                id: format!("d{i}"),
+                wing: "project".to_string(),
+                room: "general".to_string(),
+                source_file: source_file.clone(),
+                source_path: format!("/tmp/{source_file}"),
+                source_hash: format!("h{i}"),
+                source_mtime: None,
+                chunk_index: i,
+                added_by: "codex".to_string(),
+                filed_at: "2026-04-25T00:00:00Z".to_string(),
+                ingest_mode: "projects".to_string(),
+                extract_mode: "exchange".to_string(),
+                importance: Some(5.0),
+                text: "A".repeat(260),
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let layer1 = render_layer1(&drawers, Some("project"));
+
+    assert!(layer1.contains("## L1"));
+    assert!(layer1.contains("more in L3 search"));
+    assert!(layer1.chars().count() <= 3600);
+}
+
+#[test]
+fn layer1_prefers_importance_then_weight_defaulting_to_three() {
+    use mempalace_rs::layers::render_layer1;
+    use mempalace_rs::storage::sqlite::DrawerRecord;
+
+    let drawers = vec![
+        DrawerRecord {
+            id: "emotional".to_string(),
+            wing: "project".to_string(),
+            room: "general".to_string(),
+            source_file: "emotional.txt".to_string(),
+            source_path: "/tmp/emotional.txt".to_string(),
+            source_hash: "h1".to_string(),
+            source_mtime: None,
+            chunk_index: 0,
+            added_by: "codex".to_string(),
+            filed_at: "2026-04-25T00:00:00Z".to_string(),
+            ingest_mode: "projects".to_string(),
+            extract_mode: "exchange".to_string(),
+            importance: Some(5.0),
+            text: "emotional drawer".to_string(),
+        },
+        DrawerRecord {
+            id: "weight".to_string(),
+            wing: "project".to_string(),
+            room: "general".to_string(),
+            source_file: "weight.txt".to_string(),
+            source_path: "/tmp/weight.txt".to_string(),
+            source_hash: "h2".to_string(),
+            source_mtime: None,
+            chunk_index: 1,
+            added_by: "codex".to_string(),
+            filed_at: "2026-04-25T00:00:00Z".to_string(),
+            ingest_mode: "projects".to_string(),
+            extract_mode: "exchange".to_string(),
+            importance: Some(1.0),
+            text: "weight drawer".to_string(),
+        },
+        DrawerRecord {
+            id: "default".to_string(),
+            wing: "project".to_string(),
+            room: "general".to_string(),
+            source_file: "default.txt".to_string(),
+            source_path: "/tmp/default.txt".to_string(),
+            source_hash: "h3".to_string(),
+            source_mtime: None,
+            chunk_index: 2,
+            added_by: "codex".to_string(),
+            filed_at: "2026-04-25T00:00:00Z".to_string(),
+            ingest_mode: "projects".to_string(),
+            extract_mode: "exchange".to_string(),
+            importance: None,
+            text: "default drawer".to_string(),
+        },
+    ];
+
+    let layer1 = render_layer1(&drawers, Some("project"));
+
+    let emotional_pos = layer1.find("emotional drawer").unwrap();
+    let default_pos = layer1.find("default drawer").unwrap();
+    let weight_pos = layer1.find("weight drawer").unwrap();
+
+    assert!(emotional_pos < default_pos);
+    assert!(default_pos < weight_pos);
 }

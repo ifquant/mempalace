@@ -187,6 +187,7 @@ pub(crate) fn build_conversation_drawers(
             filed_at: context.filed_at.to_string(),
             ingest_mode: "convos".to_string(),
             extract_mode: context.extract_mode.to_string(),
+            importance: None,
             text: chunk.content.clone(),
         })
         .collect()

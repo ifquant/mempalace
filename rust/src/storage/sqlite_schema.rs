@@ -48,6 +48,10 @@ impl SqliteStore {
                     self.migrate_v6_to_v7()?;
                     version = 7;
                 }
+                7 => {
+                    self.migrate_v7_to_v8()?;
+                    version = 8;
+                }
                 CURRENT_SCHEMA_VERSION => break,
                 other => {
                     return Err(MempalaceError::InvalidArgument(format!(
@@ -154,6 +158,7 @@ impl SqliteStore {
                 filed_at TEXT NOT NULL,
                 ingest_mode TEXT NOT NULL,
                 extract_mode TEXT NOT NULL,
+                importance REAL,
                 text TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
@@ -373,6 +378,14 @@ impl SqliteStore {
         )?;
         self.set_meta("schema_version", "7")?;
         self.record_migration(7, "add compressed_drawers table for AAAK summaries")?;
+        Ok(())
+    }
+
+    fn migrate_v7_to_v8(&self) -> Result<()> {
+        self.conn
+            .execute("ALTER TABLE drawers ADD COLUMN importance REAL", [])?;
+        self.set_meta("schema_version", "8")?;
+        self.record_migration(8, "add canonical drawer importance metadata")?;
         Ok(())
     }
 

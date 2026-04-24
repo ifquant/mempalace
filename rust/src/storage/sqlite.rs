@@ -19,7 +19,7 @@ pub struct GraphRoomRow {
     pub filed_at: Option<String>,
 }
 
-pub const CURRENT_SCHEMA_VERSION: i64 = 7;
+pub const CURRENT_SCHEMA_VERSION: i64 = 8;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct IngestedFileState {
@@ -41,6 +41,7 @@ pub struct DrawerRecord {
     pub filed_at: String,
     pub ingest_mode: String,
     pub extract_mode: String,
+    pub importance: Option<f64>,
     pub text: String,
 }
 

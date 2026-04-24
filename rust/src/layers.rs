@@ -100,6 +100,9 @@ pub fn read_identity_text(identity_path: &Path) -> String {
 }
 
 pub fn render_layer1(drawers: &[DrawerRecord], wing: Option<&str>) -> String {
+    const MAX_DRAWERS: usize = 12;
+    const MAX_CHARS: usize = 3200;
+
     if drawers.is_empty() {
         return if let Some(wing_name) = wing {
             format!("## L1 — No memories yet for wing '{wing_name}'.")
@@ -108,15 +111,29 @@ pub fn render_layer1(drawers: &[DrawerRecord], wing: Option<&str>) -> String {
         };
     }
 
+    let mut top = drawers.iter().collect::<Vec<_>>();
+    top.sort_by(|left, right| {
+        right
+            .importance
+            .unwrap_or(3.0)
+            .partial_cmp(&left.importance.unwrap_or(3.0))
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    top.truncate(MAX_DRAWERS);
+
     let mut by_room: BTreeMap<String, Vec<&DrawerRecord>> = BTreeMap::new();
-    for drawer in drawers {
+    for drawer in top {
         by_room.entry(drawer.room.clone()).or_default().push(drawer);
     }
 
     let mut lines = vec!["## L1 — ESSENTIAL STORY".to_string()];
+    let mut total_len = 0usize;
     for (room, entries) in by_room {
-        lines.push(format!("\n[{room}]"));
-        for drawer in entries.into_iter().take(4) {
+        let room_line = format!("\n[{room}]");
+        lines.push(room_line.clone());
+        total_len += room_line.chars().count();
+
+        for drawer in entries {
             let mut snippet = drawer.text.replace('\n', " ").trim().to_string();
             if snippet.chars().count() > 200 {
                 snippet = format!("{}...", snippet.chars().take(197).collect::<String>());
@@ -125,7 +142,12 @@ pub fn render_layer1(drawers: &[DrawerRecord], wing: Option<&str>) -> String {
             if !drawer.source_file.is_empty() {
                 line.push_str(&format!("  ({})", drawer.source_file));
             }
+            if total_len + line.chars().count() > MAX_CHARS {
+                lines.push("  ... (more in L3 search)".to_string());
+                return lines.join("\n");
+            }
             lines.push(line);
+            total_len += lines.last().unwrap().chars().count();
         }
     }
 
@@ -225,6 +247,7 @@ mod tests {
             filed_at: "2026-04-18T00:00:00Z".to_string(),
             ingest_mode: "projects".to_string(),
             extract_mode: "exchange".to_string(),
+            importance: Some(3.0),
             text: "Plan the rollout in phases.".to_string(),
         }];
         let layer1 = render_layer1(&drawers, Some("proj"));

@@ -132,6 +132,7 @@ where
                 filed_at: filed_at.clone(),
                 ingest_mode: "projects".to_string(),
                 extract_mode: request.extract.clone(),
+                importance: None,
                 text: chunk.clone(),
             })
             .collect();

@@ -50,6 +50,7 @@ pub fn build_manual_drawer(
         filed_at: Utc::now().to_rfc3339(),
         ingest_mode: "mcp".to_string(),
         extract_mode: "manual".to_string(),
+        importance: None,
         text: sanitized_content,
     })
 }
@@ -68,6 +69,7 @@ pub fn drawer_input_from_record(record: &DrawerRecord) -> DrawerInput {
         filed_at: record.filed_at.clone(),
         ingest_mode: record.ingest_mode.clone(),
         extract_mode: record.extract_mode.clone(),
+        importance: record.importance,
         text: record.text.clone(),
     }
 }
