@@ -4,6 +4,7 @@ use assert_cmd::Command;
 use mempalace_rs::config::{AppConfig, EmbeddingBackend};
 use mempalace_rs::model::DrawerInput;
 use mempalace_rs::service::App;
+use mempalace_rs::storage::sqlite::CURRENT_SCHEMA_VERSION;
 use mempalace_rs::storage::vector::VectorStore;
 use predicates::prelude::PredicateBooleanExt;
 use predicates::str::contains;
@@ -46,7 +47,7 @@ fn cli_init_status_mine_search_round_trip() {
         .stdout(contains("\"aaak_entities_path\":"))
         .stdout(contains("\"critical_facts_path\":"))
         .stdout(contains("\"version\":"))
-        .stdout(contains("\"schema_version\": 7"))
+        .stdout(contains(format!("\"schema_version\": {}", CURRENT_SCHEMA_VERSION)))
         .stdout(contains("palace.sqlite3"));
 
     assert!(project.join("mempalace.yaml").exists());
@@ -2594,7 +2595,10 @@ fn cli_migrate_upgrades_legacy_sqlite_schema() {
         .stdout(contains("\"kind\": \"migrate\""))
         .stdout(contains("\"version\":"))
         .stdout(contains("\"schema_version_before\": 1"))
-        .stdout(contains("\"schema_version_after\": 7"))
+        .stdout(contains(format!(
+            "\"schema_version_after\": {}",
+            CURRENT_SCHEMA_VERSION
+        )))
         .stdout(contains("\"changed\": true"));
 }
 
@@ -2890,7 +2894,7 @@ fn cli_repair_reports_healthy_hash_palace() {
         .stdout(contains("\"ok\": true"))
         .stdout(contains("\"vector_accessible\": true"))
         .stdout(contains("\"embedding_provider\": \"hash\""))
-        .stdout(contains("\"schema_version\": 7"));
+        .stdout(contains(format!("\"schema_version\": {}", CURRENT_SCHEMA_VERSION)));
 }
 
 #[test]

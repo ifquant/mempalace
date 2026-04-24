@@ -417,7 +417,7 @@ impl SqliteStore {
             r#"
             INSERT INTO kg_entities(entity_id, name, entity_type, created_at, updated_at)
             SELECT
-                lower(replace(entity, ' ', '_')),
+                lower(replace(replace(entity, ' ', '_'), '-', '_')),
                 entity,
                 'unknown',
                 CURRENT_TIMESTAMP,
