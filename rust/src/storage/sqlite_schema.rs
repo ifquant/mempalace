@@ -52,6 +52,10 @@ impl SqliteStore {
                     self.migrate_v7_to_v8()?;
                     version = 8;
                 }
+                8 => {
+                    self.migrate_v8_to_v9()?;
+                    version = 9;
+                }
                 CURRENT_SCHEMA_VERSION => break,
                 other => {
                     return Err(MempalaceError::InvalidArgument(format!(
@@ -184,6 +188,14 @@ impl SqliteStore {
                 valid_from TEXT,
                 valid_to TEXT,
                 created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS kg_entities (
+                entity_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -389,6 +401,41 @@ impl SqliteStore {
         Ok(())
     }
 
+    fn migrate_v8_to_v9(&self) -> Result<()> {
+        self.conn.execute_batch(
+            r#"
+            CREATE TABLE IF NOT EXISTS kg_entities (
+                entity_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            "#,
+        )?;
+        self.conn.execute_batch(
+            r#"
+            INSERT INTO kg_entities(entity_id, name, entity_type, created_at, updated_at)
+            SELECT
+                lower(replace(entity, ' ', '_')),
+                entity,
+                'unknown',
+                CURRENT_TIMESTAMP,
+                CURRENT_TIMESTAMP
+            FROM (
+                SELECT subject AS entity FROM kg_triples
+                UNION
+                SELECT object AS entity FROM kg_triples
+            )
+            WHERE trim(entity) <> ''
+            ON CONFLICT(entity_id) DO NOTHING;
+            "#,
+        )?;
+        self.set_meta("schema_version", "9")?;
+        self.record_migration(9, "add explicit kg entity table for python parity")?;
+        Ok(())
+    }
+
     fn record_migration(&self, version: i64, note: &str) -> Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO schema_migrations(version, applied_at, note) VALUES(?1, ?2, ?3)",
@@ -399,7 +446,7 @@ impl SqliteStore {
 
     fn has_user_tables(&self) -> Result<bool> {
         let count = self.conn.query_row(
-            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('drawers', 'ingested_files', 'kg_triples')",
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ('drawers', 'ingested_files', 'kg_triples', 'kg_entities')",
             [],
             |row| row.get::<_, i64>(0),
         )?;

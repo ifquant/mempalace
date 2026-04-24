@@ -1,35 +1,66 @@
 use chrono::Utc;
-use rusqlite::params;
+use rusqlite::{OptionalExtension, params};
 
 use crate::error::Result;
 use crate::model::{
-    DiaryEntry, DiaryReadResult, DiaryWriteResult, KgFact, KgInvalidateResult, KgStats,
-    KgTimelineResult, KgTriple, KgWriteResult,
+    DiaryEntry, DiaryReadResult, DiaryWriteResult, KgEntityWriteResult, KgFact, KgInvalidateResult,
+    KgStats, KgTimelineResult, KgTriple, KgWriteResult,
 };
 
 use super::SqliteStore;
 
 impl SqliteStore {
+    pub fn add_kg_entity(&self, name: &str, entity_type: &str) -> Result<KgEntityWriteResult> {
+        let entity_id = normalize_entity_id(name);
+        let now = Utc::now().to_rfc3339();
+        self.conn.execute(
+            "INSERT INTO kg_entities(entity_id, name, entity_type, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(entity_id) DO UPDATE SET
+                 name = excluded.name,
+                 entity_type = excluded.entity_type,
+                 updated_at = excluded.updated_at",
+            params![entity_id, name, entity_type, now, now],
+        )?;
+        Ok(KgEntityWriteResult {
+            success: true,
+            entity_id,
+            name: name.to_string(),
+            entity_type: entity_type.to_string(),
+        })
+    }
+
     pub fn add_kg_triple(&self, triple: &KgTriple) -> Result<KgWriteResult> {
-        let triple_id = format!(
-            "t_{}_{}_{}_{}",
-            normalize_entity_fragment(&triple.subject),
-            normalize_entity_fragment(&triple.predicate),
-            normalize_entity_fragment(&triple.object),
-            &blake3::hash(
-                format!(
-                    "{}|{}|{}|{}|{}|{}",
-                    triple.subject,
-                    triple.predicate,
-                    triple.object,
-                    triple.valid_from.as_deref().unwrap_or(""),
-                    triple.valid_to.as_deref().unwrap_or(""),
-                    Utc::now().to_rfc3339(),
-                )
-                .as_bytes()
+        self.add_kg_entity(&triple.subject, "unknown")?;
+        self.add_kg_entity(&triple.object, "unknown")?;
+
+        let existing_id = self
+            .conn
+            .query_row(
+                "SELECT id FROM kg_triples
+                 WHERE subject = ?1 AND predicate = ?2 AND object = ?3 AND valid_to IS NULL
+                 LIMIT 1",
+                params![triple.subject, triple.predicate, triple.object],
+                |row| row.get::<_, i64>(0),
             )
-            .to_hex()[..12]
-        );
+            .optional()?;
+        if let Some(existing_id) = existing_id {
+            return Ok(KgWriteResult {
+                success: true,
+                triple_id: kg_triple_id(
+                    &triple.subject,
+                    &triple.predicate,
+                    &triple.object,
+                    existing_id,
+                ),
+                fact: format!(
+                    "{} → {} → {}",
+                    triple.subject, triple.predicate, triple.object
+                ),
+            });
+        }
+
+        let created_at = Utc::now().to_rfc3339();
         self.conn.execute(
             "INSERT INTO kg_triples(subject, predicate, object, valid_from, valid_to, created_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -39,12 +70,18 @@ impl SqliteStore {
                 triple.object,
                 triple.valid_from,
                 triple.valid_to,
-                Utc::now().to_rfc3339(),
+                created_at,
             ],
         )?;
+        let triple_row_id = self.conn.last_insert_rowid();
         Ok(KgWriteResult {
             success: true,
-            triple_id,
+            triple_id: kg_triple_id(
+                &triple.subject,
+                &triple.predicate,
+                &triple.object,
+                triple_row_id,
+            ),
             fact: format!(
                 "{} → {} → {}",
                 triple.subject, triple.predicate, triple.object
@@ -267,15 +304,11 @@ impl SqliteStore {
             |row| row.get::<_, i64>(0),
         )? as usize;
         let expired_facts = triples.saturating_sub(current_facts);
-        let entities = self.conn.query_row(
-            "SELECT COUNT(*) FROM (
-                    SELECT subject AS entity FROM kg_triples
-                    UNION
-                    SELECT object AS entity FROM kg_triples
-                )",
-            [],
-            |row| row.get::<_, i64>(0),
-        )? as usize;
+        let entities = self
+            .conn
+            .query_row("SELECT COUNT(*) FROM kg_entities", [], |row| {
+                row.get::<_, i64>(0)
+            })? as usize;
         let mut stmt = self
             .conn
             .prepare("SELECT DISTINCT predicate FROM kg_triples ORDER BY predicate")?;
@@ -374,16 +407,30 @@ fn normalize_agent_name(agent_name: &str) -> String {
     agent_name.trim().to_lowercase().replace([' ', '-'], "_")
 }
 
-fn normalize_entity_fragment(value: &str) -> String {
+fn kg_triple_id(subject: &str, predicate: &str, object: &str, row_id: i64) -> String {
+    format!(
+        "t_{}_{}_{}_{}",
+        normalize_entity_fragment(subject),
+        normalize_entity_fragment(predicate),
+        normalize_entity_fragment(object),
+        row_id
+    )
+}
+
+fn normalize_entity_id(value: &str) -> String {
     let mut normalized = value
         .trim()
         .to_lowercase()
         .replace([' ', '-'], "_")
         .chars()
-        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '_')
+        .filter(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '_' | '.'))
         .collect::<String>();
     if normalized.is_empty() {
         normalized = "item".to_string();
     }
     normalized
+}
+
+fn normalize_entity_fragment(value: &str) -> String {
+    normalize_entity_id(value)
 }

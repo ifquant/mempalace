@@ -52,6 +52,14 @@ pub struct KgWriteResult {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct KgEntityWriteResult {
+    pub success: bool,
+    pub entity_id: String,
+    pub name: String,
+    pub entity_type: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct KgInvalidateResult {
     pub success: bool,
     pub fact: String,

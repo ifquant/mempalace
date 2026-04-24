@@ -1,6 +1,7 @@
 use crate::error::Result;
 use crate::model::{
-    KgInvalidateResult, KgQueryResult, KgStats, KgTimelineResult, KgTriple, KgWriteResult,
+    KgEntityWriteResult, KgInvalidateResult, KgQueryResult, KgStats, KgTimelineResult, KgTriple,
+    KgWriteResult,
 };
 use crate::storage::sqlite::SqliteStore;
 
@@ -15,6 +16,10 @@ impl<'a> KnowledgeGraph<'a> {
 
     pub fn add_triple(&self, triple: &KgTriple) -> Result<KgWriteResult> {
         self.store.add_kg_triple(triple)
+    }
+
+    pub fn add_entity(&self, name: &str, entity_type: &str) -> Result<KgEntityWriteResult> {
+        self.store.add_kg_entity(name, entity_type)
     }
 
     pub fn invalidate(

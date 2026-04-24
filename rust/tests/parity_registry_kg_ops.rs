@@ -77,6 +77,57 @@ async fn parity_kg_add_auto_creates_entities_and_updates_stats() {
     assert_eq!(stats.relationship_types, vec!["knows".to_string()]);
 }
 
+#[test]
+fn kg_add_entity_normalizes_id_and_upserts() {
+    use mempalace_rs::knowledge_graph::KnowledgeGraph;
+    use mempalace_rs::storage::sqlite::SqliteStore;
+
+    let tmp = tempdir().unwrap();
+    let sqlite = SqliteStore::open(&tmp.path().join("palace.sqlite3")).unwrap();
+    sqlite.init_schema().unwrap();
+    let kg = KnowledgeGraph::new(&sqlite);
+
+    let first = kg.add_entity("Dr. Chen", "person").unwrap();
+    let second = kg.add_entity("Dr. Chen", "engineer").unwrap();
+
+    assert_eq!(first.entity_id, "dr._chen");
+    assert_eq!(second.entity_id, "dr._chen");
+    assert_eq!(kg.stats().unwrap().entities, 1);
+}
+
+#[test]
+fn kg_duplicate_active_triple_returns_existing_id() {
+    use mempalace_rs::knowledge_graph::KnowledgeGraph;
+    use mempalace_rs::model::KgTriple;
+    use mempalace_rs::storage::sqlite::SqliteStore;
+
+    let tmp = tempdir().unwrap();
+    let sqlite = SqliteStore::open(&tmp.path().join("palace.sqlite3")).unwrap();
+    sqlite.init_schema().unwrap();
+    let kg = KnowledgeGraph::new(&sqlite);
+
+    let tid1 = kg
+        .add_triple(&KgTriple {
+            subject: "Alice".to_string(),
+            predicate: "knows".to_string(),
+            object: "Bob".to_string(),
+            valid_from: None,
+            valid_to: None,
+        })
+        .unwrap();
+    let tid2 = kg
+        .add_triple(&KgTriple {
+            subject: "Alice".to_string(),
+            predicate: "knows".to_string(),
+            object: "Bob".to_string(),
+            valid_from: None,
+            valid_to: None,
+        })
+        .unwrap();
+
+    assert_eq!(tid1.triple_id, tid2.triple_id);
+}
+
 #[tokio::test]
 async fn parity_registry_lookup_uses_context_to_disambiguate_name() {
     let tmp = tempdir().unwrap();
