@@ -196,7 +196,10 @@ impl<'a> MaintenanceRuntime<'a> {
                         continue;
                     }
                     match vector
-                        .delete_drawers(self.embedder.profile().dimension, std::slice::from_ref(drawer_id))
+                        .delete_drawers(
+                            self.embedder.profile().dimension,
+                            std::slice::from_ref(drawer_id),
+                        )
                         .await
                     {
                         Ok(1) => deleted_from_vector += 1,

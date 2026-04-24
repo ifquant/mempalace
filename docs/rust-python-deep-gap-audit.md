@@ -5,8 +5,8 @@
 - Target repo: `/Users/dev/workspace2/agents_research/mempalace`
 - Reference implementation: `python/`
 - Rewrite under audit: `rust/`
-- Audit slice: Task 1 seeding plus public interface inventory
-- Goal: identify confirmed deep semantic gaps, not speculative concerns
+- Audit slice: deep semantic audit plus residual parity closeout
+- Goal: identify confirmed deep semantic gaps, close them in capability-family batches, and keep a durable evidence trail
 
 ## Audit Method
 
@@ -22,7 +22,14 @@
 
 - `docs/parity-ledger.md` already records that Python CLI surface is a subset of Rust CLI surface and Python MCP surface is a subset of Rust MCP surface.
 - `docs/parity-ledger.md` also records completed representative behavior audits for transcript split/normalize, layers and maintenance, registry/KG/read-diary, and conversation/read-side behavior.
-- This Task 1 slice seeds the durable audit docs, verifies the interface baseline against current source, and avoids reopening family-level semantic work before direct source/test comparison.
+- This audit started by seeding the durable gap docs, then closed the confirmed residual gaps in capability-family batches instead of reopening broad speculative families.
+- The residual parity implementation batches landed across:
+  - `a2ced13 feat: close rust layer1 residual parity`
+  - `ac66867 feat: close rust repair prune residual parity`
+  - `c56d3a1 feat: close rust registry residual parity`
+  - `36b4de6 feat: close rust knowledge graph residual parity`
+  - `927f21d fix: align kg migration normalization and schema assertions`
+  - `d9cd194 feat: close rust cli mcp normalize residual parity`
 
 ## Interface Inventory
 
@@ -54,6 +61,8 @@
 - Rust registry catalog in `rust/src/mcp_schema_catalog_registry.rs:5-122` adds the `mempalace_registry_*` family.
 
 ## Capability Families
+
+The family tables below preserve the original audit-time verdicts and evidence trail. The final current-state verdict after implementation is recorded in `## Closeout Update`, `## Summary`, `docs/rust-python-deep-gap-list.md`, and `docs/parity-ledger.md`.
 
 ### 1. CLI and help/error semantics
 
@@ -123,22 +132,24 @@
 | Existing-quote transcript pass-through | `python/tests/test_normalize.py::test_normalize_already_has_markers`, `python/mempalace/normalize.py::normalize` | `rust/src/normalize.rs` tests `normalize_existing_quote_transcript_passes_through_like_python`, `normalize_quote_markers_without_space_count_like_python` | `already covered by parity tests` | Rust explicitly locks Python-style quote-marker pass-through, including the marker-count edge case. | Do not list as a gap. |
 | Split mega-file boundary / tiny-fragment / backup behavior | `python/tests/test_split_mega_files.py`, `python/mempalace/split_mega_files.py` | `rust/src/split.rs`, `rust/tests/cli_integration.rs::cli_split_dry_run_reports_output_without_writing`, `::cli_split_writes_files_and_renames_backup`, `::cli_split_file_mode_limits_scan_to_requested_file` | `not a gap` | Rust mirrors Python’s true-session boundary detection, skips tiny fragments, preserves dry-run semantics, and renames the source to `.mega_backup` when writing outputs. | No confirmed split-family semantic gap surfaced in this audit. |
 
+## Closeout Update
+
+The residual parity follow-up batches have now closed every `confirmed gap` recorded by the original audit:
+
+- Layer1 now applies the Python-style global character cap and overflow notice.
+- Layer1 ordering now uses durable canonical `importance` metadata with Python-style fallback semantics.
+- `repair_prune` now falls back from batch delete to per-ID delete and reports real failure counts.
+- Registry empty-state load now defaults to `personal`, blank seed names are filtered, and confirmed `wiki_cache` entries are surfaced on lookup.
+- Knowledge graph now has explicit entity upsert behavior with normalized IDs and active-duplicate triple reuse.
+- MCP initialize now falls back to the oldest supported protocol when `protocolVersion` is omitted.
+- CLI `mcp --palace ~/...` now expands `~` before emitting setup guidance.
+- Normalize now falls back to raw content for unknown-schema JSON and malformed JSONL instead of skipping those files.
+
 ## Summary
 
-- Confirmed gaps:
-  - Layer1 global-size overflow behavior is missing in Rust.
-  - Layer1 importance fallback behavior is missing in Rust.
-  - `repair_prune` delete-failure fallback and failure accounting are missing in Rust.
-  - Registry load default mode differs on missing-registry empty state.
-  - Registry seed empty-name filtering is missing in Rust.
-  - Registry lookup does not return confirmed wiki-cache entries.
-  - KG entity CRUD / entity-id semantics are missing in Rust.
-  - KG duplicate-active-triple dedup is missing in Rust.
-  - MCP initialize without `protocolVersion` falls back differently in Rust.
-  - CLI `mcp --palace ~/...` custom-path handling differs because Rust does not expand `~` like Python does.
-  - Malformed `.json` / `.jsonl` normalization falls back to raw content in Python but is skipped in Rust.
-- Intentional divergences: none newly recorded in Task 1; keep using `docs/parity-ledger.md` as the current source for accepted divergences
-- Already-covered representative audits: not reopened in Task 1
-- Not-a-gap closures:
+- Confirmed gaps remaining: none currently.
+- Intentional divergences: keep using `docs/parity-ledger.md` as the source of truth for Python palace data compatibility, on-disk locality, and repair-model differences.
+- Already-covered representative audits: transcript split/normalize, conversation/read-side representative behavior, and the earlier focused layers/maintenance and registry/KG/read-diary audits remain valid and were extended rather than reopened.
+- Not-a-gap closures remain:
   - Public CLI surface
   - Public MCP surface

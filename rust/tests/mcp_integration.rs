@@ -581,7 +581,7 @@ async fn mcp_helper_tools_return_tool_level_errors_for_bad_inputs() {
 }
 
 #[tokio::test]
-async fn mcp_project_bootstrap_tools_return_tool_level_errors_for_bad_inputs() {
+async fn mcp_project_bootstrap_tools_validate_people_and_normalize_raw_fallback() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("world");
     std::fs::create_dir_all(&project).unwrap();
@@ -622,14 +622,9 @@ async fn mcp_project_bootstrap_tools_return_tool_level_errors_for_bad_inputs() {
     .unwrap();
     let normalize_text = normalize["result"]["content"][0]["text"].as_str().unwrap();
     let normalize_payload: serde_json::Value = serde_json::from_str(normalize_text).unwrap();
-    assert_eq!(
-        normalize_payload["error"].as_str().unwrap(),
-        "Normalize error: Invalid argument: Unsupported or unreadable conversation file."
-    );
-    assert_eq!(
-        normalize_payload["hint"].as_str().unwrap(),
-        "Use a supported .txt, .md, .json, or .jsonl chat export, then rerun mempalace_normalize."
-    );
+    assert_eq!(normalize_payload["kind"], "normalize");
+    assert_eq!(normalize_payload["changed"], false);
+    assert_eq!(normalize_payload["normalized"], "this is not valid json");
 }
 
 #[tokio::test]

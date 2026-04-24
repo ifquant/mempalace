@@ -1589,11 +1589,15 @@ async fn service_mine_convos_spellchecks_user_turns_without_touching_known_names
         )
         .await
         .unwrap();
-    assert_eq!(summary.files_mined, 1);
+    assert_eq!(summary.files_mined, 2);
 
     let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
     let drawers = sqlite.list_drawers(None).unwrap();
-    let text = &drawers[0].text;
+    let text = drawers
+        .iter()
+        .find(|drawer| drawer.source_file == "session.jsonl")
+        .map(|drawer| drawer.text.as_str())
+        .unwrap();
     assert!(text.contains("Riley know the deploy before lunch"));
     assert!(text.contains("MemPalace"));
 }

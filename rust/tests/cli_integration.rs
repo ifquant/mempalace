@@ -1606,7 +1606,7 @@ fn cli_init_human_prints_python_style_summary() {
         .stdout(contains("Palace:"))
         .stdout(contains("SQLite:"))
         .stdout(contains("LanceDB:"))
-        .stdout(contains("Schema:  7"))
+        .stdout(contains(format!("Schema:  {}", CURRENT_SCHEMA_VERSION)))
         .stdout(contains("Config:"))
         .stdout(contains("Registry:"))
         .stdout(contains("AAAK:"))
@@ -2722,7 +2722,7 @@ fn cli_migrate_human_prints_python_style_summary() {
         .stdout(contains("Palace:"))
         .stdout(contains("SQLite:"))
         .stdout(contains("Before:  1"))
-        .stdout(contains("After:   7"))
+        .stdout(contains(format!("After:   {}", CURRENT_SCHEMA_VERSION)))
         .stdout(contains("Migration complete."));
 }
 
@@ -2962,7 +2962,10 @@ fn cli_repair_human_prints_python_style_diagnostics() {
         .stdout(contains("MemPalace Repair"))
         .stdout(contains("Palace:"))
         .stdout(contains("Drawers found:"))
-        .stdout(contains("Schema version: 7"))
+        .stdout(contains(format!(
+            "Schema version: {}",
+            CURRENT_SCHEMA_VERSION
+        )))
         .stdout(contains("Embedding: hash/hash-v1/64"))
         .stdout(contains("Vector access: ok"))
         .stdout(contains("Repair diagnostics look healthy."));

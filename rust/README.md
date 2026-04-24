@@ -9,7 +9,9 @@ Current parity status:
 - the CLI integration suite now locks most command-help contracts across root/global flags, helper/read flows, maintenance, registry, and project-facing commands
 - README verification examples now cover the main project, palace, registry, helper, MCP, and embedding flows
 - focused Rust parity tests now lock representative non-CLI behavior cases for layers/maintenance, registry/KG/read-diary behavior, and conversation/read-side behavior
+- the residual deep-gap parity batches for Layer1, `repair_prune`, registry, knowledge graph, CLI/MCP path-protocol handling, and normalize fallback are now closed
 - detailed Rust/Python parity tracking now lives in [`../docs/parity-ledger.md`](../docs/parity-ledger.md)
+- the current deep-gap list in [`../docs/rust-python-deep-gap-list.md`](../docs/rust-python-deep-gap-list.md) has no confirmed remaining gaps
 - remaining work is now limited to future residual parity batches first recorded in the ledger
 
 Current dependency direction:

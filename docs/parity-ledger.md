@@ -21,6 +21,8 @@ It is **not** a tracker for internal module splits or general refactor progress.
 - Rust transcript split behavior has completed a focused Python parity pass covering CLI entrypoints, source defaults, lossy transcript reads, output naming, people detection, and `known_names.json`.
 - Rust transcript normalize behavior has completed a focused Python parity pass covering file guards, lossy reads, pass-through rules, JSONL bad-entry tolerance, Claude.ai, ChatGPT, and Slack export parsing.
 - Rust now also has focused representative behavior-parity coverage for layers/maintenance, registry/KG/read-diary behavior, and conversation/read-side behavior.
+- The residual deep-gap batches for Layer1, `repair_prune`, registry, knowledge graph, CLI/MCP path/protocol handling, and normalize fallback have now been closed.
+- `docs/rust-python-deep-gap-list.md` currently has no confirmed remaining gaps.
 - Direct compatibility with existing Python palace data is **not** part of the current Rust phase.
 
 ## Python CLI Surface
@@ -107,9 +109,10 @@ These behavior-level parity passes have already been completed and should not be
 | --- | --- | --- |
 | Transcript mega-file split | `aligned` | Rust now matches Python for true session boundary filtering, minimum session scanning, `--source`, `--file`, default source directory, dry-run/non-dry-run write behavior, `.mega_backup` rename behavior, lossy UTF-8 reads, timestamp fallback, source stem cleanup/truncation, subject cleanup/truncation, final filename sanitizing, fallback known people, list/object `known_names.json`, and `username_map`. |
 | Transcript normalize | `aligned` | Rust now matches Python for 500MB file guard behavior, lossy UTF-8 reads, blank-content pass-through, existing quote-transcript pass-through, `>` marker detection, Claude Code/Codex JSONL malformed-line tolerance, Codex missing-payload tolerance, Slack role assignment, ChatGPT missing-child traversal, ChatGPT empty-part filtering, and Claude.ai `messages`/`chat_messages` key priority. Rust additionally keeps the CLI/MCP `normalize` entrypoints and flat JSON message-array parsing as extension surface. |
-| Layers / maintenance representative behavior audit | `aligned` | Focused Rust parity tests now lock Layer 0 identity trimming/token estimation, dedup short-doc dry-run planning, and repair prune preview semantics. This pass also fixed two real Rust drifts: Layer 0 token estimation now uses Python-style char-based counting, and dedup now consistently marks sub-20-character drawers for deletion planning. |
-| Registry / KG / read-diary representative behavior audit | `aligned` | Focused Rust parity tests now lock KG entity auto-creation and stats, registry context-based disambiguation, and diary empty-state behavior. No additional Rust source change was required for this pass. |
+| Layers / maintenance representative behavior audit | `aligned` | Rust now locks Layer 0 identity trimming/token estimation, dedup short-doc dry-run planning, repair prune preview semantics, Layer1 global-cap overflow handling, Layer1 importance ordering, and live `repair_prune` delete-failure accounting. |
+| Registry / KG / read-diary representative behavior audit | `aligned` | Rust now locks registry context-based disambiguation, missing-registry default mode, blank-name seed filtering, confirmed wiki-cache lookup behavior, KG entity auto-creation and stats, explicit KG entity upsert semantics, duplicate-active-triple reuse, and diary empty-state behavior. |
 | Conversation mining / read-side representative behavior audit | `aligned` | Focused Rust parity tests now lock source replacement during convo mining, positive resolved general-memory classification, and wake-up read-side identity/kind behavior. No additional Rust source change was required for this pass. |
+| CLI / MCP / normalize residual parity audit | `aligned` | Rust now matches Python for missing-protocol MCP initialize fallback, CLI `mcp --palace ~/...` path expansion, and raw-content fallback when JSON normalization sees unknown schema or malformed JSONL input. |
 
 ## Remaining Work
 

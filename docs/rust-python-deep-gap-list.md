@@ -11,24 +11,35 @@ This file lists only **confirmed remaining gaps** between the current Python Mem
 
 ## Confirmed Gaps
 
-| Family | Gap | Python reference | Rust reference | Severity | Suggested batch |
-| --- | --- | --- | --- | --- | --- |
-| Layers / maintenance | Layer1 global-size overflow behavior is missing: Rust does not enforce Python’s `MAX_CHARS`-style global cap or emit the overflow notice. | `python/tests/test_layers.py::test_layer1_respects_max_chars` | `rust/src/layers.rs::render_layer1` | high | `read-side residual parity` |
-| Layers / maintenance | Layer1 importance fallback behavior is missing: Rust has no equivalent to Python’s `importance` / `emotional_weight` / `weight` fallback semantics. | `python/tests/test_layers.py::test_layer1_importance_from_various_keys` | `rust/src/layers.rs::render_layer1`, `rust/src/storage/sqlite.rs::DrawerRecord` | high | `read-side residual parity` |
-| Layers / maintenance | `repair_prune` lacks Python’s delete-failure fallback and failure accounting. | `python/tests/test_repair.py::test_prune_corrupt_delete_failure_fallback` | `rust/src/maintenance_runtime.rs::repair_prune` | high | `maintenance residual parity` |
-| Registry / KG | Missing registry load default parity: Rust loads a missing registry in `work` mode, while Python defaults to `personal`. | `python/tests/test_entity_registry.py::test_load_from_nonexistent_dir` | `rust/src/registry_io.rs::EntityRegistry::load` | medium | `registry residual parity` |
-| Registry / KG | Missing registry seed empty-name filtering: Rust seeds blank names that Python drops. | `python/tests/test_entity_registry.py::test_seed_skips_empty_names` | `rust/src/registry_io.rs::EntityRegistry::seed` | medium | `registry residual parity` |
-| Registry / KG | Missing confirmed wiki-cache lookup path: Rust lookup does not surface confirmed wiki-cache entries the way Python does. | `python/mempalace/entity_registry.py::EntityRegistry.lookup` | `rust/src/registry_lookup.rs::EntityRegistry::lookup` | medium | `registry residual parity` |
-| Registry / KG | Missing KG entity CRUD / normalized entity-id semantics. | `python/tests/test_knowledge_graph.py::TestEntityOperations`, `python/mempalace/knowledge_graph.py::KnowledgeGraph.add_entity` | `rust/src/knowledge_graph.rs`, `rust/src/storage/sqlite_kg.rs` | high | `knowledge-graph residual parity` |
-| Registry / KG | Missing duplicate-active-triple dedup semantics: Rust inserts a fresh triple instead of returning the active existing triple ID. | `python/tests/test_knowledge_graph.py::test_duplicate_triple_returns_existing_id` | `rust/src/storage/sqlite_kg.rs::add_kg_triple` | high | `knowledge-graph residual parity` |
-| CLI / MCP | Missing-protocol MCP initialize fallback differs: Rust does not fall back to the oldest supported protocol version when `params.protocolVersion` is omitted. | `python/tests/test_mcp_server.py::test_initialize_missing_version_uses_oldest` | `rust/src/mcp_schema_support.rs::negotiate_protocol` | medium | `mcp residual parity` |
-| CLI / MCP | Custom `mcp --palace ~/...` handling differs because Rust does not expand `~` the way Python does before emitting setup guidance. | `python/tests/test_cli.py::test_mcp_command_uses_custom_palace_path_when_provided` | `rust/src/config.rs::AppConfig::resolve`, `rust/src/helper_cli.rs`, `rust/src/cli_support.rs` | medium | `cli path-shape residual parity` |
-| Normalize / split | Malformed `.json` / `.jsonl` normalize fallback differs: Python falls back to raw content when JSON normalization fails, while Rust returns `None` and skips the file. | `python/mempalace/normalize.py::normalize`, `python/tests/test_normalize.py::test_try_normalize_json_invalid_json`, `python/tests/test_normalize.py::test_try_normalize_json_valid_but_unknown_schema` | `rust/src/normalize.rs::normalize_conversation` | medium | `normalize residual parity` |
+None currently.
+
+The residual parity batches recorded by the deep audit are now closed for:
+
+- Layer1 global-cap and importance semantics
+- `repair_prune` delete-failure fallback and failure accounting
+- registry empty-state, seed filtering, and confirmed wiki-cache lookup behavior
+- KG entity CRUD / normalized entity-id semantics and duplicate-active-triple reuse
+- MCP initialize protocol fallback
+- CLI `mcp --palace ~/...` path expansion
+- normalize raw fallback for unknown or malformed `.json` / `.jsonl`
+
+If a new user-visible gap is found later, record it here first and then mirror the summary in `docs/parity-ledger.md`.
 
 ## Closed During Audit
 
 | Topic | Resolution |
 | --- | --- |
+| Layer1 global-size overflow behavior | Closed by residual parity implementation. Rust `render_layer1()` now enforces the Python-style global character cap and emits the same overflow-hint class, with focused parity coverage in `rust/tests/parity_layers_maintenance.rs`. |
+| Layer1 importance fallback behavior | Closed by residual parity implementation. Rust now persists canonical drawer `importance`, sorts Layer1 entries with Python-style fallback semantics, and locks the ordering in focused parity tests. |
+| `repair_prune` delete-failure fallback and failure accounting | Closed by residual parity implementation. Rust now falls back from batch delete to per-ID deletion and reports real failure counts like the Python path. |
+| Registry load default mode | Closed by residual parity implementation. Rust missing-registry load now defaults to `personal`, matching Python empty-state behavior. |
+| Registry seed empty-name filtering | Closed by residual parity implementation. Rust now trims and skips blank seed names before persisting registry data. |
+| Confirmed wiki-cache lookup behavior | Closed by residual parity implementation. Rust lookup now surfaces confirmed `wiki_cache` entries before returning `unknown`, with focused parity coverage. |
+| KG entity CRUD / entity-id semantics | Closed by residual parity implementation. Rust now has explicit entity upsert behavior with normalized IDs backed by durable SQLite entity storage. |
+| KG duplicate-active-triple dedup | Closed by residual parity implementation. Rust now reuses the active triple ID for duplicate inserts instead of creating a fresh fact row. |
+| MCP initialize missing `protocolVersion` | Closed by residual parity implementation. Rust now falls back to the oldest supported protocol version when `protocolVersion` is omitted. |
+| CLI `mcp --palace ~/...` custom-path handling | Closed by residual parity implementation. Rust now expands `~` before rendering MCP setup output, matching Python path-shape behavior. |
+| Normalize malformed `.json` / `.jsonl` fallback-to-raw behavior | Closed by residual parity implementation. Rust now falls back to raw content for unknown-schema JSON and malformed JSONL instead of skipping the file. |
 | Public CLI surface | Closed as `not a gap`. `python/mempalace/cli.py:396-590` exports a command tree that is fully represented within `rust/src/root_cli.rs:9-288`, while Rust-only commands remain extension surface rather than missing parity work. |
 | Public MCP surface | Closed as `not a gap`. Python `tools/list` and handler inventory in `python/mempalace/mcp_server.py:139-575` and `python/mempalace/mcp_server.py:848-907` are fully represented by Rust `mcp_schema` catalogs in `rust/src/mcp_schema.rs:8-15`, `rust/src/mcp_schema_catalog_read.rs:5-159`, `rust/src/mcp_schema_catalog_write.rs:5-130`, `rust/src/mcp_schema_catalog_project.rs:5-77`, and `rust/src/mcp_schema_catalog_registry.rs:5-122`. |
 | Dedup short / empty doc handling | Closed as `already covered by parity tests`. Rust `parity_layers_maintenance.rs` plus `Deduplicator::plan` already lock the representative behavior. |
