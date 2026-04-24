@@ -6,7 +6,7 @@ Thanks for wanting to help. MemPalace is open source and we welcome contribution
 
 ```bash
 git clone https://github.com/milla-jovovich/mempalace.git
-cd mempalace
+cd mempalace/python
 pip install -e ".[dev]"    # installs with dev dependencies (pytest, build, twine)
 ```
 
@@ -33,12 +33,15 @@ See [benchmarks/README.md](benchmarks/README.md) for data download instructions 
 ## Project Structure
 
 ```
-mempalace/          ← core package (see mempalace/README.md for module guide)
-benchmarks/         ← reproducible benchmark runners
-hooks/              ← Claude Code auto-save hooks
-examples/           ← usage examples
-tests/              ← test suite
-assets/             ← logo + brand
+python/
+├── mempalace/      ← core package (see mempalace/README.md for module guide)
+├── benchmarks/     ← reproducible benchmark runners
+├── examples/       ← usage examples
+└── tests/          ← test suite
+
+repo root/
+├── hooks/          ← Claude Code auto-save hooks
+└── assets/         ← logo + brand
 ```
 
 ## PR Guidelines

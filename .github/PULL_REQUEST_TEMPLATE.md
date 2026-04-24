@@ -3,6 +3,6 @@
 ## How to test
 
 ## Checklist
-- [ ] Tests pass (`python -m pytest tests/ -v`)
+- [ ] Tests pass (`cd python && python -m pytest tests/ -v`)
 - [ ] No hardcoded paths
-- [ ] Linter passes (`ruff check .`)
+- [ ] Linter passes (`cd python && ruff check .`)

@@ -18,7 +18,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
+        working-directory: python
       - run: python -m pytest tests/ -v --ignore=tests/benchmarks --cov=mempalace --cov-report=term-missing --cov-fail-under=80 --durations=10
+        working-directory: python
 
   test-windows:
     runs-on: windows-latest
@@ -28,7 +30,9 @@ jobs:
         with:
           python-version: "3.9"
       - run: pip install -e ".[dev]"
+        working-directory: python
       - run: python -m pytest tests/ -v --ignore=tests/benchmarks --cov=mempalace --cov-report=term-missing --cov-fail-under=80 --durations=10
+        working-directory: python
 
   test-macos:
     runs-on: macos-latest
@@ -38,7 +42,9 @@ jobs:
         with:
           python-version: "3.9"
       - run: pip install -e ".[dev]"
+        working-directory: python
       - run: python -m pytest tests/ -v --ignore=tests/benchmarks --cov=mempalace --cov-report=term-missing --cov-fail-under=80 --durations=10
+        working-directory: python
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -48,4 +54,23 @@ jobs:
           python-version: "3.11"
       - run: pip install "ruff>=0.4.0,<0.5"
       - run: ruff check .
+        working-directory: python
       - run: ruff format --check .
+        working-directory: python
+
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - run: cargo fmt --check
+        working-directory: rust
+      - run: cargo check
+        working-directory: rust
+      - run: cargo test
+        working-directory: rust
+      - run: cargo clippy --all-targets --all-features
+        working-directory: rust

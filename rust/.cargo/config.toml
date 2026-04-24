@@ -1,0 +1,10 @@
+[build]
+incremental = false
+
+[profile.dev]
+debug = 0
+codegen-units = 16
+
+[profile.test]
+debug = 0
+codegen-units = 16
