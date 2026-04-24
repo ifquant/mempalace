@@ -66,9 +66,7 @@ pub fn normalize_conversation(
         if let Some(normalized) = try_normalize_json(content, known_names) {
             return Ok(Some(normalized));
         }
-        if matches!(ext.as_str(), "json" | "jsonl") {
-            return Ok(None);
-        }
+        return Ok(Some(raw.to_string()));
     }
 
     Ok(Some(raw.to_string()))
@@ -176,6 +174,31 @@ mod tests {
         let raw = "> knoe one\nAssistant one\n> befor two\nAssistant two\n> alredy three\n";
 
         let normalized = normalize_conversation(Path::new("quoted.txt"), raw, &known_names)
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(normalized, raw);
+    }
+
+    #[test]
+    fn normalize_json_file_with_unknown_schema_falls_back_to_raw_like_python() {
+        let raw = r#"{"random":"data"}"#;
+
+        let normalized = normalize_conversation(Path::new("unknown.json"), raw, &HashSet::new())
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(normalized, raw);
+    }
+
+    #[test]
+    fn normalize_malformed_jsonl_falls_back_to_raw_like_python() {
+        let raw = r#"{"type":"session_meta","payload":{"id":"demo"}}
+not-json
+{"type":"event_msg","payload":{"type":"user_message","message":"hello"}}
+"#;
+
+        let normalized = normalize_conversation(Path::new("broken.jsonl"), raw, &HashSet::new())
             .unwrap()
             .unwrap();
 

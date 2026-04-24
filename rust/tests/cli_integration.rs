@@ -47,7 +47,10 @@ fn cli_init_status_mine_search_round_trip() {
         .stdout(contains("\"aaak_entities_path\":"))
         .stdout(contains("\"critical_facts_path\":"))
         .stdout(contains("\"version\":"))
-        .stdout(contains(format!("\"schema_version\": {}", CURRENT_SCHEMA_VERSION)))
+        .stdout(contains(format!(
+            "\"schema_version\": {}",
+            CURRENT_SCHEMA_VERSION
+        )))
         .stdout(contains("palace.sqlite3"));
 
     assert!(project.join("mempalace.yaml").exists());
@@ -911,6 +914,20 @@ fn cli_mcp_default_prints_python_style_quick_setup() {
         .stdout(contains("Run the server directly:"))
         .stdout(contains("Optional custom palace:"))
         .stdout(contains("mempalace-rs mcp --serve --palace"));
+}
+
+#[test]
+fn cli_mcp_custom_palace_expands_tilde_like_python() {
+    let home = tempdir().unwrap();
+    let expected = home.path().join("tmp").join("my palace");
+
+    Command::cargo_bin("mempalace-rs")
+        .unwrap()
+        .env("HOME", home.path())
+        .args(["--palace", "~/tmp/my palace", "mcp"])
+        .assert()
+        .success()
+        .stdout(contains(expected.display().to_string()));
 }
 
 #[test]
@@ -2894,7 +2911,10 @@ fn cli_repair_reports_healthy_hash_palace() {
         .stdout(contains("\"ok\": true"))
         .stdout(contains("\"vector_accessible\": true"))
         .stdout(contains("\"embedding_provider\": \"hash\""))
-        .stdout(contains(format!("\"schema_version\": {}", CURRENT_SCHEMA_VERSION)));
+        .stdout(contains(format!(
+            "\"schema_version\": {}",
+            CURRENT_SCHEMA_VERSION
+        )));
 }
 
 #[test]

@@ -18,7 +18,7 @@ pub fn negotiate_protocol(params: Option<&Value>) -> &'static str {
             .copied()
             .find(|supported| *supported == version)
             .unwrap_or(SUPPORTED_PROTOCOL_VERSIONS[0]),
-        None => SUPPORTED_PROTOCOL_VERSIONS[1],
+        None => *SUPPORTED_PROTOCOL_VERSIONS.last().unwrap(),
     }
 }
 

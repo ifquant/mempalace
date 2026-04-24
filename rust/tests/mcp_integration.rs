@@ -8,6 +8,23 @@ use serde_json::json;
 use tempfile::tempdir;
 
 #[tokio::test]
+async fn mcp_initialize_missing_version_uses_oldest_supported_protocol() {
+    let config = AppConfig::resolve(Some(tempdir().unwrap().path().join("palace"))).unwrap();
+
+    let response = handle_request(json!({"method":"initialize","id":1,"params":{}}), &config)
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(
+        response["result"]["protocolVersion"],
+        *mempalace_rs::mcp_schema_support::SUPPORTED_PROTOCOL_VERSIONS
+            .last()
+            .unwrap()
+    );
+}
+
+#[tokio::test]
 async fn mcp_read_tools_work() {
     let tmp = tempdir().unwrap();
     let project = tmp.path().join("project");

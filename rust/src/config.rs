@@ -80,11 +80,25 @@ fn normalize_path(path: &Path) -> Result<PathBuf> {
         ));
     }
 
-    if path.is_absolute() {
-        return Ok(path.to_path_buf());
+    let raw = path.to_string_lossy();
+    let expanded = if raw == "~" || raw.starts_with("~/") {
+        let home = dirs::home_dir().ok_or_else(|| {
+            MempalaceError::InvalidArgument("Unable to determine home directory".to_string())
+        })?;
+        if raw == "~" {
+            home
+        } else {
+            home.join(raw.trim_start_matches("~/"))
+        }
+    } else {
+        path.to_path_buf()
+    };
+
+    if expanded.is_absolute() {
+        return Ok(expanded);
     }
 
-    Ok(std::env::current_dir()?.join(path))
+    Ok(std::env::current_dir()?.join(expanded))
 }
 
 fn resolve_embedding_settings(
