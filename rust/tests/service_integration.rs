@@ -1299,6 +1299,46 @@ async fn repair_scan_prune_and_rebuild_handle_vector_drift() {
 }
 
 #[tokio::test]
+async fn repair_prune_live_deletes_existing_ids_and_keeps_failure_count_zero() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let result = app
+        .add_drawer(
+            "project",
+            "general",
+            "This queued drawer should be removed from both stores.",
+            Some("repair-confirm.txt"),
+            Some("codex"),
+        )
+        .await
+        .unwrap();
+
+    std::fs::write(
+        config.palace_path.join("corrupt_ids.txt"),
+        format!("{}\n", result.drawer_id),
+    )
+    .unwrap();
+
+    let summary = app.repair_prune(true).await.unwrap();
+
+    assert_eq!(summary.queued, 1);
+    assert!(summary.confirm);
+    assert_eq!(summary.deleted_from_sqlite, 1);
+    assert_eq!(summary.deleted_from_vector, 1);
+    assert_eq!(summary.failed, 0);
+
+    let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    assert!(!sqlite.drawer_exists(&result.drawer_id).unwrap());
+
+    let vector = VectorStore::connect(&config.lance_path()).await.unwrap();
+    assert!(!vector.drawer_exists(64, &result.drawer_id).await.unwrap());
+}
+
+#[tokio::test]
 async fn dedup_removes_near_identical_drawers_from_same_source() {
     let tmp = tempdir().unwrap();
     let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();

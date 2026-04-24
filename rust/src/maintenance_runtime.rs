@@ -146,17 +146,72 @@ impl<'a> MaintenanceRuntime<'a> {
         let sqlite = self.open_sqlite()?;
         let vector = VectorStore::connect(&self.config.lance_path()).await?;
 
-        let deleted_from_sqlite = sqlite.delete_drawers(&queued_ids)?;
-        let deleted_from_vector = vector
+        let mut deleted_from_sqlite = 0usize;
+        let mut deleted_from_vector = 0usize;
+        let mut failed = 0usize;
+
+        let sqlite_existing = queued_ids
+            .iter()
+            .map(|drawer_id| sqlite.drawer_exists(drawer_id))
+            .collect::<Result<Vec<_>>>()?;
+        let vector_existing = {
+            let mut existing = Vec::with_capacity(queued_ids.len());
+            for drawer_id in &queued_ids {
+                existing.push(
+                    vector
+                        .drawer_exists(self.embedder.profile().dimension, drawer_id)
+                        .await?,
+                );
+            }
+            existing
+        };
+
+        match sqlite.delete_drawers(&queued_ids) {
+            Ok(count) => deleted_from_sqlite = count,
+            Err(_) => {
+                for (drawer_id, existed) in queued_ids.iter().zip(sqlite_existing.iter().copied()) {
+                    if !existed {
+                        continue;
+                    }
+                    match sqlite.delete_drawers(std::slice::from_ref(drawer_id)) {
+                        Ok(1) => deleted_from_sqlite += 1,
+                        _ => failed += 1,
+                    }
+                }
+            }
+        }
+
+        match vector
             .delete_drawers(self.embedder.profile().dimension, &queued_ids)
-            .await?;
+            .await
+        {
+            Ok(_) => {
+                deleted_from_vector = vector_existing.iter().filter(|exists| **exists).count();
+                failed += queued_ids.len() - deleted_from_vector;
+            }
+            Err(_) => {
+                for (drawer_id, existed) in queued_ids.iter().zip(vector_existing.iter().copied()) {
+                    if !existed {
+                        failed += 1;
+                        continue;
+                    }
+                    match vector
+                        .delete_drawers(self.embedder.profile().dimension, std::slice::from_ref(drawer_id))
+                        .await
+                    {
+                        Ok(1) => deleted_from_vector += 1,
+                        _ => failed += 1,
+                    }
+                }
+            }
+        }
 
         Ok(context.build_prune_result(
             &queued_ids,
             confirm,
             deleted_from_vector,
             deleted_from_sqlite,
-            0,
+            failed,
         ))
     }
 

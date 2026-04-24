@@ -132,6 +132,27 @@ async fn repair_prune_preview_reports_queue_without_mutating_palace() {
     );
 }
 
+#[tokio::test]
+async fn repair_prune_live_reports_failures_for_ids_missing_from_both_stores() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    fs::write(
+        config.palace_path.join("corrupt_ids.txt"),
+        "missing-one\nmissing-two\n",
+    )
+    .unwrap();
+
+    let summary = app.repair_prune(true).await.unwrap();
+
+    assert_eq!(summary.queued, 2);
+    assert!(summary.confirm);
+    assert_eq!(summary.failed, 2);
+}
+
 #[test]
 fn layer1_stops_at_python_style_global_char_cap() {
     use mempalace_rs::layers::render_layer1;
