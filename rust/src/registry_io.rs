@@ -23,7 +23,7 @@ impl EntityRegistry {
             let content = fs::read_to_string(path)?;
             Ok(serde_json::from_str(&content)?)
         } else {
-            Ok(Self::empty("work"))
+            Ok(Self::empty("personal"))
         }
     }
 
@@ -95,13 +95,18 @@ impl EntityRegistry {
             .collect::<BTreeMap<_, _>>();
 
         for person in people {
+            let name = person.name.trim();
+            if name.is_empty() {
+                continue;
+            }
+
             self.people.insert(
-                person.name.clone(),
+                name.to_string(),
                 crate::registry_types::RegistryPerson {
                     source: "onboarding".to_string(),
                     contexts: vec![person.context.clone()],
                     aliases: reverse_aliases
-                        .get(&person.name)
+                        .get(name)
                         .map(|alias| vec![alias.clone()])
                         .unwrap_or_default(),
                     relationship: person.relationship.clone(),
@@ -110,16 +115,16 @@ impl EntityRegistry {
                 },
             );
 
-            if let Some(alias) = reverse_aliases.get(&person.name) {
+            if let Some(alias) = reverse_aliases.get(name) {
                 self.people.insert(
                     alias.clone(),
                     crate::registry_types::RegistryPerson {
                         source: "onboarding".to_string(),
                         contexts: vec![person.context.clone()],
-                        aliases: vec![person.name.clone()],
+                        aliases: vec![name.to_string()],
                         relationship: person.relationship.clone(),
                         confidence: 1.0,
-                        canonical: Some(person.name.clone()),
+                        canonical: Some(name.to_string()),
                     },
                 );
             }

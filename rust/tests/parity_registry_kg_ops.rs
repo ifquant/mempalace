@@ -11,6 +11,56 @@ fn hash_app(root: &std::path::Path) -> App {
     App::new(config).unwrap()
 }
 
+#[test]
+fn registry_load_defaults_to_personal_mode_like_python() {
+    let tmp = tempdir().unwrap();
+    let registry = EntityRegistry::load(&tmp.path().join("entity_registry.json")).unwrap();
+
+    assert_eq!(registry.mode, "personal");
+}
+
+#[test]
+fn registry_seed_skips_blank_names_like_python() {
+    let mut registry = EntityRegistry::empty("personal");
+    registry.seed(
+        "personal",
+        &[SeedPerson {
+            name: String::new(),
+            relationship: String::new(),
+            context: "personal".to_string(),
+        }],
+        &[],
+        &BTreeMap::new(),
+    );
+
+    assert!(registry.people.is_empty());
+}
+
+#[test]
+fn registry_lookup_returns_confirmed_wiki_cache_entry_before_unknown() {
+    use mempalace_rs::registry_types::RegistryResearchEntry;
+
+    let mut registry = EntityRegistry::empty("personal");
+    registry.wiki_cache.insert(
+        "Saoirse".to_string(),
+        RegistryResearchEntry {
+            word: "Saoirse".to_string(),
+            inferred_type: "person".to_string(),
+            confidence: 0.8,
+            wiki_summary: Some("Saoirse is a given name".to_string()),
+            wiki_title: Some("Saoirse".to_string()),
+            note: None,
+            confirmed: true,
+            confirmed_type: Some("person".to_string()),
+        },
+    );
+
+    let result = registry.lookup("Saoirse", "");
+    assert_eq!(result.r#type, "person");
+    assert_eq!(result.source, "wiki");
+    assert_eq!(result.name, "Saoirse");
+}
+
 #[tokio::test]
 async fn parity_kg_add_auto_creates_entities_and_updates_stats() {
     let tmp = tempdir().unwrap();

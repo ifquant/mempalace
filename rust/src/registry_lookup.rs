@@ -85,6 +85,29 @@ impl EntityRegistry {
             }
         }
 
+        if let Some((_, entry)) = self
+            .wiki_cache
+            .iter()
+            .find(|(cached_word, entry)| cached_word.eq_ignore_ascii_case(word) && entry.confirmed)
+        {
+            return RegistryLookupResult {
+                word: word.to_string(),
+                r#type: entry
+                    .confirmed_type
+                    .clone()
+                    .unwrap_or_else(|| entry.inferred_type.clone()),
+                confidence: entry.confidence,
+                source: "wiki".to_string(),
+                name: entry
+                    .wiki_title
+                    .clone()
+                    .unwrap_or_else(|| word.to_string()),
+                context: Vec::new(),
+                needs_disambiguation: false,
+                disambiguated_by: Some("wiki_cache".to_string()),
+            };
+        }
+
         RegistryLookupResult {
             word: word.to_string(),
             r#type: "unknown".to_string(),
