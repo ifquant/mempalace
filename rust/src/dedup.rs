@@ -4,6 +4,8 @@ use crate::model::{DedupSourceResult, DedupSummary};
 use crate::storage::sqlite::DrawerRecord;
 use crate::storage::vector::VectorDrawer;
 
+const MIN_DOC_CHARS: usize = 20;
+
 pub struct Deduplicator<'a> {
     sqlite_drawers: &'a [DrawerRecord],
     vector_drawers: &'a [VectorDrawer],
@@ -62,7 +64,14 @@ impl<'a> Deduplicator<'a> {
             let mut local_kept = 0usize;
 
             for record in &records {
+                if record.text.chars().count() < MIN_DOC_CHARS {
+                    delete_ids.push(record.id.clone());
+                    local_deleted += 1;
+                    continue;
+                }
+
                 let Some(vector_record) = vectors_by_id.get(&record.id) else {
+                    local_kept += 1;
                     continue;
                 };
                 let is_dup = kept_vectors.iter().any(|(_, kept_vector)| {

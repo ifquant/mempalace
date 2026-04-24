@@ -8,8 +8,9 @@ Current parity status:
 - the top-level Rust CLI help now reflects the broader current surface: bootstrap, transcript prep, recall layers, registry workflows, maintenance, and MCP
 - the CLI integration suite now locks most command-help contracts across root/global flags, helper/read flows, maintenance, registry, and project-facing commands
 - README verification examples now cover the main project, palace, registry, helper, MCP, and embedding flows
+- focused Rust parity tests now lock representative non-CLI behavior cases for layers/maintenance, registry/KG/read-diary behavior, and conversation/read-side behavior
 - detailed Rust/Python parity tracking now lives in [`../docs/parity-ledger.md`](../docs/parity-ledger.md)
-- remaining work is now mainly deeper non-CLI behavior audits and any future residual parity batches identified in the ledger
+- remaining work is now limited to future residual parity batches first recorded in the ledger
 
 Current dependency direction:
 

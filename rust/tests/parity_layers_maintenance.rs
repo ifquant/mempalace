@@ -1,0 +1,132 @@
+use std::fs;
+
+use mempalace_rs::config::{AppConfig, EmbeddingBackend};
+use mempalace_rs::layers::LayerStack;
+use mempalace_rs::model::DrawerInput;
+use mempalace_rs::service::App;
+use mempalace_rs::storage::sqlite::SqliteStore;
+use tempfile::tempdir;
+
+#[tokio::test]
+async fn layer0_trims_identity_and_matches_python_token_estimate() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let padded_identity = format!("  {}  \n\n", "A".repeat(400));
+    fs::write(config.identity_path(), &padded_identity).unwrap();
+
+    let stack = LayerStack::with_app(app);
+    let layer0 = stack.layer0().await.unwrap();
+    let wake = stack.wake_up(None).await.unwrap();
+
+    assert_eq!(layer0.identity, "A".repeat(400));
+    assert_eq!(layer0.token_estimate, 100);
+    assert_eq!(wake.identity, "A".repeat(400));
+    assert!(wake.layer1.contains("No memories yet"));
+}
+
+#[tokio::test]
+async fn dedup_dry_run_marks_short_docs_without_deleting_anything() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    let keeper = DrawerInput {
+        id: "keep_long".to_string(),
+        wing: "project".to_string(),
+        room: "general".to_string(),
+        source_file: "dedup-short.txt".to_string(),
+        source_path: "dedup-short.txt".to_string(),
+        source_hash: "keep".to_string(),
+        source_mtime: None,
+        chunk_index: 0,
+        added_by: "codex".to_string(),
+        filed_at: "2026-04-18T00:00:00Z".to_string(),
+        ingest_mode: "projects".to_string(),
+        extract_mode: "exchange".to_string(),
+        text: "long enough document to keep in the palace".to_string(),
+    };
+    let short = DrawerInput {
+        id: "delete_short".to_string(),
+        chunk_index: 1,
+        source_hash: "short".to_string(),
+        text: "tiny".to_string(),
+        ..keeper.clone()
+    };
+    sqlite.insert_drawer(&keeper).unwrap();
+    sqlite.insert_drawer(&short).unwrap();
+
+    let vector = mempalace_rs::storage::vector::VectorStore::connect(&config.lance_path())
+        .await
+        .unwrap();
+    vector
+        .add_drawers(
+            &[keeper.clone(), short.clone()],
+            &[vec![1.0; 64], vec![0.0; 64]],
+        )
+        .await
+        .unwrap();
+
+    let preview = app
+        .dedup(0.01, true, None, Some("dedup-short.txt"), 2, false)
+        .await
+        .unwrap();
+
+    assert!(preview.dry_run);
+    assert_eq!(preview.sources_checked, 1);
+    assert_eq!(preview.kept, 1);
+    assert_eq!(preview.deleted, 1);
+    assert_eq!(preview.groups.len(), 1);
+    assert_eq!(preview.groups[0].source_file, "dedup-short.txt");
+    assert_eq!(preview.groups[0].kept, 1);
+    assert_eq!(preview.groups[0].deleted, 1);
+
+    let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    assert_eq!(sqlite.total_drawers().unwrap(), 2);
+}
+
+#[tokio::test]
+async fn repair_prune_preview_reports_queue_without_mutating_palace() {
+    let tmp = tempdir().unwrap();
+    let mut config = AppConfig::resolve(Some(tmp.path().join("palace"))).unwrap();
+    config.embedding.backend = EmbeddingBackend::Hash;
+    let app = App::new(config.clone()).unwrap();
+    app.init().await.unwrap();
+
+    app.add_drawer(
+        "project",
+        "general",
+        "This stable drawer should survive prune preview.",
+        Some("repair-preview.txt"),
+        Some("codex"),
+    )
+    .await
+    .unwrap();
+
+    fs::write(
+        config.palace_path.join("corrupt_ids.txt"),
+        "orphan_a\n\n orphan_b \n",
+    )
+    .unwrap();
+
+    let preview = app.repair_prune(false).await.unwrap();
+
+    assert_eq!(preview.queued, 2);
+    assert!(!preview.confirm);
+    assert_eq!(preview.deleted_from_vector, 0);
+    assert_eq!(preview.deleted_from_sqlite, 0);
+    assert_eq!(preview.failed, 0);
+
+    let sqlite = SqliteStore::open(&config.sqlite_path()).unwrap();
+    assert_eq!(sqlite.total_drawers().unwrap(), 1);
+    assert_eq!(
+        fs::read_to_string(config.palace_path.join("corrupt_ids.txt")).unwrap(),
+        "orphan_a\n\n orphan_b \n"
+    );
+}

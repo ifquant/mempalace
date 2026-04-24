@@ -3,6 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::config::AppConfig;
+use crate::dialect::count_tokens;
 use crate::error::Result;
 use crate::model::{LayerStatusSummary, RecallSummary, SearchHit, SearchResults, WakeUpSummary};
 use crate::service::App;
@@ -42,7 +43,7 @@ impl LayerStack {
         let wake = self.app.wake_up(None).await?;
         Ok(Layer0State {
             identity_path: wake.identity_path,
-            token_estimate: wake.identity.split_whitespace().count(),
+            token_estimate: count_tokens(&wake.identity),
             identity: wake.identity,
         })
     }
