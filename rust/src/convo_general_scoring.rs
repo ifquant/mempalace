@@ -202,6 +202,7 @@ enum Sentiment {
     Neutral,
 }
 
+/// Scores a prose segment and returns the best matching memory type.
 pub fn score_segment(text: &str) -> Option<(String, f64)> {
     let mut scores = vec![
         ("decision", score_markers(text, DECISION_MARKERS)),
@@ -221,6 +222,7 @@ pub fn score_segment(text: &str) -> Option<(String, f64)> {
     Some((best_type.to_string(), best_score))
 }
 
+/// Converts the raw marker score into a normalized confidence value.
 pub fn confidence(score: f64, segment_len: usize) -> f64 {
     let length_bonus = if segment_len > 500 {
         2.0

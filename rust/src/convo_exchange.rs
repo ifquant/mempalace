@@ -1,3 +1,8 @@
+//! Exchange-style conversation extraction.
+//!
+//! This split facade groups the heuristics that keep conversational turn
+//! structure and the lightweight room detector used for those chunks.
+
 #[path = "convo_exchange_chunking.rs"]
 mod chunking;
 #[path = "convo_exchange_rooms.rs"]

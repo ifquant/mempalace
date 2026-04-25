@@ -1,3 +1,9 @@
+//! Project-file mining pipeline.
+//!
+//! This path scans readable project files, chunks them into drawers, detects a
+//! room for each source, and then replaces the stored source state in both
+//! SQLite and LanceDB.
+
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -16,6 +22,11 @@ use crate::room_detector::{detect_room, load_project_config, load_project_rooms}
 use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::VectorStore;
 
+/// Mines a project directory into drawers using the project-oriented pipeline.
+///
+/// This is the main entrypoint for `"projects"` mode. It discovers readable
+/// files, detects rooms from project config plus file/content heuristics, and
+/// replaces previously mined data for each source when the content changed.
 pub async fn mine_project_run<F>(
     config: &AppConfig,
     embedder: Arc<dyn EmbeddingProvider>,
@@ -152,6 +163,8 @@ where
 
         let embeddings = embedder.embed_documents(&chunks)?;
         if let Some(vector) = &vector {
+            // Re-mining replaces the full source payload so vector chunks never
+            // drift from the current canonical file content.
             vector.replace_source(&drawers, &embeddings).await?;
         }
         sqlite.replace_source(

@@ -24,6 +24,8 @@ pub(crate) fn messages_to_transcript(
             if let Some((next_role, next_text)) = messages.get(index + 1)
                 && *next_role == "assistant"
             {
+                // Assistant text stays verbatim; only user turns are
+                // spellchecked during transcript reconstruction.
                 lines.push(next_text.trim().to_string());
                 index += 1;
             }

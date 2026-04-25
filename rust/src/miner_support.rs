@@ -1,3 +1,8 @@
+//! Shared helpers for mining pipelines.
+//!
+//! These functions hold reusable file discovery, chunking, and drawer-building
+//! logic so the project and conversation miners can stay focused on policy.
+
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -92,6 +97,8 @@ pub(crate) fn discover_files(
     builder.require_git(false);
     builder.filter_entry(move |entry| {
         if is_force_include(entry.path(), &project_root, &include_paths_for_filter) {
+            // Explicit include overrides ignore-based pruning so callers can
+            // force a subtree back into the scan.
             return true;
         }
 

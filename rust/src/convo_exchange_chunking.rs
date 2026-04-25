@@ -11,6 +11,11 @@ enum SpeakerRole {
     Unknown,
 }
 
+/// Extracts exchange-oriented chunks from transcript-like text.
+///
+/// The extractor first prefers quote-based transcripts, then explicit speaker
+/// markers, and finally falls back to paragraph grouping when no stable turn
+/// structure is visible.
 pub fn extract_exchange_chunks(text: &str) -> Vec<ConversationChunk> {
     let lines = text.lines().collect::<Vec<_>>();
     if count_quote_lines(text) >= 3 {
@@ -34,6 +39,8 @@ fn chunk_by_quote_exchange(lines: &[&str]) -> Vec<ConversationChunk> {
     while index < lines.len() {
         let line = lines[index].trim();
         if line.starts_with('>') {
+            // Quoted transcripts are already user turns, so we preserve the
+            // quoted line and only attach the following assistant prose.
             let user_turn = line.to_string();
             index += 1;
             let mut ai_lines = Vec::new();

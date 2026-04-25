@@ -1,3 +1,8 @@
+//! Conversation file scanning facade.
+//!
+//! The scan is split so auditors can read include/ignore override logic
+//! separately from the `ignore` walker setup.
+
 #[path = "convo_scan_include.rs"]
 mod include;
 #[path = "convo_scan_walk.rs"]

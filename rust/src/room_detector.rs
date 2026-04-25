@@ -1,3 +1,8 @@
+//! Project room-detection facade.
+//!
+//! These helpers load explicit room config when present and otherwise build a
+//! lightweight room map from folder structure and filename/content heuristics.
+
 use serde::{Deserialize, Serialize};
 
 #[path = "room_detector_config.rs"]
@@ -9,12 +14,14 @@ pub use config::{load_project_config, load_project_rooms};
 pub use detect::{detect_room, detect_rooms};
 
 #[derive(Clone, Debug, Deserialize)]
+/// Optional project-level mining configuration loaded from YAML.
 pub struct ProjectConfig {
     pub wing: Option<String>,
     pub rooms: Option<Vec<ProjectRoom>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+/// One configured room plus the keywords used to match it.
 pub struct ProjectRoom {
     pub name: String,
     #[serde(default)]
@@ -22,6 +29,7 @@ pub struct ProjectRoom {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// Auto-detected room description returned by discovery flows.
 pub struct RoomDetection {
     pub name: String,
     pub description: String,

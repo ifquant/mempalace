@@ -1,3 +1,8 @@
+//! Include-path helpers for conversation scanning.
+//!
+//! These utilities normalize explicit include overrides and answer whether a
+//! path should bypass the usual ignore-based pruning.
+
 use std::collections::HashSet;
 use std::path::Path;
 

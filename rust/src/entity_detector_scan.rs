@@ -36,6 +36,10 @@ const READABLE_EXTENSIONS: &[&str] = &[
     ".rb", ".go", ".rs",
 ];
 
+/// Scans a project for files worth sampling during entity detection.
+///
+/// The scanner prefers prose-heavy files and falls back to broader readable
+/// formats only when there are not enough prose candidates.
 pub fn scan_for_detection(project_dir: &Path) -> Result<Vec<PathBuf>> {
     let mut prose_files = Vec::new();
     let mut readable_files = Vec::new();

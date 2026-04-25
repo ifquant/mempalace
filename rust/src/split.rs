@@ -1,3 +1,8 @@
+//! Transcript splitting utilities for oversized session logs.
+//!
+//! This subsystem identifies multi-session "mega files", writes one output per
+//! detected session, and optionally renames the original file into a backup.
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -21,6 +26,7 @@ enum KnownNamesConfig {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Per-file result for a split operation.
 pub struct SplitFileResult {
     pub source_file: String,
     pub detected_sessions: usize,
@@ -29,6 +35,7 @@ pub struct SplitFileResult {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Summary returned by directory or single-file split commands.
 pub struct SplitSummary {
     pub kind: String,
     pub source_dir: String,
@@ -39,6 +46,7 @@ pub struct SplitSummary {
     pub files: Vec<SplitFileResult>,
 }
 
+/// Splits every oversized transcript file in a directory.
 pub fn split_directory(
     source_dir: &Path,
     output_dir: Option<&Path>,
@@ -85,6 +93,7 @@ pub fn split_directory(
     })
 }
 
+/// Splits one transcript file when it contains at least `min_sessions`.
 pub fn split_single_file(
     path: &Path,
     output_dir: Option<&Path>,
@@ -215,6 +224,7 @@ fn is_true_session_start(lines: &[String], idx: usize) -> bool {
     !nearby.contains("Ctrl+E") && !nearby.contains("previous messages")
 }
 
+/// Finds session boundary indices inside a transcript file.
 pub fn find_session_boundaries(lines: &[String]) -> Vec<usize> {
     lines
         .iter()

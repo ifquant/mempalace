@@ -1,3 +1,8 @@
+//! Line-oriented JSONL handlers for transcript normalization.
+//!
+//! These parsers accept partial or noisy log streams and extract only the
+//! message events needed to rebuild a plain-text transcript.
+
 use std::collections::HashSet;
 
 use serde_json::Value;

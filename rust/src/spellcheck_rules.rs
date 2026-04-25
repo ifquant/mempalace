@@ -1,3 +1,8 @@
+//! Guard rails for transcript spellchecking.
+//!
+//! These rules decide which tokens are too code-like, too technical, or too
+//! identity-sensitive to rewrite during transcript cleanup.
+
 use std::collections::HashSet;
 use std::sync::OnceLock;
 

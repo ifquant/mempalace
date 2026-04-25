@@ -9,6 +9,7 @@ enum SpeakerRole {
     Unknown,
 }
 
+/// Splits normalized transcript text into segments suitable for scoring.
 pub fn split_into_segments(text: &str) -> Vec<String> {
     let lines = text.lines().collect::<Vec<_>>();
     if count_turn_markers(&lines) >= 3 {
@@ -32,6 +33,7 @@ pub fn split_into_segments(text: &str) -> Vec<String> {
     paragraphs
 }
 
+/// Removes obvious code and shell fragments before general-memory scoring.
 pub fn extract_prose(text: &str) -> String {
     let mut prose = Vec::new();
     let mut in_code = false;

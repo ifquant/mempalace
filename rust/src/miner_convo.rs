@@ -1,3 +1,9 @@
+//! Conversation mining pipeline.
+//!
+//! This path normalizes transcript-like exports first, then routes the text
+//! into either exchange extraction or general-memory extraction before replacing
+//! the stored source state.
+
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
@@ -21,6 +27,12 @@ use crate::palace::{SKIP_DIRS, source_state_matches};
 use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::VectorStore;
 
+/// Mines conversation exports or transcript files into drawers.
+///
+/// `extract = "exchange"` preserves paired conversational turns, while
+/// `extract = "general"` reclassifies higher-level memories such as decisions
+/// and milestones. In both cases, normalized content is treated as the source
+/// of truth for change detection and replacement.
 pub async fn mine_conversations_run<F>(
     config: &AppConfig,
     embedder: Arc<dyn EmbeddingProvider>,
@@ -107,8 +119,12 @@ where
         }
 
         let chunks = if request.extract == "general" {
+            // General extraction is for memory-like statements, not turn-paired
+            // transcript playback.
             extract_general_memories(&normalized, 0.3)
         } else {
+            // Exchange extraction keeps the transcript boundary and rooming in
+            // the conversation-specific pipeline.
             extract_exchange_chunks(&normalized)
         };
         if chunks.is_empty() {
@@ -178,6 +194,8 @@ where
             .collect::<Vec<_>>();
         let embeddings = embedder.embed_documents(&drawer_texts)?;
         if let Some(vector) = &vector {
+            // Re-mining is replace-only for a source so stale chunks from an
+            // earlier normalization/extraction pass do not survive.
             vector.replace_source(&drawers, &embeddings).await?;
         }
         sqlite.replace_source(

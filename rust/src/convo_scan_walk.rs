@@ -10,6 +10,10 @@ use super::include::{is_exact_force_include, is_force_include, normalize_include
 const CONVO_EXTENSIONS: &[&str] = &[".txt", ".md", ".json", ".jsonl"];
 const MAX_CONVO_FILE_SIZE: u64 = 10 * 1024 * 1024;
 
+/// Scans a directory for candidate conversation files.
+///
+/// The walker keeps transcript-like exports plus explicitly included paths, and
+/// leaves transcript normalization to later stages.
 pub fn scan_convo_files(
     dir: &Path,
     respect_gitignore: bool,
@@ -31,6 +35,8 @@ pub fn scan_convo_files(
     builder.require_git(false);
     builder.filter_entry(move |entry| {
         if is_force_include(entry.path(), &project_root, &include_paths_for_filter) {
+            // A forced include keeps the parent path visible even when the walk
+            // would otherwise prune it via gitignore or skip-dir rules.
             return true;
         }
 

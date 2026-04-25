@@ -1,3 +1,8 @@
+//! General-memory extraction for normalized conversations.
+//!
+//! Unlike exchange extraction, this path tries to pull standalone memories such
+//! as decisions or problems out of longer transcript text.
+
 use crate::convo::ConversationChunk;
 
 #[path = "convo_general_scoring.rs"]
@@ -13,6 +18,7 @@ const GENERAL_TYPES: &[&str] = &[
     "emotional",
 ];
 
+/// Returns the room set used by general-memory extraction.
 pub fn general_rooms() -> Vec<String> {
     GENERAL_TYPES
         .iter()
@@ -20,6 +26,10 @@ pub fn general_rooms() -> Vec<String> {
         .collect()
 }
 
+/// Extracts memory-like conversation segments above the configured confidence.
+///
+/// This pipeline intentionally ignores turn pairing and instead classifies
+/// segments by semantic type after prose cleanup.
 pub fn extract_general_memories(text: &str, min_confidence: f64) -> Vec<ConversationChunk> {
     let segments = segments::split_into_segments(text);
     let mut memories = Vec::new();

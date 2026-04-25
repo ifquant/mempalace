@@ -1,3 +1,9 @@
+//! Conversation normalization entrypoints.
+//!
+//! This layer keeps Python-compatible fallback behavior: known JSON/JSONL
+//! exports are converted into plain transcripts when possible, and everything
+//! else passes through as raw text.
+
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
@@ -10,15 +16,18 @@ use crate::spellcheck::known_names_for_path;
 const MAX_NORMALIZE_SIZE: u64 = 500 * 1024 * 1024;
 
 #[derive(Clone, Debug, PartialEq)]
+/// Normalization result that preserves both raw bytes-as-text and output text.
 pub struct NormalizeFileOutput {
     pub raw: String,
     pub normalized: Option<String>,
 }
 
+/// Normalizes a conversation file and returns only the final text payload.
 pub fn normalize_conversation_file(path: &Path) -> Result<Option<String>> {
     Ok(normalize_conversation_file_with_raw(path)?.normalized)
 }
 
+/// Normalizes a conversation file while preserving the raw text that was read.
 pub fn normalize_conversation_file_with_raw(path: &Path) -> Result<NormalizeFileOutput> {
     let known_names = known_names_for_path(path);
     let raw = read_normalize_text(path)?;
@@ -40,6 +49,11 @@ fn read_normalize_text(path: &Path) -> Result<String> {
     Ok(String::from_utf8_lossy(&bytes).into_owned())
 }
 
+/// Converts raw file content into a transcript-like plain-text form.
+///
+/// The function prefers explicit export normalizers, but it keeps Python-style
+/// passthrough semantics for blank files, already-quoted transcripts, and
+/// malformed or unknown JSON payloads.
 pub fn normalize_conversation(
     path: &Path,
     raw: &str,
@@ -51,6 +65,8 @@ pub fn normalize_conversation(
     }
 
     if count_quote_lines(content) >= 3 {
+        // Existing quote transcripts are already in the target format; leave
+        // them untouched instead of re-spellchecking or reflowing them.
         return Ok(Some(raw.to_string()));
     }
 
@@ -66,6 +82,8 @@ pub fn normalize_conversation(
         if let Some(normalized) = try_normalize_json(content, known_names) {
             return Ok(Some(normalized));
         }
+        // Unknown or malformed JSON falls back to the raw text so callers keep
+        // the Python-compatible "best effort, never drop content" behavior.
         return Ok(Some(raw.to_string()));
     }
 

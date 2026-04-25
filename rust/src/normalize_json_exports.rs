@@ -1,3 +1,8 @@
+//! Structured export handlers for JSON normalization.
+//!
+//! Each helper understands one export family and converts it into the shared
+//! transcript representation used by downstream conversation mining.
+
 use std::collections::{BTreeMap, HashSet};
 
 use serde_json::Value;

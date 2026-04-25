@@ -1,3 +1,8 @@
+//! Dictionary-backed spellcheck helpers.
+//!
+//! The dictionary layer provides typo overrides plus an indexed system-word
+//! lookup for low-cost candidate generation.
+
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
 use std::sync::OnceLock;

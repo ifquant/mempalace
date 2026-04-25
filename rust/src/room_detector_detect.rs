@@ -85,6 +85,10 @@ const FOLDER_ROOM_MAP: &[(&str, &str)] = &[
     ("deploy", "configuration"),
 ];
 
+/// Detects likely rooms for a project directory.
+///
+/// The detector first trusts top-level folder structure, then falls back to a
+/// broader filename scan if the project layout is too flat to infer rooms.
 pub fn detect_rooms(project_dir: &Path) -> Result<Vec<RoomDetection>> {
     let mut found_rooms = BTreeMap::new();
 
@@ -177,6 +181,10 @@ pub fn detect_rooms(project_dir: &Path) -> Result<Vec<RoomDetection>> {
     Ok(found_rooms.into_values().collect())
 }
 
+/// Chooses the best room for one source file.
+///
+/// Matching prefers path structure first, then filename hints, and only uses
+/// content keyword counts as a last resort.
 pub fn detect_room(root: &Path, path: &Path, content: &str, rooms: &[ProjectRoom]) -> String {
     if rooms.is_empty() {
         return "general".to_string();

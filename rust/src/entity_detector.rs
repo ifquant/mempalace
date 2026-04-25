@@ -1,3 +1,8 @@
+//! Project entity detection facade.
+//!
+//! The detector samples a bounded set of readable files, extracts candidate
+//! names, and scores each candidate as either a person or a project.
+
 use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
@@ -14,12 +19,14 @@ mod score;
 pub use scan::scan_for_detection;
 
 #[derive(Clone, Debug, PartialEq)]
+/// Heuristic entity-detection result used to seed registries.
 pub struct DetectedEntities {
     pub people: Vec<String>,
     pub projects: Vec<String>,
     pub files_scanned: usize,
 }
 
+/// Detects likely people and project names from a project directory.
 pub fn detect_entities(project_dir: &Path) -> Result<DetectedEntities> {
     let files = scan_for_detection(project_dir)?;
     if files.is_empty() {
@@ -113,6 +120,7 @@ pub fn detect_entities(project_dir: &Path) -> Result<DetectedEntities> {
     })
 }
 
+/// Detects entities and returns the registry-oriented tuple shape.
 pub fn detect_entities_for_registry(project_dir: &Path) -> Result<(Vec<String>, Vec<String>)> {
     let detected = detect_entities(project_dir)?;
     Ok((detected.people, detected.projects))

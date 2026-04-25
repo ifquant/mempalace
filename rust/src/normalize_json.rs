@@ -1,3 +1,8 @@
+//! JSON and JSONL normalization facade.
+//!
+//! Format-specific parsing lives in split modules so reviewers can inspect
+//! export handlers separately from line-oriented JSONL heuristics.
+
 use std::collections::HashSet;
 
 use serde_json::Value;

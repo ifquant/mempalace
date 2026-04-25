@@ -1,3 +1,8 @@
+//! Transcript spellchecking helpers.
+//!
+//! Spellchecking is intentionally narrow: only user-authored transcript turns
+//! are corrected, and known project/entity names are treated as protected.
+
 use std::collections::HashSet;
 use std::path::Path;
 
@@ -8,6 +13,7 @@ mod dict;
 #[path = "spellcheck_rules.rs"]
 mod rules;
 
+/// Spellchecks free-form user text while preserving protected names.
 pub fn spellcheck_user_text(text: &str, known_names: &HashSet<String>) -> String {
     rules::token_re()
         .replace_all(text, |caps: &regex::Captures<'_>| {
@@ -17,6 +23,7 @@ pub fn spellcheck_user_text(text: &str, known_names: &HashSet<String>) -> String
         .into_owned()
 }
 
+/// Spellchecks only quoted user turns inside an already formatted transcript.
 pub fn spellcheck_transcript(content: &str, known_names: &HashSet<String>) -> String {
     content
         .lines()
@@ -25,6 +32,7 @@ pub fn spellcheck_transcript(content: &str, known_names: &HashSet<String>) -> St
         .join("\n")
 }
 
+/// Loads protected names by walking up from a file toward nearby registries.
 pub fn known_names_for_path(path: &Path) -> HashSet<String> {
     let mut current = if path.is_dir() {
         Some(path)
@@ -60,6 +68,8 @@ pub fn known_names_for_path(path: &Path) -> HashSet<String> {
 fn spellcheck_transcript_line(line: &str, known_names: &HashSet<String>) -> String {
     let stripped = line.trim_start();
     if !stripped.starts_with('>') {
+        // Assistant/output lines are pass-through so we do not mutate quoted
+        // transcripts beyond the user-authored surface.
         return line.to_string();
     }
 

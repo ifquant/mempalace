@@ -296,10 +296,12 @@ const PRONOUNS: &[&str] = &[
     "she", "her", "hers", "he", "him", "his", "they", "them", "their",
 ];
 
+/// Returns whether a candidate token is too generic to treat as an entity.
 pub fn is_stopword(name: &str) -> bool {
     STOPWORDS.iter().any(|word| word.eq_ignore_ascii_case(name))
 }
 
+/// Scores how strongly a candidate looks like a person mention.
 pub fn score_person(name: &str, text: &str, lines: &[String]) -> usize {
     let mut score = 0usize;
     let lower = name.to_ascii_lowercase();
@@ -327,6 +329,7 @@ pub fn score_person(name: &str, text: &str, lines: &[String]) -> usize {
     score
 }
 
+/// Counts distinct person-signal categories for a candidate.
 pub fn person_signal_category_count(name: &str, text: &str, lines: &[String]) -> usize {
     let mut categories = Vec::new();
     let lower = name.to_ascii_lowercase();
@@ -358,6 +361,7 @@ pub fn person_signal_category_count(name: &str, text: &str, lines: &[String]) ->
     categories.len()
 }
 
+/// Scores how strongly a candidate looks like a project name.
 pub fn score_project(name: &str, _text: &str, lines: &[String]) -> usize {
     let mut score = 0usize;
     let lower = name.to_ascii_lowercase();

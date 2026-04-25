@@ -68,6 +68,7 @@ const TOPIC_BUCKETS: &[(&str, &[&str])] = &[
     ),
 ];
 
+/// Returns the room set used by exchange extraction.
 pub fn exchange_rooms() -> Vec<String> {
     TOPIC_BUCKETS
         .iter()
@@ -76,6 +77,7 @@ pub fn exchange_rooms() -> Vec<String> {
         .collect()
 }
 
+/// Classifies an exchange chunk into a lightweight topical room.
 pub fn detect_convo_room(content: &str) -> String {
     let content_lower = content
         .chars()
