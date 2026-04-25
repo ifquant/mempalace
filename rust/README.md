@@ -2,6 +2,12 @@
 
 This directory holds the in-progress Rust rewrite of MemPalace.
 
+For audit readers, the fastest entrypoint is `service` for end-to-end behavior,
+then the split families around it: `service_project` + `miner`/`normalize` for
+project and transcript ingest, `service_read` for recall/search flows,
+`service_registry` for project-local world-model updates, and
+`service_maintenance` for repair/dedup/compress boundaries.
+
 Current parity status:
 
 - the Rust rewrite now covers the current public Python CLI surface and the current public Python MCP tool surface

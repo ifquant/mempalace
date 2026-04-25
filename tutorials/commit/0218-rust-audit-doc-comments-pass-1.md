@@ -1,5 +1,7 @@
 # 背景
 
+> 后续补充：这一组审计注释在第三个切片里还补做了 `0220-rust-audit-doc-comments-mining-pass.md`，专门回补 mining / transcript comment pass 的教程文档。
+
 这次任务不是补功能差距，而是做一轮面向审计的 Rust 注释整理。目标文件集中在 `rust/src/` 的 palace、maintenance、SQLite、LanceDB 这些边界层：它们本身行为已经存在，但阅读门槛偏高，尤其是 schema migration、跨库回滚、preview/live 分支这些逻辑，如果没有注释，reviewer 很容易得靠逆向调用链才能确认真实语义。
 
 同时，这一轮有明确约束：

@@ -1,5 +1,7 @@
 # 背景
 
+> 后续补充：这一组审计注释的 mining / transcript 切片后来单独补写为 `0220-rust-audit-doc-comments-mining-pass.md`，因为原始注释提交缺失了配套教程。
+
 这次是 Rust 审计注释整理的第二个切片，范围集中在 `registry`、`knowledge_graph`、`bootstrap`、`onboarding` 和它们对应的 CLI facade。前一轮已经把 storage / maintenance 的边界补清楚了，但 reviewer 仍然很难快速回答这几个问题：
 
 - `entity_registry.json` 的读写、lookup、research 各自在哪一层
