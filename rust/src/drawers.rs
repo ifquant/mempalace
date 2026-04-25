@@ -1,8 +1,11 @@
+//! Drawer construction and sanitization helpers for manual write paths.
+
 use crate::error::{MempalaceError, Result};
 use crate::model::DrawerInput;
 use crate::storage::sqlite::DrawerRecord;
 use chrono::Utc;
 
+/// Builds a manual drawer payload with stable IDs and MCP-local source paths.
 pub fn build_manual_drawer(
     wing: &str,
     room: &str,
@@ -15,6 +18,8 @@ pub fn build_manual_drawer(
     let sanitized_content = sanitize_content(content)?;
     let sanitized_added_by = sanitize_name(added_by.unwrap_or("mcp"), "added_by")?;
     let normalized_source_file = source_file.unwrap_or_default().trim().to_string();
+    // The ID is based on a short content preview so repeated manual inserts of
+    // the same note collapse to the same drawer instead of creating noise.
     let content_preview = sanitized_content
         .char_indices()
         .nth(100)
@@ -55,6 +60,7 @@ pub fn build_manual_drawer(
     })
 }
 
+/// Reconstructs a drawer input payload from a stored SQLite drawer row.
 pub fn drawer_input_from_record(record: &DrawerRecord) -> DrawerInput {
     DrawerInput {
         id: record.id.clone(),
@@ -74,6 +80,7 @@ pub fn drawer_input_from_record(record: &DrawerRecord) -> DrawerInput {
     }
 }
 
+/// Normalizes short user-facing identifiers such as wing, room, and agent names.
 pub fn sanitize_name(value: &str, field_name: &str) -> Result<String> {
     let trimmed = value.trim();
     if trimmed.is_empty() {

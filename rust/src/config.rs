@@ -1,19 +1,28 @@
+//! Palace path and embedding configuration resolution.
+//!
+//! This module is the first storage boundary for the Rust rewrite: it decides
+//! where the palace lives on disk and which embedding profile must be honored
+//! by both SQLite metadata and LanceDB tables.
+
 use std::path::{Path, PathBuf};
 
 use crate::error::{MempalaceError, Result};
 
+/// Resolved runtime configuration shared by CLI, MCP, and service layers.
 #[derive(Clone, Debug)]
 pub struct AppConfig {
     pub palace_path: PathBuf,
     pub embedding: EmbeddingSettings,
 }
 
+/// Supported embedding backends for the current rewrite.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EmbeddingBackend {
     Fastembed,
     Hash,
 }
 
+/// Embedding-specific configuration persisted alongside palace metadata.
 #[derive(Clone, Debug)]
 pub struct EmbeddingSettings {
     pub backend: EmbeddingBackend,
@@ -24,6 +33,8 @@ pub struct EmbeddingSettings {
 }
 
 impl AppConfig {
+    /// Resolves the palace path and embedding settings from explicit input,
+    /// environment overrides, or the default home-directory location.
     pub fn resolve(explicit: Option<impl AsRef<Path>>) -> Result<Self> {
         let home = dirs::home_dir();
 
@@ -54,18 +65,22 @@ impl AppConfig {
         })
     }
 
+    /// Returns the SQLite metadata path for the palace.
     pub fn sqlite_path(&self) -> PathBuf {
         self.palace_path.join("palace.sqlite3")
     }
 
+    /// Returns the LanceDB directory used for semantic search vectors.
     pub fn lance_path(&self) -> PathBuf {
         self.palace_path.join("lance")
     }
 
+    /// Returns the palace-local identity layer path.
     pub fn identity_path(&self) -> PathBuf {
         self.palace_path.join("identity.txt")
     }
 
+    /// Ensures the palace root and vector-store directory exist before use.
     pub fn ensure_dirs(&self) -> Result<()> {
         std::fs::create_dir_all(&self.palace_path)?;
         std::fs::create_dir_all(self.lance_path())?;

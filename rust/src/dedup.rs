@@ -1,3 +1,9 @@
+//! Deduplication planning for drawer maintenance.
+//!
+//! The dedup flow reads canonical drawer rows from SQLite, joins them with
+//! vectors from LanceDB, and produces a deletion plan. The runtime decides
+//! whether to report stats, preview the plan, or execute deletions.
+
 use std::collections::{BTreeMap, HashMap};
 
 use crate::model::{DedupSourceResult, DedupSummary};
@@ -6,12 +12,14 @@ use crate::storage::vector::VectorDrawer;
 
 const MIN_DOC_CHARS: usize = 20;
 
+/// Builds a deduplication plan from SQLite metadata plus LanceDB vectors.
 pub struct Deduplicator<'a> {
     sqlite_drawers: &'a [DrawerRecord],
     vector_drawers: &'a [VectorDrawer],
 }
 
 impl<'a> Deduplicator<'a> {
+    /// Creates a deduplicator over the current SQLite and vector snapshots.
     pub fn new(sqlite_drawers: &'a [DrawerRecord], vector_drawers: &'a [VectorDrawer]) -> Self {
         Self {
             sqlite_drawers,
@@ -19,6 +27,7 @@ impl<'a> Deduplicator<'a> {
         }
     }
 
+    /// Groups drawers by source file and marks near-duplicate IDs for deletion.
     pub fn plan(
         &self,
         threshold: f64,
@@ -71,6 +80,8 @@ impl<'a> Deduplicator<'a> {
                 }
 
                 let Some(vector_record) = vectors_by_id.get(&record.id) else {
+                    // Missing vectors are treated as "keep" so maintenance does
+                    // not silently delete canonical SQLite rows on partial drift.
                     local_kept += 1;
                     continue;
                 };
@@ -111,6 +122,7 @@ impl<'a> Deduplicator<'a> {
     }
 }
 
+/// Proposed deduplication outcome before any deletes are applied.
 pub struct DedupPlan {
     pub total_drawers: usize,
     pub kept: usize,
@@ -118,6 +130,7 @@ pub struct DedupPlan {
     pub groups: Vec<DedupSourceResult>,
 }
 
+/// Shared metadata for rendering a dedup summary response.
 pub struct DedupSummaryContext {
     pub kind: String,
     pub palace_path: String,
@@ -133,6 +146,7 @@ pub struct DedupSummaryContext {
 }
 
 impl DedupPlan {
+    /// Converts a dedup plan into the external summary payload.
     pub fn into_summary(self, context: DedupSummaryContext) -> DedupSummary {
         DedupSummary {
             kind: context.kind,
@@ -155,6 +169,7 @@ impl DedupPlan {
     }
 }
 
+/// Computes cosine distance, where lower values mean more similar vectors.
 pub fn cosine_distance(left: &[f32], right: &[f32]) -> f64 {
     let mut dot = 0.0f64;
     let mut left_norm = 0.0f64;

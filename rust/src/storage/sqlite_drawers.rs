@@ -1,3 +1,9 @@
+//! SQLite drawer and compression-table operations.
+//!
+//! These helpers operate only on the canonical relational store. Cross-store
+//! coordination with LanceDB happens in higher-level runtimes so failures can
+//! be rolled back or surfaced with better context.
+
 use std::collections::BTreeMap;
 
 use chrono::Utc;
@@ -11,6 +17,7 @@ use crate::model::{
 use super::{DrawerRecord, GraphRoomRow, IngestedFileState, SqliteStore};
 
 impl SqliteStore {
+    /// Returns the cached ingest state for a source path, if present.
     pub fn ingested_file_state(&self, source_path: &str) -> Result<Option<IngestedFileState>> {
         let value = self
             .conn
@@ -28,6 +35,7 @@ impl SqliteStore {
         Ok(value)
     }
 
+    /// Replaces all drawers for a source file and updates the ingest ledger atomically.
     pub fn replace_source(
         &mut self,
         source_path: &str,
@@ -38,6 +46,8 @@ impl SqliteStore {
         drawers: &[DrawerInput],
     ) -> Result<()> {
         let tx = self.conn.transaction()?;
+        // SQLite replaces the source as one transaction so readers never see a
+        // half-deleted, half-reinserted source snapshot.
         tx.execute("DELETE FROM drawers WHERE source_path = ?1", [source_path])?;
 
         let now = Utc::now().to_rfc3339();
@@ -76,6 +86,7 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Returns whether a drawer ID exists in SQLite.
     pub fn drawer_exists(&self, drawer_id: &str) -> Result<bool> {
         let exists = self
             .conn
@@ -88,6 +99,7 @@ impl SqliteStore {
         Ok(exists.is_some())
     }
 
+    /// Loads a single canonical drawer row by ID.
     pub fn get_drawer(&self, drawer_id: &str) -> Result<DrawerRecord> {
         let drawer = self
             .conn
@@ -104,6 +116,7 @@ impl SqliteStore {
         })
     }
 
+    /// Inserts one manual or mined drawer unless the ID already exists.
     pub fn insert_drawer(&self, drawer: &DrawerInput) -> Result<DrawerWriteResult> {
         if self.drawer_exists(&drawer.id)? {
             return Ok(DrawerWriteResult {
@@ -146,6 +159,7 @@ impl SqliteStore {
         })
     }
 
+    /// Deletes a single drawer row by ID.
     pub fn delete_drawer(&self, drawer_id: &str) -> Result<DrawerDeleteResult> {
         let deleted = self
             .conn
@@ -161,6 +175,7 @@ impl SqliteStore {
         })
     }
 
+    /// Deletes multiple drawer rows and returns how many were removed.
     pub fn delete_drawers(&self, drawer_ids: &[String]) -> Result<usize> {
         let mut deleted = 0usize;
         let mut stmt = self.conn.prepare("DELETE FROM drawers WHERE id = ?1")?;
@@ -170,6 +185,7 @@ impl SqliteStore {
         Ok(deleted)
     }
 
+    /// Counts all canonical drawers stored in SQLite.
     pub fn total_drawers(&self) -> Result<usize> {
         let count = self
             .conn
@@ -179,6 +195,7 @@ impl SqliteStore {
         Ok(count as usize)
     }
 
+    /// Lists wings and drawer counts from canonical metadata.
     pub fn list_wings(&self) -> Result<BTreeMap<String, usize>> {
         let mut stmt = self
             .conn
@@ -195,6 +212,7 @@ impl SqliteStore {
         Ok(out)
     }
 
+    /// Lists rooms for one wing or the whole palace.
     pub fn list_rooms(&self, wing: Option<&str>) -> Result<Rooms> {
         let mut out = BTreeMap::new();
         if let Some(wing_name) = wing {
@@ -230,6 +248,7 @@ impl SqliteStore {
         })
     }
 
+    /// Builds the full wing/room taxonomy from drawer rows.
     pub fn taxonomy(&self) -> Result<Taxonomy> {
         let mut stmt = self.conn.prepare(
             "SELECT wing, room, COUNT(*) FROM drawers GROUP BY wing, room ORDER BY wing, room",
@@ -253,6 +272,7 @@ impl SqliteStore {
         Ok(Taxonomy { taxonomy })
     }
 
+    /// Lists drawer rows, optionally scoped to a single wing.
     pub fn list_drawers(&self, wing: Option<&str>) -> Result<Vec<DrawerRecord>> {
         let mut query = String::from(
             "SELECT id, wing, room, source_file, source_path, source_hash, source_mtime, chunk_index, added_by, filed_at, ingest_mode, extract_mode, importance, text
@@ -310,6 +330,7 @@ impl SqliteStore {
         Ok(records)
     }
 
+    /// Replaces the persisted compressed-drawer snapshot for one wing or the whole palace.
     pub fn replace_compressed_drawers(
         &mut self,
         wing: Option<&str>,
@@ -322,6 +343,7 @@ impl SqliteStore {
                 [wing_name],
             )?;
         } else {
+            // A full recompute intentionally wipes the previous snapshot first.
             tx.execute("DELETE FROM compressed_drawers", [])?;
         }
         let mut stmt = tx.prepare(
@@ -350,6 +372,7 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Lists compressed drawer summaries, optionally for one wing.
     pub fn list_compressed_drawers(&self, wing: Option<&str>) -> Result<Vec<CompressedDrawer>> {
         let mut query = String::from(
             "SELECT drawer_id, wing, room, source_file, source_path, ingest_mode, extract_mode, aaak, original_tokens, compressed_tokens, compression_ratio

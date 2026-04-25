@@ -1,3 +1,9 @@
+//! Maintenance runtime for schema upgrades, repair, dedup, and rebuild flows.
+//!
+//! This is the highest-risk storage boundary in the crate. It coordinates
+//! migrations plus repair actions that may inspect, preview, delete, or
+//! rebuild data across both SQLite and LanceDB.
+
 use crate::VERSION;
 use crate::config::AppConfig;
 use crate::dedup::{DedupSummaryContext, Deduplicator};
@@ -12,6 +18,7 @@ use crate::repair::{RepairContext, RepairDiagnostics, backup_sqlite_source, read
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
 use crate::storage::vector::VectorStore;
 
+/// Maintenance facade shared by CLI, MCP, and integration tests.
 pub struct MaintenanceRuntime<'a> {
     pub config: &'a AppConfig,
     pub embedder: &'a dyn EmbeddingProvider,
@@ -35,6 +42,7 @@ impl<'a> MaintenanceRuntime<'a> {
         }
     }
 
+    /// Applies pending SQLite schema migrations and reports whether anything changed.
     pub async fn migrate(&self) -> Result<MigrateSummary> {
         self.config.ensure_dirs()?;
         let sqlite = SqliteStore::open(&self.config.sqlite_path())?;
@@ -54,6 +62,7 @@ impl<'a> MaintenanceRuntime<'a> {
         })
     }
 
+    /// Reports whether the palace stores are present, readable, and profile-compatible.
     pub async fn repair(&self) -> Result<RepairSummary> {
         let context = self.repair_context();
         let sqlite_path = self.config.sqlite_path();
@@ -123,6 +132,7 @@ impl<'a> MaintenanceRuntime<'a> {
         }))
     }
 
+    /// Scans for drift between SQLite and LanceDB, then stages prune candidates.
     pub async fn repair_scan(&self, wing: Option<&str>) -> Result<RepairScanSummary> {
         let sqlite = self.open_sqlite()?;
         let vector = VectorStore::connect(&self.config.lance_path()).await?;
@@ -135,6 +145,7 @@ impl<'a> MaintenanceRuntime<'a> {
             .build_scan_summary(wing, &sqlite_drawers, &vector_drawers)?)
     }
 
+    /// Deletes staged corrupt IDs when `confirm` is true, otherwise returns a preview.
     pub async fn repair_prune(&self, confirm: bool) -> Result<RepairPruneSummary> {
         let context = self.repair_context();
         let queued_ids = read_corrupt_ids(&context.corrupt_ids_path())?;
@@ -169,6 +180,8 @@ impl<'a> MaintenanceRuntime<'a> {
         match sqlite.delete_drawers(&queued_ids) {
             Ok(count) => deleted_from_sqlite = count,
             Err(_) => {
+                // Fall back to one-by-one cleanup so one bad row does not block
+                // pruning the remaining staged IDs.
                 for (drawer_id, existed) in queued_ids.iter().zip(sqlite_existing.iter().copied()) {
                     if !existed {
                         continue;
@@ -218,6 +231,7 @@ impl<'a> MaintenanceRuntime<'a> {
         ))
     }
 
+    /// Rebuilds the LanceDB table from SQLite drawers after taking a SQLite backup.
     pub async fn repair_rebuild(&self) -> Result<RepairRebuildSummary> {
         let sqlite_path = self.config.sqlite_path();
         let sqlite = self.open_sqlite()?;
@@ -225,6 +239,8 @@ impl<'a> MaintenanceRuntime<'a> {
 
         let backup_path = backup_sqlite_source(&sqlite_path)?;
         let vector = VectorStore::connect(&self.config.lance_path()).await?;
+        // Rebuild is intentionally "clear then repopulate" so the vector side
+        // reflects only the canonical SQLite drawer set.
         vector
             .clear_table(self.embedder.profile().dimension)
             .await?;
@@ -249,6 +265,7 @@ impl<'a> MaintenanceRuntime<'a> {
             .build_rebuild_summary(drawers.len(), rebuilt, backup_path))
     }
 
+    /// Plans or executes semantic deduplication within the selected slice.
     pub async fn dedup(
         &self,
         threshold: f64,
@@ -272,6 +289,8 @@ impl<'a> MaintenanceRuntime<'a> {
         );
 
         if !dry_run && !stats_only && !plan.delete_ids.is_empty() {
+            // Live dedup deletes from both stores; preview and stats modes stop
+            // before any destructive work so reviewers can inspect the plan.
             sqlite.delete_drawers(&plan.delete_ids)?;
             vector
                 .delete_drawers(self.embedder.profile().dimension, &plan.delete_ids)

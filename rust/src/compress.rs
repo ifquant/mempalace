@@ -1,13 +1,21 @@
+//! Compression planning helpers for AAAK summary maintenance.
+//!
+//! This module is intentionally pure: it converts stored drawers into
+//! compressed summaries and reports aggregate statistics, leaving the "preview
+//! vs persist" decision to the runtime wrapper.
+
 use crate::dialect::{CompressMetadata, CompressionStats, Dialect};
 use crate::model::{CompressSummary, CompressedDrawer};
 use crate::storage::sqlite::DrawerRecord;
 
+/// In-memory result of compressing a batch of drawers.
 pub struct CompressionRun {
     pub entries: Vec<CompressedDrawer>,
     pub original_tokens: usize,
     pub compressed_tokens: usize,
 }
 
+/// Shared metadata used to turn a compression run into a user-facing summary.
 pub struct CompressSummaryContext {
     pub palace_path: String,
     pub sqlite_path: String,
@@ -17,6 +25,7 @@ pub struct CompressSummaryContext {
 }
 
 impl CompressionRun {
+    /// Compresses a drawer batch and accumulates token counts for reporting.
     pub fn from_drawers(drawers: Vec<DrawerRecord>, dialect: &Dialect) -> Self {
         let mut original_tokens = 0usize;
         let mut compressed_tokens = 0usize;
@@ -46,6 +55,7 @@ impl CompressionRun {
         }
     }
 
+    /// Converts the in-memory run into the external summary payload.
     pub fn into_summary(self, context: CompressSummaryContext) -> CompressSummary {
         CompressSummary {
             kind: "compress".to_string(),

@@ -1,3 +1,9 @@
+//! SQLite schema bootstrap and migration logic.
+//!
+//! This module is one of the main audit anchors for on-disk compatibility. It
+//! upgrades older palace files in place and backfills newly added metadata so
+//! higher layers can assume the modern schema contract.
+
 use chrono::Utc;
 use rusqlite::OptionalExtension;
 
@@ -7,10 +13,13 @@ use crate::error::{MempalaceError, Result};
 use super::{CURRENT_SCHEMA_VERSION, SqliteStore};
 
 impl SqliteStore {
+    /// Bootstraps a fresh schema or migrates an existing palace up to the current version.
     pub fn init_schema(&self) -> Result<()> {
         self.ensure_meta_table()?;
 
         let mut version = self.schema_version()?.unwrap_or_else(|| {
+            // Older palaces may predate explicit schema_version metadata, so
+            // treat any detected user tables as the legacy v1 shape.
             if self.has_user_tables().unwrap_or(false) {
                 1
             } else {
@@ -68,6 +77,7 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Reads the recorded schema version from the meta table.
     pub fn schema_version(&self) -> Result<Option<i64>> {
         let value = self
             .conn
@@ -80,6 +90,7 @@ impl SqliteStore {
         Ok(value.and_then(|raw| raw.parse::<i64>().ok()))
     }
 
+    /// Reads an arbitrary metadata value from the SQLite meta table.
     pub fn meta(&self, key: &str) -> Result<Option<String>> {
         let value = self
             .conn
@@ -90,6 +101,7 @@ impl SqliteStore {
         Ok(value)
     }
 
+    /// Writes an arbitrary metadata value into the SQLite meta table.
     pub fn set_meta(&self, key: &str, value: &str) -> Result<()> {
         self.conn.execute(
             "INSERT OR REPLACE INTO meta(key, value) VALUES(?1, ?2)",
@@ -98,6 +110,7 @@ impl SqliteStore {
         Ok(())
     }
 
+    /// Verifies that the current palace matches the requested embedding profile.
     pub fn ensure_embedding_profile(&self, profile: &EmbeddingProfile) -> Result<()> {
         let stored_provider = self.meta("embedding_provider")?;
         let stored_model = self.meta("embedding_model")?;
@@ -307,6 +320,8 @@ impl SqliteStore {
                 id,
                 wing,
                 room,
+                -- v3 stored only source_path, so backfill both source fields
+                -- from that legacy value before dropping the old table.
                 source_path,
                 source_path,
                 source_hash,
@@ -431,6 +446,8 @@ impl SqliteStore {
             ON CONFLICT(entity_id) DO NOTHING;
             "#,
         )?;
+        // Existing triples become the seed set for explicit entity rows so the
+        // KG can move forward with normalized entity metadata.
         self.set_meta("schema_version", "9")?;
         self.record_migration(9, "add explicit kg entity table for python parity")?;
         Ok(())

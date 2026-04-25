@@ -1,3 +1,8 @@
+//! Runtime wrapper for compression maintenance commands.
+//!
+//! The runtime owns the store setup and the dry-run/live split; the helper
+//! module only builds the compressed entries.
+
 use crate::VERSION;
 use crate::compress::{CompressSummaryContext, CompressionRun};
 use crate::config::AppConfig;
@@ -7,6 +12,7 @@ use crate::error::Result;
 use crate::model::CompressSummary;
 use crate::storage::sqlite::SqliteStore;
 
+/// Compression maintenance facade used by service and CLI entrypoints.
 pub struct CompressionRuntime<'a> {
     pub config: &'a AppConfig,
     pub embedder: &'a dyn EmbeddingProvider,
@@ -21,12 +27,15 @@ impl<'a> CompressionRuntime<'a> {
         Ok(sqlite)
     }
 
+    /// Recomputes compressed drawer summaries, optionally persisting them.
     pub fn compress(&self, wing: Option<&str>, dry_run: bool) -> Result<CompressSummary> {
         let dialect = Dialect;
         let mut sqlite = self.open_sqlite()?;
         let drawers = sqlite.list_drawers(wing)?;
         let run = CompressionRun::from_drawers(drawers, &dialect);
 
+        // Dry runs still build the exact payload, but leave the persisted
+        // compressed_drawers snapshot untouched.
         if !dry_run {
             sqlite.replace_compressed_drawers(wing, &run.entries)?;
         }

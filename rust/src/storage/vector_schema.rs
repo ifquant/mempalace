@@ -1,3 +1,9 @@
+//! LanceDB table bootstrap and metadata-column backfill.
+//!
+//! Search data evolved over time just like the SQLite schema. This module keeps
+//! older LanceDB tables readable by adding missing metadata columns lazily when
+//! they are first opened.
+
 use std::sync::Arc;
 
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
@@ -10,6 +16,7 @@ use super::VectorStore;
 pub(crate) const TABLE_NAME: &str = "drawers";
 
 impl VectorStore {
+    /// Opens the drawers table or creates it if this palace has no vector index yet.
     pub async fn ensure_table(&self, dimension: usize) -> Result<Table> {
         match self.conn.open_table(TABLE_NAME).execute().await {
             Ok(table) => {
@@ -53,6 +60,8 @@ impl VectorStore {
         }
 
         if !transforms.is_empty() {
+            // Old vector tables are backfilled in place so search and repair
+            // code can rely on the newer metadata contract afterwards.
             table
                 .add_columns(NewColumnTransform::SqlExpressions(transforms), None)
                 .await?;
@@ -62,6 +71,7 @@ impl VectorStore {
     }
 }
 
+/// Returns the canonical Arrow schema for the LanceDB drawers table.
 pub(crate) fn schema(dimension: usize) -> SchemaRef {
     Arc::new(Schema::new(vec![
         Field::new("id", DataType::Utf8, false),

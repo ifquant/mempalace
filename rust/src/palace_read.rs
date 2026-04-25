@@ -1,3 +1,8 @@
+//! Read-only palace runtime for status, taxonomy, search, and recall flows.
+//!
+//! This facade opens the durable stores with the configured embedding profile,
+//! then delegates pure read surfaces that are safe for CLI, MCP, and tests.
+
 use std::collections::BTreeMap;
 use std::fs;
 
@@ -19,6 +24,7 @@ use crate::searcher::{normalize_search_hits, normalize_source_file};
 use crate::storage::sqlite::{CURRENT_SCHEMA_VERSION, SqliteStore};
 use crate::storage::vector::VectorStore;
 
+/// Read-oriented palace facade shared by user-facing status and recall APIs.
 pub struct PalaceReadRuntime<'a> {
     pub config: &'a AppConfig,
     pub embedder: &'a dyn EmbeddingProvider,
@@ -33,6 +39,7 @@ impl<'a> PalaceReadRuntime<'a> {
         Ok(sqlite)
     }
 
+    /// Returns a summary of palace paths, schema version, and taxonomy counts.
     pub async fn status(&self) -> Result<Status> {
         let sqlite = self.open_sqlite()?;
         Ok(Status {
@@ -48,18 +55,22 @@ impl<'a> PalaceReadRuntime<'a> {
         })
     }
 
+    /// Lists wings currently present in SQLite drawer metadata.
     pub async fn list_wings(&self) -> Result<BTreeMap<String, usize>> {
         self.open_sqlite()?.list_wings()
     }
 
+    /// Lists rooms for one wing or across the whole palace.
     pub async fn list_rooms(&self, wing: Option<&str>) -> Result<Rooms> {
         self.open_sqlite()?.list_rooms(wing)
     }
 
+    /// Returns the full wing/room taxonomy derived from stored drawers.
     pub async fn taxonomy(&self) -> Result<Taxonomy> {
         self.open_sqlite()?.taxonomy()
     }
 
+    /// Traverses the room graph built from SQLite room adjacency rows.
     pub async fn traverse_graph(
         &self,
         start_room: &str,
@@ -70,6 +81,7 @@ impl<'a> PalaceReadRuntime<'a> {
         Ok(traverse_room_graph(&graph, start_room, max_hops))
     }
 
+    /// Finds graph tunnel candidates between wings using the current room graph.
     pub async fn find_tunnels(
         &self,
         wing_a: Option<&str>,
@@ -80,12 +92,14 @@ impl<'a> PalaceReadRuntime<'a> {
         Ok(find_graph_tunnels(&graph, wing_a, wing_b))
     }
 
+    /// Summarizes graph connectivity and room-level structure.
     pub async fn graph_stats(&self) -> Result<GraphStats> {
         let sqlite = self.open_sqlite()?;
         let graph = build_room_graph(&sqlite.graph_room_rows()?);
         Ok(summarize_graph(&graph))
     }
 
+    /// Runs semantic search against LanceDB, with optional wing/room filters.
     pub async fn search(
         &self,
         query: &str,
@@ -107,6 +121,7 @@ impl<'a> PalaceReadRuntime<'a> {
         })
     }
 
+    /// Builds the wake-up payload from identity text plus recent drawers.
     pub async fn wake_up(&self, wing: Option<&str>) -> Result<WakeUpSummary> {
         let sqlite = self.open_sqlite()?;
         let identity_path = self.config.identity_path();
@@ -128,6 +143,7 @@ impl<'a> PalaceReadRuntime<'a> {
         })
     }
 
+    /// Renders layer-2 recall from ordered SQLite drawer reads.
     pub async fn recall(
         &self,
         wing: Option<&str>,
@@ -182,6 +198,7 @@ impl<'a> PalaceReadRuntime<'a> {
         })
     }
 
+    /// Reports whether the layered recall inputs exist and how large they are.
     pub async fn layer_status(&self) -> Result<LayerStatusSummary> {
         let sqlite = self.open_sqlite()?;
         let identity_path = self.config.identity_path();

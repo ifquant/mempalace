@@ -1,3 +1,8 @@
+//! SQLite knowledge-graph and diary operations.
+//!
+//! KG rows remain part of the canonical SQLite state so they can be migrated,
+//! queried temporally, and kept in step with the rest of palace metadata.
+
 use chrono::Utc;
 use rusqlite::{OptionalExtension, params};
 
@@ -10,6 +15,7 @@ use crate::model::{
 use super::SqliteStore;
 
 impl SqliteStore {
+    /// Upserts a KG entity row using the normalized entity ID as the durable key.
     pub fn add_kg_entity(&self, name: &str, entity_type: &str) -> Result<KgEntityWriteResult> {
         let entity_id = normalize_entity_id(name);
         let now = Utc::now().to_rfc3339();
@@ -30,10 +36,13 @@ impl SqliteStore {
         })
     }
 
+    /// Inserts a KG triple unless an equivalent active triple already exists.
     pub fn add_kg_triple(&self, triple: &KgTriple) -> Result<KgWriteResult> {
         self.add_kg_entity(&triple.subject, "unknown")?;
         self.add_kg_entity(&triple.object, "unknown")?;
 
+        // Active triples are idempotent on subject/predicate/object so repeated
+        // writes do not create duplicate "current" facts.
         let existing_id = self
             .conn
             .query_row(
@@ -89,6 +98,7 @@ impl SqliteStore {
         })
     }
 
+    /// Closes the active triple matching the given subject/predicate/object.
     pub fn invalidate_kg_triple(
         &self,
         subject: &str,
@@ -113,6 +123,7 @@ impl SqliteStore {
         })
     }
 
+    /// Returns raw triples for a subject in insertion order.
     pub fn query_kg(&self, subject: &str) -> Result<Vec<KgTriple>> {
         let mut stmt = self.conn.prepare(
             "SELECT subject, predicate, object, valid_from, valid_to
@@ -135,6 +146,7 @@ impl SqliteStore {
         Ok(triples)
     }
 
+    /// Returns outgoing and/or incoming KG facts, optionally filtered by date.
     pub fn query_kg_entity(
         &self,
         entity: &str,
@@ -242,6 +254,7 @@ impl SqliteStore {
         Ok(results)
     }
 
+    /// Returns a chronological KG view for one entity or the full graph.
     pub fn kg_timeline(&self, entity: Option<&str>) -> Result<KgTimelineResult> {
         let mut query = String::from(
             "SELECT subject, predicate, object, valid_from, valid_to

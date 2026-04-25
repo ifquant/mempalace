@@ -1,3 +1,9 @@
+//! LanceDB query and mutation helpers.
+//!
+//! These methods manage the vector-side index only. Higher-level runtimes are
+//! responsible for keeping SQLite and LanceDB in sync when one store succeeds
+//! and the other fails.
+
 use futures::TryStreamExt;
 use lancedb::query::{ExecutableQuery, QueryBase};
 
@@ -7,6 +13,7 @@ use crate::model::{DrawerInput, SearchHit};
 use super::{VectorDrawer, VectorStore, record_batch, vector_drawers_from_batch};
 
 impl VectorStore {
+    /// Replaces every vector row for one source path with the new embedding batch.
     pub async fn replace_source(
         &self,
         drawers: &[DrawerInput],
@@ -22,6 +29,8 @@ impl VectorStore {
         let table = self.ensure_table(dimension).await?;
         if let Some(source_path) = drawers.first().map(|drawer| drawer.source_path.clone()) {
             let escaped = source_path.replace('\'', "''");
+            // Source replacement is expressed as delete-then-add because LanceDB
+            // does not expose the SQLite-style transaction used by the canonical store.
             table.delete(&format!("source_path = '{escaped}'")).await?;
         }
         let batch = record_batch(drawers, embeddings, dimension)?;
@@ -29,6 +38,7 @@ impl VectorStore {
         Ok(())
     }
 
+    /// Runs a nearest-neighbor search with optional wing/room filters.
     pub async fn search(
         &self,
         embedding: &[f32],
@@ -56,6 +66,7 @@ impl VectorStore {
         Ok(hits)
     }
 
+    /// Appends new drawer vectors without deleting prior rows.
     pub async fn add_drawers(
         &self,
         drawers: &[DrawerInput],
@@ -74,6 +85,7 @@ impl VectorStore {
         Ok(())
     }
 
+    /// Returns whether a vector row exists for a drawer ID.
     pub async fn drawer_exists(&self, dimension: usize, drawer_id: &str) -> Result<bool> {
         let table = self.ensure_table(dimension).await?;
         let escaped = drawer_id.replace('\'', "''");
@@ -88,6 +100,7 @@ impl VectorStore {
         Ok(batches.iter().any(|batch| batch.num_rows() > 0))
     }
 
+    /// Deletes one vector row by drawer ID.
     pub async fn delete_drawer(&self, dimension: usize, drawer_id: &str) -> Result<()> {
         let table = self.ensure_table(dimension).await?;
         let escaped = drawer_id.replace('\'', "''");
@@ -95,6 +108,7 @@ impl VectorStore {
         Ok(())
     }
 
+    /// Deletes multiple vector rows and reports how many delete attempts were issued.
     pub async fn delete_drawers(&self, dimension: usize, drawer_ids: &[String]) -> Result<usize> {
         if drawer_ids.is_empty() {
             return Ok(0);
@@ -109,12 +123,14 @@ impl VectorStore {
         Ok(deleted)
     }
 
+    /// Clears the entire drawers table for a given embedding dimension.
     pub async fn clear_table(&self, dimension: usize) -> Result<()> {
         let table = self.ensure_table(dimension).await?;
         table.delete("id IS NOT NULL").await?;
         Ok(())
     }
 
+    /// Lists stored vector rows for maintenance and repair scans.
     pub async fn list_drawers(
         &self,
         dimension: usize,

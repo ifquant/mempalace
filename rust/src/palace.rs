@@ -1,3 +1,9 @@
+//! Shared palace-level helpers used by mining and storage orchestration.
+//!
+//! Audit readers should start here for the cross-cutting rules that do not
+//! belong to a single runtime, such as ignored directories, vector bootstrap,
+//! and "already mined" checks backed by SQLite ingest state.
+
 use std::path::Path;
 
 use crate::config::AppConfig;
@@ -6,6 +12,7 @@ use crate::error::Result;
 use crate::storage::sqlite::SqliteStore;
 use crate::storage::vector::VectorStore;
 
+/// High-noise directories skipped by project mining.
 pub const SKIP_DIRS: &[&str] = &[
     ".git",
     "node_modules",
@@ -32,6 +39,7 @@ pub const SKIP_DIRS: &[&str] = &[
     "target",
 ];
 
+/// Opens the LanceDB side of the palace and ensures the expected table exists.
 pub async fn ensure_vector_store(
     config: &AppConfig,
     profile: &EmbeddingProfile,
@@ -42,6 +50,8 @@ pub async fn ensure_vector_store(
     Ok(vector)
 }
 
+/// Checks whether a source file was already mined, optionally requiring an
+/// mtime match when the caller wants "only unchanged files" semantics.
 pub fn file_already_mined(
     sqlite: &SqliteStore,
     source_path: &Path,
@@ -65,6 +75,8 @@ pub fn file_already_mined(
     Ok(stored_mtime == current_mtime)
 }
 
+/// Compares the current source state against the ingest ledger using mtime
+/// when available, then falling back to content-hash equality.
 pub fn source_state_matches(
     sqlite: &SqliteStore,
     source_path: &Path,

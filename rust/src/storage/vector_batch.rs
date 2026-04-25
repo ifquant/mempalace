@@ -1,3 +1,5 @@
+//! Arrow batch conversions used by the LanceDB storage layer.
+
 use std::sync::Arc;
 
 use arrow_array::types::Float32Type;
@@ -8,6 +10,7 @@ use crate::model::DrawerInput;
 
 use super::{VectorDrawer, schema};
 
+/// Builds the Arrow batch written into LanceDB for a drawer slice.
 pub(crate) fn record_batch(
     drawers: &[DrawerInput],
     embeddings: &[Vec<f32>],
@@ -56,6 +59,7 @@ pub(crate) fn record_batch(
     )?)
 }
 
+/// Converts a LanceDB query batch back into vector-drawer rows.
 pub(crate) fn vector_drawers_from_batch(batch: &RecordBatch) -> Vec<VectorDrawer> {
     let ids = batch
         .column_by_name("id")

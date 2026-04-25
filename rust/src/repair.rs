@@ -1,3 +1,9 @@
+//! Repair helper types for storage drift diagnostics and cleanup flows.
+//!
+//! The runtime uses these helpers to report drift between SQLite and LanceDB,
+//! stage prune candidates, and record rebuild metadata without mixing response
+//! shaping into the execution logic.
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::io;
@@ -7,6 +13,7 @@ use crate::model::{RepairPruneSummary, RepairRebuildSummary, RepairScanSummary, 
 use crate::storage::sqlite::DrawerRecord;
 use crate::storage::vector::VectorDrawer;
 
+/// Stable context shared by all repair-related summary builders.
 pub struct RepairContext {
     pub palace_path: PathBuf,
     pub sqlite_path: PathBuf,
@@ -14,6 +21,7 @@ pub struct RepairContext {
     pub version: String,
 }
 
+/// Collected repair diagnostics prior to response shaping.
 pub struct RepairDiagnostics {
     pub sqlite_exists: bool,
     pub lance_exists: bool,
@@ -27,10 +35,12 @@ pub struct RepairDiagnostics {
 }
 
 impl RepairContext {
+    /// Returns the palace-local file that stores queued corrupt drawer IDs.
     pub fn corrupt_ids_path(&self) -> PathBuf {
         corrupt_ids_path(&self.palace_path)
     }
 
+    /// Builds the top-level repair summary from collected diagnostics.
     pub fn build_summary(&self, diagnostics: RepairDiagnostics) -> RepairSummary {
         RepairSummary {
             kind: "repair".to_string(),
@@ -51,6 +61,7 @@ impl RepairContext {
         }
     }
 
+    /// Compares SQLite and LanceDB IDs, then writes prune candidates to disk.
     pub fn build_scan_summary(
         &self,
         wing: Option<&str>,
@@ -82,6 +93,8 @@ impl RepairContext {
             payload.push_str(drawer_id);
             payload.push('\n');
         }
+        // `repair_prune` reads this file later, so scan acts as the explicit
+        // staging step between detection and destructive cleanup.
         fs::write(&corrupt_ids_path, payload)?;
 
         Ok(RepairScanSummary {
@@ -100,6 +113,7 @@ impl RepairContext {
         })
     }
 
+    /// Builds the non-destructive preview returned when prune is not confirmed.
     pub fn build_prune_preview(&self, queued_ids: &[String], confirm: bool) -> RepairPruneSummary {
         RepairPruneSummary {
             kind: "repair_prune".to_string(),
@@ -116,6 +130,7 @@ impl RepairContext {
         }
     }
 
+    /// Builds the final prune result after live deletion attempts.
     pub fn build_prune_result(
         &self,
         queued_ids: &[String],
@@ -139,6 +154,7 @@ impl RepairContext {
         }
     }
 
+    /// Builds the vector rebuild summary, including any SQLite backup path.
     pub fn build_rebuild_summary(
         &self,
         drawers_found: usize,
@@ -158,10 +174,12 @@ impl RepairContext {
     }
 }
 
+/// Returns the palace-local path used to stage corrupt drawer IDs.
 pub fn corrupt_ids_path(palace_path: &Path) -> PathBuf {
     palace_path.join("corrupt_ids.txt")
 }
 
+/// Reads staged corrupt IDs, ignoring empty lines left by manual edits.
 pub fn read_corrupt_ids(path: &Path) -> io::Result<Vec<String>> {
     if !path.exists() {
         return Ok(Vec::new());
@@ -176,6 +194,7 @@ pub fn read_corrupt_ids(path: &Path) -> io::Result<Vec<String>> {
     Ok(queued_ids)
 }
 
+/// Copies the SQLite file before destructive vector rebuild work starts.
 pub fn backup_sqlite_source(sqlite_path: &Path) -> io::Result<Option<String>> {
     if !sqlite_path.exists() {
         return Ok(None);
