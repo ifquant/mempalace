@@ -1,3 +1,9 @@
+//! Mutating `App` helpers for palace and knowledge-graph operations.
+//!
+//! These methods all ensure the palace exists before delegating into
+//! `PalaceOpsRuntime`, which keeps write-side behavior separate from the
+//! read-only surfaces.
+
 use crate::error::Result;
 use crate::model::{
     DiaryReadResult, DiaryWriteResult, DrawerDeleteResult, DrawerWriteResult, KgInvalidateResult,
@@ -7,6 +13,7 @@ use crate::palace_ops::PalaceOpsRuntime;
 use crate::service::App;
 
 impl App {
+    /// Insert one raw KG triple after ensuring the palace storage exists.
     pub async fn add_kg_triple(&self, triple: &KgTriple) -> Result<()> {
         self.init().await?;
         PalaceOpsRuntime {
@@ -17,6 +24,7 @@ impl App {
         .await
     }
 
+    /// Fetch raw KG triples for one subject.
     pub async fn query_kg(&self, subject: &str) -> Result<Vec<KgTriple>> {
         self.init().await?;
         PalaceOpsRuntime {
@@ -27,6 +35,7 @@ impl App {
         .await
     }
 
+    /// Run the user-facing KG query surface with direction and time filters.
     pub async fn kg_query(
         &self,
         entity: &str,
@@ -42,6 +51,7 @@ impl App {
         .await
     }
 
+    /// Return a timeline-oriented KG view, optionally scoped to one entity.
     pub async fn kg_timeline(&self, entity: Option<&str>) -> Result<KgTimelineResult> {
         self.init().await?;
         PalaceOpsRuntime {
@@ -52,6 +62,7 @@ impl App {
         .await
     }
 
+    /// Return aggregate KG counts used by CLI and MCP health surfaces.
     pub async fn kg_stats(&self) -> Result<KgStats> {
         self.init().await?;
         PalaceOpsRuntime {
@@ -62,6 +73,7 @@ impl App {
         .await
     }
 
+    /// Add one KG fact through the normalized write path.
     pub async fn kg_add(
         &self,
         subject: &str,
@@ -78,6 +90,7 @@ impl App {
         .await
     }
 
+    /// Close out an existing KG fact without deleting its history.
     pub async fn kg_invalidate(
         &self,
         subject: &str,
@@ -94,6 +107,7 @@ impl App {
         .await
     }
 
+    /// File one drawer directly into the palace.
     pub async fn add_drawer(
         &self,
         wing: &str,
@@ -111,6 +125,7 @@ impl App {
         .await
     }
 
+    /// Delete one drawer by storage identifier.
     pub async fn delete_drawer(&self, drawer_id: &str) -> Result<DrawerDeleteResult> {
         self.init().await?;
         PalaceOpsRuntime {
@@ -121,6 +136,7 @@ impl App {
         .await
     }
 
+    /// Append one diary entry for the named agent.
     pub async fn diary_write(
         &self,
         agent_name: &str,
@@ -136,6 +152,7 @@ impl App {
         .await
     }
 
+    /// Read the most recent diary entries for one agent.
     pub async fn diary_read(&self, agent_name: &str, last_n: usize) -> Result<DiaryReadResult> {
         self.init().await?;
         PalaceOpsRuntime {

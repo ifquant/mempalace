@@ -1,3 +1,9 @@
+//! Binary entrypoint for the Rust CLI.
+//!
+//! The only work done here is parsing the root command tree and handing control
+//! to `cli_runtime`, which keeps process setup separate from the actual command
+//! dispatch logic.
+
 use clap::Parser;
 
 mod cli_runtime;

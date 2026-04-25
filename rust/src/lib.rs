@@ -1,3 +1,9 @@
+//! Crate root for the Rust MemPalace rewrite.
+//!
+//! Auditors can start here to see how the rewrite is split: process entrypoints
+//! live in the CLI and MCP modules, while `service` exposes the shared facade
+//! those front doors delegate into.
+
 pub mod audit;
 pub mod bootstrap;
 pub mod bootstrap_docs;
@@ -69,4 +75,5 @@ pub mod storage;
 pub use config::AppConfig;
 pub use error::{MempalaceError, Result};
 
+/// Build version surfaced by the CLI and MCP setup flows.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -1,3 +1,9 @@
+//! MCP tool dispatch for the Rust rewrite.
+//!
+//! This is the transport-level router: it checks whether a tool may run
+//! without an initialized palace, constructs `App`, and then delegates into the
+//! read, write, project, or registry runtime families.
+
 use serde_json::{Value, json};
 
 use crate::audit::WriteAheadLog;
@@ -10,7 +16,10 @@ use crate::mcp_runtime_write::call_write_tool;
 use crate::mcp_schema::{no_palace, requires_existing_palace};
 use crate::service::App;
 
+/// Execute one MCP tool call against the Rust runtime.
 pub async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Result<Value> {
+    // Project bootstrap and registry tools are allowed before palace storage
+    // exists; the rest should fail fast with a setup hint.
     if requires_existing_palace(name) && !palace_exists(config) {
         return Ok(no_palace());
     }
@@ -69,6 +78,7 @@ pub async fn call_tool(name: &str, arguments: Value, config: &AppConfig) -> Resu
     }
 }
 
+/// Build a structured tool error payload while preserving a human hint.
 pub(crate) fn tool_error(prefix: &str, err: &dyn std::fmt::Display, hint: &str) -> Value {
     json!({
         "error": format!("{prefix}: {err}"),
@@ -76,10 +86,13 @@ pub(crate) fn tool_error(prefix: &str, err: &dyn std::fmt::Display, hint: &str) 
     })
 }
 
+/// Check whether either durable palace backend has been initialized on disk.
 pub(crate) fn palace_exists(config: &AppConfig) -> bool {
     config.sqlite_path().exists() || config.lance_path().exists()
 }
 
+/// Record best-effort WAL audit data without turning logging failures into user
+/// visible tool failures.
 pub(crate) fn best_effort_wal_log(config: &AppConfig, operation: &str, params: Value) {
     match WriteAheadLog::for_palace(&config.palace_path) {
         Ok(wal) => {

@@ -1,3 +1,9 @@
+//! CLI dispatcher that bridges `root_cli` into the split runtime families.
+//!
+//! This file is the high-level routing layer for the binary: it destructures
+//! root flags once, then forwards each command into the project, palace,
+//! helper, or registry handlers.
+
 use anyhow::Result;
 
 use crate::helper_cli::{HelperCommand, handle_helper_command};
@@ -6,6 +12,7 @@ use crate::project_cli::{ProjectCommand, handle_project_command};
 use crate::registry_cli::handle_registry_command;
 use crate::root_cli::{Cli, Command};
 
+/// Run one parsed CLI invocation against the appropriate command family.
 pub async fn run_cli(cli: Cli) -> Result<()> {
     let Cli {
         palace,

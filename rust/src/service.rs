@@ -1,3 +1,10 @@
+//! Shared application facade used by the CLI, MCP runtime, and integration
+//! tests.
+//!
+//! `App` owns the resolved config and embedding provider, while the
+//! `service_*` split keeps read, write, project, and registry flows isolated
+//! enough for auditors to trace independently.
+
 use std::sync::Arc;
 
 use crate::config::AppConfig;
@@ -5,17 +12,26 @@ use crate::embed::{EmbeddingProvider, build_embedder};
 use crate::error::Result;
 
 #[derive(Clone)]
+/// Main runtime facade shared across every front door into the Rust rewrite.
 pub struct App {
     pub config: AppConfig,
     pub(crate) embedder: Arc<dyn EmbeddingProvider>,
 }
 
 impl App {
+    /// Construct the default application facade from config alone.
+    ///
+    /// This is the normal production path for CLI and MCP entrypoints because it
+    /// resolves the configured embedding backend before any operation runs.
     pub fn new(config: AppConfig) -> Result<Self> {
         let embedder = build_embedder(&config.embedding)?;
         Ok(Self { config, embedder })
     }
 
+    /// Construct the facade with a caller-supplied embedder.
+    ///
+    /// Tests and focused runtimes use this to bypass real model startup while
+    /// still exercising the same orchestration code.
     pub fn with_embedder(config: AppConfig, embedder: Arc<dyn EmbeddingProvider>) -> Self {
         Self { config, embedder }
     }

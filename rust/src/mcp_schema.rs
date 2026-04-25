@@ -1,3 +1,9 @@
+//! MCP schema catalog for the Rust rewrite.
+//!
+//! This module assembles tool definitions from the read, write, project, and
+//! registry catalogs so auditors can inspect the full public MCP surface in one
+//! place.
+
 use serde_json::{Value, json};
 
 pub use crate::mcp_schema_support::{
@@ -5,6 +11,7 @@ pub use crate::mcp_schema_support::{
     no_palace, required_str, requires_existing_palace, string_list_arg, truncate_duplicate_content,
 };
 
+/// Return the complete MCP tool list exposed by the Rust runtime.
 pub fn tools() -> Vec<Value> {
     let mut tools = Vec::new();
     tools.extend(crate::mcp_schema_catalog_read::tools());
@@ -14,6 +21,7 @@ pub fn tools() -> Vec<Value> {
     tools
 }
 
+/// Build one MCP tool descriptor in the schema shape expected by clients.
 pub fn tool(name: &str, description: &str, input_schema: Value) -> Value {
     json!({
         "name": name,

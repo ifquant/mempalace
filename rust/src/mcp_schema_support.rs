@@ -1,12 +1,22 @@
+//! Shared MCP schema helpers and transport-facing policy decisions.
+//!
+//! Reviewers can read this file to understand protocol negotiation, which tools
+//! are allowed before a palace exists, and how loosely typed MCP arguments are
+//! normalized before runtime dispatch.
+
 use serde_json::{Value, json};
 
 use crate::error::{MempalaceError, Result};
 
+/// Protocol versions this runtime can negotiate with MCP clients.
 pub const SUPPORTED_PROTOCOL_VERSIONS: [&str; 4] =
     ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
+/// Operator guidance returned to MCP clients as the MemPalace protocol text.
 pub const PALACE_PROTOCOL: &str = "IMPORTANT — MemPalace Memory Protocol:\n1. ON WAKE-UP: Call mempalace_status to load palace overview + AAAK spec.\n2. BEFORE RESPONDING about any person, project, or past event: call mempalace_kg_query or mempalace_search FIRST. Never guess — verify.\n3. IF UNSURE about a fact (name, gender, age, relationship): say \"let me check\" and query the palace. Wrong is worse than slow.\n4. AFTER EACH SESSION: call mempalace_diary_write to record what happened, what you learned, what matters.\n5. WHEN FACTS CHANGE: call mempalace_kg_invalidate on the old fact, mempalace_kg_add for the new one.\n\nThis protocol ensures the AI KNOWS before it speaks. Storage is not memory — but storage + this protocol = memory.";
 
+/// Negotiate the MCP protocol version, defaulting to the newest supported
+/// version when a client requests an unknown one.
 pub fn negotiate_protocol(params: Option<&Value>) -> &'static str {
     let requested = params
         .and_then(|params| params.get("protocolVersion"))
@@ -22,6 +32,7 @@ pub fn negotiate_protocol(params: Option<&Value>) -> &'static str {
     }
 }
 
+/// Return whether a tool assumes the palace storage already exists.
 pub fn requires_existing_palace(tool_name: &str) -> bool {
     !matches!(
         tool_name,
@@ -45,6 +56,7 @@ pub fn requires_existing_palace(tool_name: &str) -> bool {
     )
 }
 
+/// Standard setup hint returned when a tool needs palace storage first.
 pub fn no_palace() -> Value {
     json!({
         "error": "No palace found",
@@ -52,6 +64,8 @@ pub fn no_palace() -> Value {
     })
 }
 
+/// Normalize loosely typed MCP arguments into the concrete shapes the runtime
+/// expects.
 pub fn coerce_argument_types(tool_name: &str, arguments: &mut Value) {
     let Some(args) = arguments.as_object_mut() else {
         return;
@@ -102,6 +116,7 @@ pub fn coerce_argument_types(tool_name: &str, arguments: &mut Value) {
     }
 }
 
+/// Shorten duplicate-check previews so schema responses stay readable.
 pub fn truncate_duplicate_content(text: &str) -> String {
     const PREVIEW_LIMIT: usize = 200;
     if text.chars().count() <= PREVIEW_LIMIT {
@@ -112,6 +127,7 @@ pub fn truncate_duplicate_content(text: &str) -> String {
     }
 }
 
+/// Read one required string argument or raise an MCP-shaped validation error.
 pub fn required_str<'a>(arguments: &'a Value, key: &str, tool_name: &str) -> Result<&'a str> {
     arguments
         .get(key)
@@ -119,6 +135,7 @@ pub fn required_str<'a>(arguments: &'a Value, key: &str, tool_name: &str) -> Res
         .ok_or_else(|| MempalaceError::Mcp(format!("{tool_name} requires {key}")))
 }
 
+/// Accept either a single string or a string array for repeated schema fields.
 pub fn string_list_arg(arguments: &Value, key: &str) -> Vec<String> {
     match arguments.get(key) {
         Some(Value::String(value)) => vec![value.clone()],

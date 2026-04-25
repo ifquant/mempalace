@@ -1,3 +1,9 @@
+//! Top-level CLI command tree for the Rust rewrite.
+//!
+//! Audit readers can start here to see which user-visible surfaces exist, then
+//! follow each command family into the dedicated `project`, `palace`, `helper`,
+//! and `registry` runtimes.
+
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
@@ -12,6 +18,10 @@ use crate::registry_cli::RegistryCommand;
     about = "MemPalace — Give your AI a memory. No API key required.",
     long_about = "MemPalace — Give your AI a memory. No API key required.\n\nCurrent Rust phase supports local-first project bootstrap, mining/search, transcript normalization and splitting, AAAK compression, wake-up and recall layers, registry workflows, maintenance diagnostics, and MCP tools.\n\nExamples:\n  mempalace-rs init ~/projects/my_app\n  mempalace-rs onboarding ~/projects/my_app --mode combo --scan\n  mempalace-rs mine ~/projects/my_app\n  mempalace-rs normalize ~/exports/chat.jsonl --human\n  mempalace-rs search \"why did we switch to GraphQL\"\n  mempalace-rs recall --wing my_app --room decisions\n  mempalace-rs registry summary ~/projects/my_app\n  mempalace-rs status"
 )]
+/// Root CLI options shared by every command family.
+///
+/// Reviewers can read this struct to understand which process-wide overrides
+/// are resolved before command-specific logic runs.
 pub struct Cli {
     #[arg(long)]
     #[arg(
@@ -26,6 +36,7 @@ pub struct Cli {
 }
 
 #[derive(Subcommand)]
+/// First-level command routing for every user-visible Rust CLI surface.
 pub enum Command {
     #[command(about = "Set up a palace directory for a project")]
     Init {
