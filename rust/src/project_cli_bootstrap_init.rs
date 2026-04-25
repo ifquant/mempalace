@@ -1,3 +1,8 @@
+//! CLI handler for `mempalace-rs init`.
+//!
+//! This layer converts CLI flags into a configured `App`, then renders either the
+//! human summary or the JSON payload returned by the runtime.
+
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;

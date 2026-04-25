@@ -1,7 +1,13 @@
+//! Shared data types for registry lookup, mutation, and research flows.
+//!
+//! These structs mirror the durable JSON shape plus the lightweight result
+//! payloads exposed through CLI and service wrappers.
+
 use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+/// Common English words that are likely to need disambiguation when used as names.
 pub const COMMON_ENGLISH_WORDS: &[&str] = &[
     "ever",
     "grace",
@@ -58,6 +64,7 @@ pub const COMMON_ENGLISH_WORDS: &[&str] = &[
 ];
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// One person entry stored in `entity_registry.json`.
 pub struct RegistryPerson {
     pub source: String,
     pub contexts: Vec<String>,
@@ -69,6 +76,7 @@ pub struct RegistryPerson {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Cached research result for one unknown term.
 pub struct RegistryResearchEntry {
     pub word: String,
     pub inferred_type: String,
@@ -83,6 +91,7 @@ pub struct RegistryResearchEntry {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Durable JSON registry containing people, projects, ambiguity flags, and wiki cache.
 pub struct EntityRegistry {
     pub version: u8,
     pub mode: String,
@@ -93,6 +102,7 @@ pub struct EntityRegistry {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Lookup result returned by registry read surfaces.
 pub struct RegistryLookupResult {
     pub word: String,
     pub r#type: String,
@@ -106,6 +116,7 @@ pub struct RegistryLookupResult {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Summary view of a project registry.
 pub struct RegistrySummary {
     pub kind: String,
     pub registry_path: String,
@@ -118,6 +129,7 @@ pub struct RegistrySummary {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+/// Learn result returned after scanning local files for new entities.
 pub struct RegistryLearnSummary {
     pub kind: String,
     pub project_path: String,
@@ -129,6 +141,7 @@ pub struct RegistryLearnSummary {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// Minimal onboarding person seed before it is expanded into registry rows.
 pub struct SeedPerson {
     pub name: String,
     pub relationship: String,
@@ -136,6 +149,7 @@ pub struct SeedPerson {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+/// Internal learn counters reused by runtime/service result builders.
 pub struct RegistryLearnSummaryFields {
     pub added_people: Vec<String>,
     pub added_projects: Vec<String>,

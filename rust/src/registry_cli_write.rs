@@ -1,3 +1,8 @@
+//! CLI handlers for mutating registry commands.
+//!
+//! This layer is intentionally thin: parse a routed command, call the runtime via
+//! `App`, then print the resulting write summary.
+
 use std::path::PathBuf;
 
 use mempalace_rs::model::RegistryWriteResult;
@@ -5,6 +10,7 @@ use mempalace_rs::model::RegistryWriteResult;
 use crate::registry_cli::RegistryCommand;
 use crate::registry_cli_support::{build_registry_app, print_registry_json};
 
+/// Executes registry write commands such as add-person, add-project, and add-alias.
 pub fn handle_registry_write_command(
     action: RegistryCommand,
     palace: Option<&PathBuf>,

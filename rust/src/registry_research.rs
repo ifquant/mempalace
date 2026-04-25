@@ -1,3 +1,9 @@
+//! Wikipedia-backed research helpers for unknown registry terms.
+//!
+//! The research flow is intentionally lightweight: fetch one summary, classify it
+//! heuristically, then let the caller decide whether that result should become a
+//! confirmed registry entry.
+
 use std::time::Duration;
 
 use serde_json::Value;
@@ -76,6 +82,7 @@ pub fn wikipedia_lookup(word: &str) -> Result<RegistryResearchEntry> {
     }
 }
 
+/// Classifies a Wikipedia summary into the registry's coarse entity types.
 pub fn classify_wikipedia_summary(word: &str, body: &Value) -> RegistryResearchEntry {
     let page_type = body
         .get("type")

@@ -1,3 +1,8 @@
+//! CLI command tree for registry operations.
+//!
+//! Audit readers can start here to see the user-visible registry surfaces, then
+//! follow the routed handlers for read, write, and research behavior.
+
 use std::path::PathBuf;
 
 use clap::Subcommand;
@@ -7,6 +12,7 @@ use crate::registry_cli_research::handle_registry_research_command;
 use crate::registry_cli_write::handle_registry_write_command;
 
 #[derive(Subcommand)]
+/// Registry-related CLI subcommands grouped by read/write/research intent.
 pub enum RegistryCommand {
     #[command(about = "Show a summary of entity_registry.json")]
     Summary {
@@ -119,6 +125,7 @@ pub enum RegistryCommand {
     },
 }
 
+/// Routes a parsed registry command to the matching handler family.
 pub fn handle_registry_command(
     action: RegistryCommand,
     palace: Option<&PathBuf>,

@@ -1,3 +1,8 @@
+//! Interactive prompt helpers for onboarding.
+//!
+//! These routines only gather user intent; normalization, dedupe, and file writes
+//! remain in `onboarding.rs` and `onboarding_support.rs`.
+
 use std::collections::BTreeMap;
 use std::io::{self, Write};
 use std::path::Path;
@@ -8,6 +13,7 @@ use crate::registry::SeedPerson;
 use crate::onboarding::OnboardingRequest;
 use crate::onboarding_support::{default_wings, split_name_relationship};
 
+/// Prompts for a complete onboarding request when no explicit CLI inputs were provided.
 pub fn prompt_for_request(
     project_dir: &Path,
     mut request: OnboardingRequest,
@@ -28,6 +34,7 @@ pub fn prompt_for_request(
     Ok(request)
 }
 
+/// Prompts for a yes/no answer with a default branch.
 pub fn ask_yes_no(prompt_text: &str, default_yes: bool) -> Result<bool> {
     let suffix = if default_yes { "[Y/n]" } else { "[y/N]" };
     let answer = prompt(&format!("{prompt_text} {suffix}"), None)?;

@@ -1,3 +1,8 @@
+//! Shared helpers for onboarding defaults, parsing, dedupe, and auto-detection.
+//!
+//! Keeping these routines separate makes the main onboarding flow easier to audit:
+//! prompt collection happens elsewhere, while this file owns normalization and merge policy.
+
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::entity_detector::detect_entities_for_registry;
@@ -33,6 +38,7 @@ pub fn should_prompt(request: &OnboardingRequest) -> bool {
         && !request.auto_accept_detected
 }
 
+/// Normalizes CLI/prompt mode strings into the supported onboarding modes.
 pub fn normalize_mode(value: &str) -> Result<String> {
     match value.trim().to_ascii_lowercase().as_str() {
         "work" => Ok("work".to_string()),
@@ -44,6 +50,7 @@ pub fn normalize_mode(value: &str) -> Result<String> {
     }
 }
 
+/// Returns the default wing set for the selected onboarding mode.
 pub fn default_wings(mode: &str) -> Vec<String> {
     match mode {
         "work" => DEFAULT_WORK_WINGS,
@@ -55,6 +62,7 @@ pub fn default_wings(mode: &str) -> Vec<String> {
     .collect()
 }
 
+/// Returns the default person context bucket for a given onboarding mode.
 pub fn default_person_context(mode: &str) -> &'static str {
     match mode {
         "personal" => "personal",
@@ -62,6 +70,7 @@ pub fn default_person_context(mode: &str) -> &'static str {
     }
 }
 
+/// Deduplicates a string list case-insensitively while preserving first-seen order.
 pub fn dedupe_list(values: &[String]) -> Vec<String> {
     let mut seen = BTreeSet::new();
     let mut output = Vec::new();
@@ -78,6 +87,7 @@ pub fn dedupe_list(values: &[String]) -> Vec<String> {
     output
 }
 
+/// Deduplicates people by name and fills empty contexts with the mode default.
 pub fn dedupe_people(values: &[SeedPerson], default_context: &str) -> Vec<SeedPerson> {
     let mut seen = BTreeSet::new();
     let mut output = Vec::new();
@@ -102,6 +112,7 @@ pub fn dedupe_people(values: &[SeedPerson], default_context: &str) -> Vec<SeedPe
     output
 }
 
+/// Merges auto-detected people into the onboarding request when accepted.
 pub fn merge_detected_people(
     people: &mut Vec<SeedPerson>,
     detected_people: &[String],
@@ -138,6 +149,7 @@ pub fn merge_detected_people(
     Ok(accepted)
 }
 
+/// Merges auto-detected projects into the onboarding request when accepted.
 pub fn merge_detected_projects(
     projects: &mut Vec<String>,
     detected_projects: &[String],
@@ -169,10 +181,12 @@ pub fn merge_detected_projects(
     Ok(accepted)
 }
 
+/// Runs the lightweight registry detector used by onboarding scan mode.
 pub fn auto_detect_entities(project_dir: &std::path::Path) -> Result<(Vec<String>, Vec<String>)> {
     detect_entities_for_registry(project_dir)
 }
 
+/// Splits `name,relationship` prompt input into its components.
 pub fn split_name_relationship(input: &str) -> (&str, &str) {
     let mut parts = input.splitn(2, ',').map(str::trim);
     let name = parts.next().unwrap_or_default();
@@ -180,6 +194,7 @@ pub fn split_name_relationship(input: &str) -> (&str, &str) {
     (name, relationship)
 }
 
+/// Parses one `name[,relationship[,context]]` CLI person argument.
 pub fn parse_person_arg(value: &str) -> Result<SeedPerson> {
     let parts = value
         .split(',')
@@ -198,6 +213,7 @@ pub fn parse_person_arg(value: &str) -> Result<SeedPerson> {
     })
 }
 
+/// Parses one `alias=canonical` CLI alias argument.
 pub fn parse_alias_arg(value: &str) -> Result<(String, String)> {
     let Some((alias, canonical)) = value.split_once('=') else {
         return Err(MempalaceError::InvalidArgument(
@@ -214,6 +230,7 @@ pub fn parse_alias_arg(value: &str) -> Result<(String, String)> {
     Ok((alias.to_string(), canonical.to_string()))
 }
 
+/// Returns person names that are also common English words and may need disambiguation.
 pub fn ambiguous_names(people: &[String]) -> Vec<String> {
     let common = COMMON_ENGLISH_WORDS
         .iter()
@@ -226,6 +243,7 @@ pub fn ambiguous_names(people: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// Deduplicates alias mappings after trimming empty keys or values.
 pub fn dedupe_aliases(aliases: &BTreeMap<String, String>) -> BTreeMap<String, String> {
     aliases
         .iter()
@@ -235,6 +253,8 @@ pub fn dedupe_aliases(aliases: &BTreeMap<String, String>) -> BTreeMap<String, St
             if alias.is_empty() || canonical.is_empty() {
                 None
             } else {
+                // Last write wins for exact duplicate keys, but trimming keeps the
+                // persisted alias map stable across prompt and CLI sources.
                 Some((alias.to_string(), canonical.to_string()))
             }
         })

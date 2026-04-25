@@ -1,3 +1,8 @@
+//! CLI handlers for registry research and confirmation commands.
+//!
+//! Research uses the same registry runtime as other commands but is split out so
+//! the wiki-cache workflow is easy to audit independently.
+
 use std::path::PathBuf;
 
 use mempalace_rs::model::{RegistryConfirmResult, RegistryResearchResult};
@@ -5,6 +10,7 @@ use mempalace_rs::model::{RegistryConfirmResult, RegistryResearchResult};
 use crate::registry_cli::RegistryCommand;
 use crate::registry_cli_support::{build_registry_app, print_registry_json};
 
+/// Executes registry research/confirm commands and prints the resulting payload.
 pub fn handle_registry_research_command(
     action: RegistryCommand,
     palace: Option<&PathBuf>,

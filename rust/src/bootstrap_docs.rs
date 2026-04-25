@@ -1,9 +1,15 @@
+//! Markdown and registry-document writers used by bootstrap/onboarding flows.
+//!
+//! These helpers render the human-facing files that explain the initial local
+//! world model alongside the machine-readable registry JSON.
+
 use std::fs;
 use std::path::Path;
 
 use crate::error::Result;
 use crate::registry::EntityRegistry;
 
+/// Writes the initial `entity_registry.json` snapshot derived from bootstrap detection.
 pub fn write_entity_registry(
     entity_registry_path: &Path,
     people: &[String],
@@ -14,6 +20,7 @@ pub fn write_entity_registry(
     registry.save(entity_registry_path)
 }
 
+/// Writes the `aaak_entities.md` quick-reference document for detected entities.
 pub fn write_aaak_entities(
     aaak_entities_path: &Path,
     people: &[String],
@@ -57,6 +64,7 @@ pub fn write_aaak_entities(
     Ok(())
 }
 
+/// Writes the starter `critical_facts.md` document for the new project.
 pub fn write_critical_facts(
     critical_facts_path: &Path,
     people: &[String],

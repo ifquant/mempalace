@@ -1,3 +1,9 @@
+//! Thin facade over the SQLite-backed knowledge graph.
+//!
+//! Audit readers should treat this as the high-level KG boundary: it exposes
+//! entity/triple operations while the actual normalized-ID storage details stay
+//! in `storage/sqlite_kg.rs`.
+
 use crate::error::Result;
 use crate::model::{
     KgEntityWriteResult, KgInvalidateResult, KgQueryResult, KgStats, KgTimelineResult, KgTriple,
@@ -10,18 +16,24 @@ pub struct KnowledgeGraph<'a> {
 }
 
 impl<'a> KnowledgeGraph<'a> {
+    /// Binds KG operations to the canonical SQLite store.
     pub fn new(store: &'a SqliteStore) -> Self {
         Self { store }
     }
 
+    /// Adds one fact triple, creating backing entity rows as needed.
     pub fn add_triple(&self, triple: &KgTriple) -> Result<KgWriteResult> {
         self.store.add_kg_triple(triple)
     }
 
+    /// Upserts one entity into the KG entity table.
     pub fn add_entity(&self, name: &str, entity_type: &str) -> Result<KgEntityWriteResult> {
+        // SQLite normalizes the durable entity ID internally so callers can keep
+        // using human-readable names while the store maintains stable keys.
         self.store.add_kg_entity(name, entity_type)
     }
 
+    /// Marks an active fact as no longer valid from `ended` onward.
     pub fn invalidate(
         &self,
         subject: &str,
@@ -33,10 +45,12 @@ impl<'a> KnowledgeGraph<'a> {
             .invalidate_kg_triple(subject, predicate, object, ended)
     }
 
+    /// Returns raw triples for one subject without direction/as-of filtering.
     pub fn query_raw(&self, subject: &str) -> Result<Vec<KgTriple>> {
         self.store.query_kg(subject)
     }
 
+    /// Queries one entity with optional temporal and direction filters.
     pub fn query_entity(
         &self,
         entity: &str,
@@ -52,10 +66,12 @@ impl<'a> KnowledgeGraph<'a> {
         })
     }
 
+    /// Returns the KG timeline, optionally scoped to one entity.
     pub fn timeline(&self, entity: Option<&str>) -> Result<KgTimelineResult> {
         self.store.kg_timeline(entity)
     }
 
+    /// Returns high-level KG statistics for audit/reporting.
     pub fn stats(&self) -> Result<KgStats> {
         self.store.kg_stats()
     }

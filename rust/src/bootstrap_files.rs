@@ -1,3 +1,8 @@
+//! Bootstrap file readers and writers for project config and entity lists.
+//!
+//! The bootstrap orchestrator uses these helpers to preserve user-authored files
+//! when present and to render deterministic defaults only for missing artifacts.
+
 use std::fs;
 use std::path::Path;
 
@@ -31,6 +36,7 @@ struct GeneratedRoom {
 }
 
 #[derive(Clone, Debug, Deserialize)]
+/// Parsed `entities.json` payload reused when bootstrap should preserve existing data.
 pub struct ExistingEntities {
     #[serde(default)]
     pub people: Vec<String>,
@@ -44,6 +50,7 @@ struct GeneratedEntities {
     projects: Vec<String>,
 }
 
+/// Loads an existing `mempalace.yaml` and falls back to a derived wing/general room.
 pub fn load_existing_rooms(
     config_path: &Path,
     fallback_wing: &str,
@@ -69,6 +76,7 @@ pub fn load_existing_rooms(
     Ok((wing, rooms))
 }
 
+/// Writes a generated `mempalace.yaml` from detected room metadata.
 pub fn write_project_config(config_path: &Path, wing: &str, rooms: &[RoomDetection]) -> Result<()> {
     let config = GeneratedProjectConfig {
         wing: wing.to_string(),
@@ -91,6 +99,7 @@ pub fn write_project_config(config_path: &Path, wing: &str, rooms: &[RoomDetecti
     Ok(())
 }
 
+/// Writes a generated `mempalace.yaml` from plain room names supplied by onboarding.
 pub fn write_project_config_from_names(
     config_path: &Path,
     wing: &str,
@@ -121,6 +130,7 @@ pub fn write_project_config_from_names(
     write_project_config(config_path, wing, &rooms)
 }
 
+/// Loads an existing `entities.json` file for bootstrap preservation.
 pub fn load_existing_entities(entities_path: &Path) -> Result<ExistingEntities> {
     let content = fs::read_to_string(entities_path)?;
     serde_json::from_str::<ExistingEntities>(&content).map_err(|err| {
@@ -131,6 +141,7 @@ pub fn load_existing_entities(entities_path: &Path) -> Result<ExistingEntities> 
     })
 }
 
+/// Writes `entities.json` with the current people/project seeds.
 pub fn write_entities(entities_path: &Path, people: &[String], projects: &[String]) -> Result<()> {
     let payload = GeneratedEntities {
         people: people.to_vec(),

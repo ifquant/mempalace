@@ -1,3 +1,8 @@
+//! CLI handlers for read-only registry commands.
+//!
+//! These commands all build the same `App` facade, then choose human or JSON
+//! rendering for the corresponding registry read result.
+
 use std::path::PathBuf;
 
 use mempalace_rs::model::{
@@ -7,6 +12,7 @@ use mempalace_rs::model::{
 use crate::registry_cli::RegistryCommand;
 use crate::registry_cli_support::{build_registry_app, print_registry_json};
 
+/// Executes registry read commands such as summary, lookup, learn, and query.
 pub fn handle_registry_read_command(
     action: RegistryCommand,
     palace: Option<&PathBuf>,

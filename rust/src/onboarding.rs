@@ -1,3 +1,8 @@
+//! Interactive and non-interactive onboarding flow for project-local world setup.
+//!
+//! This module coordinates prompt collection, optional auto-detection, dedupe, and
+//! final bootstrap file writes for users who want more control than `init`.
+
 use std::collections::BTreeMap;
 use std::io::{self, IsTerminal};
 use std::path::Path;
@@ -19,6 +24,7 @@ use crate::registry::{EntityRegistry, SeedPerson};
 pub use crate::onboarding_support::{ambiguous_names, parse_alias_arg, parse_person_arg};
 
 #[derive(Clone, Debug, Default, PartialEq)]
+/// User-supplied onboarding inputs before prompting/dedupe/default expansion.
 pub struct OnboardingRequest {
     pub mode: Option<String>,
     pub people: Vec<SeedPerson>,
@@ -29,6 +35,7 @@ pub struct OnboardingRequest {
     pub auto_accept_detected: bool,
 }
 
+/// Runs onboarding for one project directory and writes the requested bootstrap artifacts.
 pub fn run_onboarding(project_dir: &Path, request: OnboardingRequest) -> Result<OnboardingSummary> {
     let project_dir = project_dir
         .canonicalize()
@@ -71,6 +78,8 @@ pub fn run_onboarding(project_dir: &Path, request: OnboardingRequest) -> Result<
 
     if should_scan {
         let (detected_people, detected_projects) = auto_detect_entities(&project_dir)?;
+        // Merge is case-insensitive and asks/auto-accepts only for names that are
+        // not already present in the explicit onboarding request.
         auto_detected_people = merge_detected_people(
             &mut request.people,
             &detected_people,

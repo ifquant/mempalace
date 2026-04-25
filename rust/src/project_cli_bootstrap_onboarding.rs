@@ -1,3 +1,8 @@
+//! CLI handler for `mempalace-rs onboarding`.
+//!
+//! It focuses on argument parsing and output formatting while the onboarding
+//! module owns prompting, merge rules, and file writes.
+
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -11,6 +16,7 @@ use serde_json::json;
 use crate::project_cli_bootstrap_support::print_bootstrap_json;
 
 #[allow(clippy::too_many_arguments)]
+/// Runs onboarding from CLI arguments and prints either human or JSON output.
 pub async fn handle_onboarding(
     dir: &Path,
     mode: Option<String>,

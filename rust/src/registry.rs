@@ -1,3 +1,9 @@
+//! Entity registry facade for project-local people, aliases, and research cache.
+//!
+//! Audit readers can start here to see the split between persistence (`registry_io`),
+//! lookup/disambiguation (`registry_lookup`), and write-side updates
+//! (`registry_mutation`).
+
 pub use crate::registry_types::{
     COMMON_ENGLISH_WORDS, EntityRegistry, RegistryLearnSummary, RegistryLearnSummaryFields,
     RegistryLookupResult, RegistryPerson, RegistryResearchEntry, RegistrySummary, SeedPerson,

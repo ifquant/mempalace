@@ -1,3 +1,8 @@
+//! Read-side lookup and disambiguation heuristics for the entity registry.
+//!
+//! The registry favors local explicit data first, then falls back to confirmed
+//! wiki research only when the name is still unresolved locally.
+
 use regex::Regex;
 
 use super::{COMMON_ENGLISH_WORDS, EntityRegistry, RegistryLookupResult, RegistryPerson};
@@ -39,6 +44,7 @@ const CONCEPT_CONTEXT_PATTERNS: &[&str] = &[
 ];
 
 impl EntityRegistry {
+    /// Looks up one word against people, projects, and confirmed wiki research.
     pub fn lookup(&self, word: &str, context: &str) -> RegistryLookupResult {
         for (canonical, info) in &self.people {
             let aliases = info.aliases.iter().map(|alias| alias.to_ascii_lowercase());
@@ -85,6 +91,8 @@ impl EntityRegistry {
             }
         }
 
+        // Local registry entries win over wiki cache so explicit onboarding/manual
+        // edits remain the authoritative interpretation for the project.
         if let Some((_, entry)) = self
             .wiki_cache
             .iter()
@@ -117,6 +125,7 @@ impl EntityRegistry {
         }
     }
 
+    /// Extracts known people mentioned in a free-form registry query.
     pub fn extract_people_from_query(&self, query: &str) -> Vec<String> {
         let mut found = Vec::new();
         for (canonical, info) in &self.people {
@@ -154,6 +163,7 @@ impl EntityRegistry {
         found
     }
 
+    /// Extracts capitalized words that still look unknown after registry lookup.
     pub fn extract_unknown_candidates(&self, query: &str) -> Vec<String> {
         let regex = Regex::new(r"\b[A-Z][a-z]{2,15}\b").expect("capitalized word regex");
         let mut unknown = regex

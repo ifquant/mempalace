@@ -1,3 +1,8 @@
+//! Project-local runtime facade for registry operations.
+//!
+//! This file is the audit entrypoint for registry reads, writes, learning, and
+//! research once a caller has already chosen the target project directory.
+
 use std::path::{Path, PathBuf};
 
 use crate::entity_detector::detect_entities_for_registry;
@@ -13,16 +18,19 @@ pub struct RegistryRuntime {
 }
 
 impl RegistryRuntime {
+    /// Binds registry operations to one project directory.
     pub fn new(project_dir: &Path) -> Self {
         Self {
             project_dir: project_dir.to_path_buf(),
         }
     }
 
+    /// Returns the canonical `entity_registry.json` path for this project.
     pub fn registry_path(&self) -> PathBuf {
         self.project_dir.join("entity_registry.json")
     }
 
+    /// Summarizes the current registry contents.
     pub fn summary(&self) -> Result<RegistrySummaryResult> {
         let registry_path = self.registry_path();
         let summary = EntityRegistry::load(&registry_path)?.summary(&registry_path);
@@ -38,6 +46,7 @@ impl RegistryRuntime {
         })
     }
 
+    /// Resolves one word against registry people, projects, and confirmed research cache.
     pub fn lookup(&self, word: &str, context: &str) -> Result<RegistryLookupResult> {
         let registry_path = self.registry_path();
         let lookup = EntityRegistry::load(&registry_path)?.lookup(word, context);
@@ -55,6 +64,7 @@ impl RegistryRuntime {
         })
     }
 
+    /// Learns additional people/projects by rescanning the project tree.
     pub fn learn(&self) -> Result<RegistryLearnResult> {
         let registry_path = self.registry_path();
         let mut registry = EntityRegistry::load(&registry_path)?;
@@ -72,6 +82,7 @@ impl RegistryRuntime {
         })
     }
 
+    /// Adds one person entry and persists the updated registry.
     pub fn add_person(
         &self,
         name: &str,
@@ -95,6 +106,7 @@ impl RegistryRuntime {
         })
     }
 
+    /// Adds one project entry and persists the updated registry.
     pub fn add_project(&self, project: &str) -> Result<RegistryWriteResult> {
         let registry_path = self.registry_path();
         let mut registry = EntityRegistry::load(&registry_path)?;
@@ -113,6 +125,7 @@ impl RegistryRuntime {
         })
     }
 
+    /// Adds an alias entry for an existing canonical person and persists the registry.
     pub fn add_alias(&self, canonical: &str, alias: &str) -> Result<RegistryWriteResult> {
         let registry_path = self.registry_path();
         let mut registry = EntityRegistry::load(&registry_path)?;
@@ -131,6 +144,7 @@ impl RegistryRuntime {
         })
     }
 
+    /// Parses a free-form query into known people and unknown capitalized candidates.
     pub fn query(&self, query: &str) -> Result<RegistryQueryResult> {
         let registry_path = self.registry_path();
         let registry = EntityRegistry::load(&registry_path)?;
@@ -143,6 +157,7 @@ impl RegistryRuntime {
         })
     }
 
+    /// Runs one Wikipedia-backed research lookup and saves the cache entry.
     pub fn research(&self, word: &str, auto_confirm: bool) -> Result<RegistryResearchResult> {
         let registry_path = self.registry_path();
         let mut registry = EntityRegistry::load(&registry_path)?;
@@ -162,6 +177,7 @@ impl RegistryRuntime {
         })
     }
 
+    /// Confirms a researched term and promotes it into the registry when applicable.
     pub fn confirm_research(
         &self,
         word: &str,

@@ -1,8 +1,14 @@
+//! Write-side mutation helpers for the entity registry.
+//!
+//! These methods keep the JSON snapshot coherent after learn/manual/research
+//! updates and recompute ambiguous-name flags whenever person identities change.
+
 use crate::registry_types::{
     COMMON_ENGLISH_WORDS, EntityRegistry, RegistryLearnSummaryFields, RegistryPerson,
 };
 
 impl EntityRegistry {
+    /// Adds newly detected people/projects without overwriting existing explicit entries.
     pub fn learn(&mut self, people: &[String], projects: &[String]) -> RegistryLearnSummaryFields {
         let mut added_people = Vec::new();
         let mut added_projects = Vec::new();
@@ -52,6 +58,7 @@ impl EntityRegistry {
         }
     }
 
+    /// Adds or replaces one person entry with manual provenance.
     pub fn add_person(&mut self, name: &str, relationship: &str, context: &str) {
         self.people.insert(
             name.to_string(),
@@ -67,6 +74,7 @@ impl EntityRegistry {
         self.recompute_ambiguous_flags();
     }
 
+    /// Adds one project name if it is not already present case-insensitively.
     pub fn add_project(&mut self, project: &str) {
         if !self
             .projects
@@ -78,6 +86,7 @@ impl EntityRegistry {
         }
     }
 
+    /// Registers an alias row that points back to an existing canonical person.
     pub fn add_alias(&mut self, canonical: &str, alias: &str) {
         let cloned = if let Some(person) = self.people.get_mut(canonical) {
             if !person
@@ -126,6 +135,8 @@ impl EntityRegistry {
         }
 
         if entity_type == "person" {
+            // Promoting research creates the same top-level person record shape as
+            // manual/onboarding entries so later lookups do not need a special case.
             self.people.insert(
                 word.to_string(),
                 RegistryPerson {
@@ -170,6 +181,7 @@ impl EntityRegistry {
         self.ambiguous_flags = flags;
     }
 
+    /// Resolves the default learned context for the current registry mode.
     fn mode_context(&self) -> String {
         if self.mode == "combo" {
             "personal".to_string()

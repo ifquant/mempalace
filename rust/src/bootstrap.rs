@@ -1,3 +1,9 @@
+//! Project bootstrap orchestration for first-run MemPalace artifacts.
+//!
+//! This layer decides which files are created during `init`, reuses existing
+//! project metadata when present, and delegates actual file rendering to the
+//! split `bootstrap_docs` and `bootstrap_files` helpers.
+
 use std::path::Path;
 
 use crate::bootstrap_docs::write_entity_registry;
@@ -10,6 +16,7 @@ pub use crate::bootstrap_docs::{write_aaak_entities, write_critical_facts};
 pub use crate::bootstrap_files::{write_entities, write_project_config_from_names};
 
 #[derive(Clone, Debug, PartialEq)]
+/// Summary of the bootstrap files that were created or preserved for a project.
 pub struct InitBootstrap {
     pub wing: String,
     pub configured_rooms: Vec<String>,
@@ -27,6 +34,7 @@ pub struct InitBootstrap {
     pub critical_facts_written: bool,
 }
 
+/// Detects initial project metadata and writes bootstrap artifacts when missing.
 pub fn bootstrap_project(project_dir: &Path) -> Result<InitBootstrap> {
     let project_dir = project_dir
         .canonicalize()
@@ -83,6 +91,8 @@ pub fn bootstrap_project(project_dir: &Path) -> Result<InitBootstrap> {
 
     let aaak_entities_path = project_dir.join("aaak_entities.md");
     let critical_facts_path = project_dir.join("critical_facts.md");
+    // Bootstrap is additive: once a user has edited these files, `init` reports
+    // them as kept instead of overwriting the local version.
     let aaak_entities_written = if aaak_entities_path.exists() {
         false
     } else {
@@ -130,6 +140,7 @@ pub fn bootstrap_project(project_dir: &Path) -> Result<InitBootstrap> {
     })
 }
 
+/// Derives the default palace wing name from the project directory.
 pub fn default_wing(project_dir: &Path) -> String {
     project_dir
         .file_name()
